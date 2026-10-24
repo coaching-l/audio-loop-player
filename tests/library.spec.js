@@ -190,15 +190,22 @@ test("quota failure keeps registered audio and reports that the new audio was no
 test("saving audio requests persistent storage once and shows the space used", async ({
   page,
 }) => {
+  // A full stub keeps the check independent of each engine's Storage API support.
   await page.addInitScript(() => {
     window.persistCalls = 0;
     let granted = false;
-    navigator.storage.persisted = async () => granted;
-    navigator.storage.persist = async () => {
-      window.persistCalls++;
-      granted = true;
-      return true;
-    };
+    Object.defineProperty(navigator, "storage", {
+      configurable: true,
+      value: {
+        persisted: async () => granted,
+        persist: async () => {
+          window.persistCalls++;
+          granted = true;
+          return true;
+        },
+        estimate: async () => ({ usage: 600 * 1024, quota: 2 * 1024 ** 3 }),
+      },
+    });
   });
   await page.goto("/");
   await expect(page.locator("#storage-info")).toBeHidden();
