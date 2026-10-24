@@ -1,3 +1,4 @@
+import { readableAudio } from "./audio-import.js";
 import "./offline.js";
 import {
   audioKey,
@@ -197,6 +198,7 @@ async function loadFile(file) {
   error("");
   rangeError("");
   if (!storageWarning) notice("");
+  $("load-audio").hidden = false;
   $("file-name").textContent = file.name;
   $("play-status").textContent = "音声を読み込み中…";
   $("play").textContent = "▶";
@@ -224,6 +226,7 @@ async function loadFile(file) {
     clearTimeout(loadTimeout);
     ready = false;
     enable(false);
+    $("load-audio").hidden = true;
     currentEngine.pause();
     error(message);
     $("play-status").textContent = "読み込めませんでした";
@@ -263,6 +266,7 @@ async function loadFile(file) {
           )
         : [];
       ready = true;
+      $("load-audio").hidden = true;
       currentEngine.configure(s);
       currentEngine.setRate(s.rate);
       if (Number.isFinite(stored?.position))
@@ -274,19 +278,30 @@ async function loadFile(file) {
       renderSegments();
       render(currentEngine);
       persist();
+      if (!storageWarning) notice("音声を読み込みました。再生ボタンで練習できます。");
     },
     { once: true },
   );
-  objectURL = URL.createObjectURL(file);
-  loadTimeout = setTimeout(
-    () =>
-      fail(
-        "読み込みに時間がかかっています。ファイルが端末にダウンロード済みか確認し、選び直してください。",
-      ),
-    30000,
-  );
-  audio.src = objectURL;
-  audio.load();
+  $("notice").textContent = "音声を端末から読み込み中です。";
+  try {
+    const copy = await readableAudio(file);
+    if (generation !== loadGeneration) return;
+    objectURL = URL.createObjectURL(copy);
+    notice(
+      "読み込みが始まらない場合は「タップして読み込みを開始」を押してください。",
+    );
+    loadTimeout = setTimeout(() => {
+      if (generation !== loadGeneration || ready) return;
+      $("play-status").textContent = "タップして読み込み";
+      notice(
+        "ブラウザが読み込みを待機しています。「タップして読み込みを開始」を押してください。端末に未保存の場合は、先に「ファイル」アプリでダウンロードしてください。",
+      );
+    }, 15000);
+    audio.src = objectURL;
+    audio.load();
+  } catch (e) {
+    fail(e.message);
+  }
 }
 $("file-input").addEventListener("change", (event) => {
   importFiles(Array.from(event.target.files));
@@ -534,6 +549,7 @@ function renderAudioList() {
           if (objectURL) URL.revokeObjectURL(objectURL);
           objectURL = null;
           ready = false;
+          $("load-audio").hidden = true;
           fileKey = null;
           segments = [];
           enable(false);
@@ -569,11 +585,13 @@ function importFiles(files) {
       $("library-status").textContent =
         "音声を保存中です。この画面を閉じずにお待ちください。";
       let saved = 0;
+      let deferred = 0;
       const problems = [];
       for (const file of files) {
         try {
-          await validateAudio(file);
+          const validation = await validateAudio(file);
           const record = await addAudio(file);
+          if (validation.metadataDeferred) deferred++;
           if (!audioItems.some((item) => item.id === record.id))
             audioItems.push(record);
           saved++;
@@ -582,9 +600,15 @@ function importFiles(files) {
           const message =
             e.name === "QuotaExceededError"
               ? "ブラウザの保存容量が不足しています。不要な登録音声を削除してください。"
-              : e.message?.includes("10件")
+              : [
+                    "AudioReadTimeout",
+                    "AudioReadError",
+                    "AudioFormatError",
+                  ].includes(e.name)
                 ? e.message
-                : "音声を保存できませんでした。形式・保存容量・ブラウザの保存設定を確認してください。";
+                : e.message?.includes("10件")
+                  ? e.message
+                  : "音声を保存できませんでした。形式・保存容量・ブラウザの保存設定を確認してください。";
           problems.push(file.name + "：" + message);
         }
       }
@@ -593,7 +617,11 @@ function importFiles(files) {
           "件保存。" +
           problems.join(" / ") +
           " 保存できない音声も今回の画面では再生を試せますが、再訪問時には残りません。"
-        : saved + "件の音声を保存しました。次回も一覧から開けます。";
+        : saved +
+          "件の音声を保存しました。次回も一覧から開けます。" +
+          (deferred
+            ? " 再生確認が必要な音声があります。音声を開き、読み込み開始ボタンを押して再生できるか確認してください。"
+            : "");
     })
     .catch(() => {
       $("library-status").textContent =
@@ -619,4 +647,23 @@ window.addEventListener("offline-update", () => {
     engine.pause();
     persist();
   }
+});
+
+$("load-audio").addEventListener("click", () => {
+  if (!engine || !engine.audio.src) {
+    notice(
+      "まだファイルを取得中です。「ファイル」アプリでダウンロードを完了しているか確認してください。",
+    );
+    return;
+  }
+  // Called directly by the gesture, not after an await: Safari may require this.
+  const player = engine;
+  player.audio.play().catch((error) => {
+    if (player !== engine || error.name === "AbortError") return;
+    notice(
+      error.name === "NotAllowedError"
+        ? "再度このボタンをタップしてください。別アプリ内のブラウザの場合はSafariで開いてください。"
+        : "音声を再生できません。端末に保存済みの別のMP3・M4A・WAVもお試しください。",
+    );
+  });
 });

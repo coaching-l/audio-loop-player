@@ -7,7 +7,7 @@ import { resolve, join } from "node:path";
 // Dedicated HTTP server exercises real SW fetches, including failed installs and upgrades.
 // Playwright route mocks cannot reliably intercept fetches initiated inside a worker.
 async function server() {
-  const state = { fail: false, version: "v1" };
+  const state = { fail: false, version: "v2" };
   const host = createServer(async (req, res) => {
     const path = new URL(req.url, "http://localhost").pathname;
     if (path === "/pomodoro/") {
@@ -27,6 +27,7 @@ async function server() {
       "sw.js",
       "player.js",
       "audio-library.js",
+      "audio-import.js",
       "style.css",
       "manifest.webmanifest",
       "icons/logo-144.png",
@@ -45,7 +46,12 @@ async function server() {
       let body = await readFile(resolve("" + file));
       if (file === "sw.js")
         body = Buffer.from(
-          body.toString().replace('"v1"', JSON.stringify(state.version)),
+          body
+            .toString()
+            .replace(
+              /const VERSION = \"[^\"]+\";/,
+              "const VERSION = " + JSON.stringify(state.version) + ";",
+            ),
         );
       const type = file.endsWith(".js")
         ? "text/javascript"
@@ -163,7 +169,7 @@ test("failed update keeps the old offline app; successful update preserves audio
       const c = await caches.open("pomodoro-offline-v1");
       await c.put("/pomodoro/", new Response("keep"));
     });
-    host.state.version = "v2";
+    host.state.version = "test-v3";
     host.state.fail = true;
     await page.evaluate(async () => {
       const r = await navigator.serviceWorker.getRegistration();
@@ -198,8 +204,10 @@ test("failed update keeps the old offline app; successful update preserves audio
         const keys = await caches.keys();
         return (
           keys.includes("pomodoro-offline-v1") &&
-          keys.includes("coaching-l-audio-offline:/audio-loop-player/:v2") &&
-          !keys.includes("coaching-l-audio-offline:/audio-loop-player/:v1")
+          keys.includes(
+            "coaching-l-audio-offline:/audio-loop-player/:test-v3",
+          ) &&
+          !keys.includes("coaching-l-audio-offline:/audio-loop-player/:v2")
         );
       }),
     ).toBe(true);

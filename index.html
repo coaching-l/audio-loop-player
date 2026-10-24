@@ -37,8 +37,8 @@
       content="端末の音声で、繰り返し聴く・声に出す。アップロード不要の語学学習プレーヤー。"
     />
     <title>音声リピートプレーヤー | COACHING-L</title>
-    <link rel="stylesheet" href="./style.css?v=4" />
-    <script type="module" src="./app.js?v=4"></script>
+    <link rel="stylesheet" href="./style.css?v=5" />
+    <script type="module" src="./app.js?v=5"></script>
   </head>
   <body>
     <main>
@@ -109,6 +109,12 @@
           音声本体と練習設定をこのブラウザに保存します。サーバーへの送信・端末間の同期はありません。サイトデータを削除すると消えるため、元ファイルは残してください。
         </p>
       </section>
+      <button id="load-audio" class="button primary" type="button" hidden>
+        タップして読み込みを開始
+      </button>
+      <p class="small">
+        iPhoneで選べない・読み込めない場合は、「ファイル」アプリで端末内へのダウンロードを完了してから選んでください。
+      </p>
       <p id="error" class="error" role="alert" hidden></p>
       <p id="notice" class="notice" role="status"></p>
       <div class="workspace">

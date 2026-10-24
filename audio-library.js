@@ -1,3 +1,4 @@
+import { readableAudio } from "./audio-import.js";
 export const MAX_AUDIO_FILES = 10;
 export function audioKey(file) {
   return JSON.stringify([file.name, file.size, file.lastModified]);
@@ -40,6 +41,7 @@ export async function listAudio() {
   });
 }
 export async function addAudio(file) {
+  file = await readableAudio(file);
   const db = await openLibrary();
   return new Promise((resolve, reject) => {
     const transaction = db.transaction("audio", "readwrite");
@@ -67,7 +69,7 @@ export async function addAudio(file) {
           lastModified: file.lastModified,
           type: file.type,
           addedAt: Date.now(),
-          blob: file,
+          blob: new Blob([file], { type: file.type }),
         };
         try {
           store.add(record);
@@ -101,12 +103,14 @@ export function storedFile(record) {
     lastModified: record.lastModified,
   });
 }
-// Decode metadata before storing. A corrupt item must not break a whole batch.
-export function validateAudio(file) {
+// Explicitly load the probe. Mobile browsers may still defer metadata until a tap.
+// A timeout is not proof of corrupt bytes: preserve the file and request playback confirmation.
+export async function validateAudio(file) {
+  file = await readableAudio(file);
   return new Promise((resolve, reject) => {
     const audio = document.createElement("audio");
     const url = URL.createObjectURL(file);
-    const timeout = setTimeout(() => finish(false), 30000);
+    const timeout = setTimeout(() => finish("deferred"), 8000);
     function finish(valid) {
       clearTimeout(timeout);
       audio.onloadedmetadata = null;
@@ -115,10 +119,13 @@ export function validateAudio(file) {
       audio.load();
       URL.revokeObjectURL(url);
       valid
-        ? resolve()
+        ? resolve({ metadataDeferred: valid === "deferred" })
         : reject(
-            new Error(
-              "非対応形式・破損・未ダウンロードなどにより音声を読み込めません。",
+            Object.assign(
+              new Error(
+                "このブラウザで再生できない形式か、音声ファイルが破損しています。MP3・M4A・WAVなどの別ファイルをお試しください。",
+              ),
+              { name: "AudioFormatError" },
             ),
           );
     }
@@ -127,5 +134,6 @@ export function validateAudio(file) {
       finish(Number.isFinite(audio.duration) && audio.duration > 0);
     audio.onerror = () => finish(false);
     audio.src = url;
+    audio.load();
   });
 }
