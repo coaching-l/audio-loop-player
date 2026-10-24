@@ -211,3 +211,28 @@ test("a recording can be played back and compared with the model", async ({
   await expect(page.locator("#record-status")).toHaveText("録音なし");
   await expect(page.locator("#compare")).toBeDisabled();
 });
+
+test("recording pauses the model, and playing ends the recording first", async ({
+  page,
+  browserName,
+}) => {
+  test.skip(
+    browserName !== "chromium",
+    "Only Chromium has a fake microphone in these tests.",
+  );
+  await page.goto("/");
+  await load(page);
+  await page.locator("#repeat-count").selectOption("0");
+  await page.locator("#repeat-mode").selectOption("all");
+  await page.locator("#play").click();
+  await expect.poll(() => playing(page)).toBe(true);
+  await page.getByRole("button", { name: "録音する", exact: true }).click();
+  await expect(page.locator("#record-status")).toContainText("録音中");
+  expect(await playing(page)).toBe(false);
+  await page.waitForTimeout(500);
+  expect(await playing(page)).toBe(false);
+  await page.locator("#play").click();
+  await expect(page.locator("#record-status")).toHaveText("録音あり");
+  await expect.poll(() => playing(page)).toBe(true);
+  await expect(page.locator("#notice")).toContainText("録音を止めて");
+});

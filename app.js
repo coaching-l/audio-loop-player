@@ -444,7 +444,14 @@ function togglePlay() {
   if (engine.active) {
     engine.pause();
     persist();
-  } else void engine.play();
+    return;
+  }
+  // The model must not play into the microphone: finish the recording first.
+  if (recorder.recording) {
+    recorder.stop();
+    notice("録音を止めて、再生します。");
+  }
+  void engine.play();
 }
 function skip(seconds) {
   stopCompare();
@@ -1217,6 +1224,11 @@ $("record").addEventListener("click", async () => {
     return;
   }
   stopCompare();
+  // Pause the model so it is not recorded along with the voice.
+  if (engine?.active) {
+    engine.pause();
+    persist();
+  }
   try {
     await recorder.start();
   } catch (e) {
