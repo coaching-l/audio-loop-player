@@ -2,6 +2,11 @@
 <html lang="ja">
   <head>
     <meta charset="UTF-8" />
+    <!-- Only this site's own files may load; audio and recordings stay as local blob: URLs. -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'"
+    />
     <meta
       name="viewport"
       content="width=device-width, initial-scale=1, viewport-fit=cover"
@@ -37,8 +42,8 @@
       content="端末の音声で、繰り返し聴く・声に出す。アップロード不要の語学学習プレーヤー。"
     />
     <title>音声リピートプレーヤー | COACHING-L</title>
-    <link rel="stylesheet" href="./style.css?v=9" />
-    <script type="module" src="./app.js?v=9"></script>
+    <link rel="stylesheet" href="./style.css?v=10" />
+    <script type="module" src="./app.js?v=10"></script>
   </head>
   <body>
     <main>
@@ -127,6 +132,12 @@
                 </button>
               </div>
               <div id="interval-gauge" class="interval-gauge">
+                <canvas
+                  id="waveform"
+                  class="waveform"
+                  aria-hidden="true"
+                  hidden
+                ></canvas>
                 <div class="interval-track" aria-hidden="true">
                   <div id="interval-fill"></div>
                 </div>
@@ -182,6 +193,30 @@
                 今の位置をBに
               </button>
             </div>
+            <div
+              id="phrase-actions"
+              class="gauge-actions phrase-actions"
+              hidden
+            >
+              <button
+                id="prev-phrase"
+                class="button secondary"
+                type="button"
+                aria-label="前の文をA–B区間にする"
+              >
+                前の文へ</button
+              ><button
+                id="next-phrase"
+                class="button secondary"
+                type="button"
+                aria-label="次の文をA–B区間にする"
+              >
+                次の文へ
+              </button>
+            </div>
+            <p id="phrase-help" class="small phrase-help" hidden>
+              波形の無音で区切った「文」を、そのままA–B区間にします。区切りは目安なので、ずれたらA・Bを動かしてください。
+            </p>
             <div class="transport">
               <button id="back" class="skip" aria-label="5秒戻る">
                 <svg
@@ -333,6 +368,14 @@
                 /><span>秒</span>
               </div>
             </div>
+            <div class="ramp-row">
+              <label for="ramp-step">くり返すたびに速くする</label
+              ><select id="ramp-step">
+                <option value="0">しない</option>
+                <option value="0.05">0.05倍ずつ</option>
+                <option value="0.1">0.1倍ずつ</option>
+              </select>
+            </div>
             <details class="hint-details">
               <summary>くり返しのしくみ</summary>
               <p class="small">
@@ -344,13 +387,49 @@
               <p class="small">
                 秒数で決めた無音は、再生速度を変えても同じ長さです。設定を変えると、回数は0から数え直します。
               </p>
+              <p class="small">
+                「くり返すたびに速くする」は、ゆっくりの速度から始めて1回ごとに速くし、1.0倍で止めます（例：0.8倍・0.1倍ずつなら、0.8→0.9→1.0）。再生速度が1.0倍以上のときは変わりません。
+              </p>
             </details>
           </fieldset>
+        </section>
+        <section class="card record-card" aria-labelledby="record-heading">
+          <div class="section-heading">
+            <h2 id="record-heading">
+              <span class="step">03</span> 録音して聞き比べ
+            </h2>
+            <span id="record-status" class="tag">録音なし</span>
+          </div>
+          <fieldset id="record-controls" disabled>
+            <div class="record-actions">
+              <button id="record" class="button primary" type="button">
+                録音する</button
+              ><button
+                id="play-recording"
+                class="button secondary"
+                type="button"
+                disabled
+              >
+                自分の声を聞く</button
+              ><button
+                id="compare"
+                class="button secondary"
+                type="button"
+                disabled
+              >
+                お手本→自分の声
+              </button>
+            </div>
+          </fieldset>
+          <p id="record-error" class="error" role="alert" hidden></p>
+          <p class="small">
+            お手本の区間を聞いたら「録音する」で声に出し、「お手本→自分の声」で続けて聞き比べます。録音は最長60秒で、このページの中にだけ置きます。保存も送信もせず、別の音声を開くと消えます。
+          </p>
         </section>
         <section class="card saved-card" aria-labelledby="saved-heading">
           <div class="section-heading">
             <h2 id="saved-heading">
-              <span class="step">03</span> 保存した練習区間
+              <span class="step">04</span> 保存した練習区間
             </h2>
             <span id="saved-count" class="tag">0件</span>
           </div>
@@ -422,6 +501,35 @@
             <p>
               覚えたい区間は、名前を付けて保存できます。練習区間・速度・再生位置は、音声ごとに記録されます。
             </p>
+          </section>
+          <section>
+            <h2>ロック画面・イヤホン・キーボードで操作する</h2>
+            <p>
+              ロック画面やイヤホンのボタンでも、再生・一時停止・5秒戻る／進むができます（端末やブラウザによって使えるボタンは異なります）。「前へ」のボタンは、区間の最初に戻ります。
+            </p>
+            <dl class="shortcut-list">
+              <div>
+                <dt>Space または K</dt>
+                <dd>再生・一時停止</dd>
+              </div>
+              <div>
+                <dt>← または J ／ → または L</dt>
+                <dd>5秒戻る／進む</dd>
+              </div>
+              <div>
+                <dt>A ／ B</dt>
+                <dd>今の位置を開始点A／終了点Bにする</dd>
+              </div>
+              <div>
+                <dt>R</dt>
+                <dd>区間リピートのON・OFF</dd>
+              </div>
+              <div>
+                <dt>[ ／ ]</dt>
+                <dd>速度を0.05倍ずつ下げる／上げる</dd>
+              </div>
+            </dl>
+            <p>入力欄に文字を入れているときは、キー操作は効きません。</p>
           </section>
           <section>
             <h2>保存先とデータの扱い</h2>

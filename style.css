@@ -1234,3 +1234,71 @@ label {
 .mini-play[data-state="paused"] .icon-pause {
   display: none;
 }
+
+/* 波形：区間の中は金、外は灰色。波形があるときは細いバーの代わりに使う */
+.waveform {
+  --wave-inside: var(--gold);
+  --wave-outside: var(--input-border);
+  position: absolute;
+  left: 22px;
+  right: 22px;
+  top: 4px;
+  width: calc(100% - 44px);
+  height: 48px;
+  pointer-events: none;
+}
+.interval-gauge.has-waveform {
+  height: 150px;
+}
+.has-waveform .interval-track {
+  display: none;
+}
+.has-waveform .marker-a {
+  top: 58px;
+}
+.has-waveform .marker-a::before {
+  height: 30px;
+}
+.has-waveform .marker-b {
+  top: 104px;
+}
+.has-waveform .marker-b::before {
+  height: 76px;
+}
+.phrase-actions {
+  margin-top: 10px;
+}
+.phrase-help {
+  margin-top: 6px;
+}
+
+.ramp-row {
+  margin-bottom: 8px;
+}
+
+/* 録音して聞き比べ */
+.record-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+/* キーボード操作の一覧 */
+.shortcut-list {
+  margin: 8px 0 0;
+}
+.shortcut-list div {
+  display: flex;
+  gap: 12px;
+  padding: 4px 0;
+  border-top: 1px solid var(--line);
+}
+.shortcut-list dt {
+  flex: 0 0 44%;
+  color: var(--heading);
+  font-weight: 600;
+}
+.shortcut-list dd {
+  margin: 0;
+}

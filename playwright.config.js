@@ -9,7 +9,12 @@ const chromium = {
       (!process.env.CI && existsSync("/usr/bin/chromium")
         ? "/usr/bin/chromium"
         : undefined),
-    args: ["--no-sandbox"],
+    // A fake microphone that is allowed without a prompt, for the recording tests.
+    args: [
+      "--no-sandbox",
+      "--use-fake-ui-for-media-stream",
+      "--use-fake-device-for-media-stream",
+    ],
   },
 };
 export default defineConfig({

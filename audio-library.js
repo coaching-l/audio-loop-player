@@ -157,12 +157,13 @@ export function storedFile(record) {
 }
 // Explicitly load the probe. Mobile browsers may still defer metadata until a tap.
 // A timeout is not proof of corrupt bytes: preserve the file and request playback confirmation.
-export async function validateAudio(file) {
+// `wait` shortens the probe once a batch has shown that this browser defers metadata.
+export async function validateAudio(file, wait = 8000) {
   file = await readableAudio(file);
   return new Promise((resolve, reject) => {
     const audio = document.createElement("audio");
     const url = URL.createObjectURL(file);
-    const timeout = setTimeout(() => finish("deferred"), 8000);
+    const timeout = setTimeout(() => finish("deferred"), wait);
     function finish(valid) {
       clearTimeout(timeout);
       audio.onloadedmetadata = null;
