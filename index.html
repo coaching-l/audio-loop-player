@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <meta name="color-scheme" content="light dark" />
+    <meta
+      name="theme-color"
+      content="#f7f8fa"
+      media="(prefers-color-scheme: light)"
+    />
+    <meta
+      name="theme-color"
+      content="#02172f"
+      media="(prefers-color-scheme: dark)"
+    />
+    <link
+      rel="icon"
+      href="./icons/favicon-32.png"
+      sizes="32x32"
+      type="image/png"
+    />
+    <link
+      rel="icon"
+      href="./icons/icon-192.png"
+      sizes="192x192"
+      type="image/png"
+    />
+    <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
+    <meta
+      name="description"
+      content="端末の音声で、繰り返し聴く・声に出す。アップロード不要の語学学習プレーヤー。"
+    />
+    <title>音声リピートプレーヤー | COACHING-L</title>
+    <link rel="stylesheet" href="./style.css" />
+    <script type="module" src="./app.js"></script>
+  </head>
+  <body>
+    <main>
+      <header class="page-header">
+        <a
+          class="brand"
+          href="./"
+          aria-label="COACHING-L 音声リピートプレーヤー"
+        >
+          <img
+            class="brand-logo"
+            src="./icons/logo-144.png"
+            width="52"
+            height="52"
+            alt=""
+          />
+          <div>
+            <p class="brand-name">COACHING-L</p>
+            <h1 class="app-title">音声リピートプレーヤー</h1>
+          </div>
+        </a>
+      </header>
+      <div class="intro">
+        <h2 class="lead">聴く。くり返す。<br />自分の言葉にする。</h2>
+        <p>いつもの音声から、あなただけの練習区間を。</p>
+      </div>
+      <section id="drop-zone" class="file-card" aria-labelledby="file-heading">
+        <div class="file-symbol" aria-hidden="true">♫</div>
+        <div class="file-copy">
+          <h2 id="file-heading">練習する音声を選ぶ</h2>
+          <p id="file-name">ここに音声ファイルをドロップ</p>
+          <p class="small">MP3 / M4A / WAV ほか、ブラウザ対応形式</p>
+        </div>
+        <label class="button primary file-button" for="file-input"
+          >ファイルを選ぶ</label
+        ><input
+          id="file-input"
+          type="file"
+          accept="audio/*,.mp3,.m4a,.wav,.aac,.ogg,.flac,.webm,.opus"
+          class="visually-hidden"
+        />
+      </section>
+      <p id="error" class="error" role="alert" hidden></p>
+      <p id="notice" class="notice" role="status"></p>
+      <div class="workspace">
+        <section class="card player-card" aria-labelledby="player-heading">
+          <div class="section-heading">
+            <h2 id="player-heading"><span class="step">01</span> プレーヤー</h2>
+            <span id="play-status" class="tag" role="status"
+              >音声を選択してください</span
+            >
+          </div>
+          <fieldset id="player-controls" disabled>
+            <div class="timeline">
+              <div class="time-row">
+                <output id="current-time">0:00.0</output
+                ><span id="duration">0:00.0</span>
+              </div>
+              <label for="seek" class="visually-hidden">再生位置</label
+              ><input
+                id="seek"
+                type="range"
+                min="0"
+                max="0"
+                step="0.01"
+                value="0"
+              />
+              <div class="ab-legend">
+                <span id="a-legend">A —</span><span id="b-legend">B —</span>
+              </div>
+            </div>
+            <div class="transport">
+              <button id="back" class="skip" aria-label="5秒戻る">
+                ↶ <span>5秒</span></button
+              ><button id="play" class="play-button" aria-label="再生">▶</button
+              ><button id="forward" class="skip" aria-label="5秒進む">
+                ↷ <span>5秒</span>
+              </button>
+            </div>
+            <div class="speed-section">
+              <div class="label-row">
+                <label for="speed">再生速度</label
+                ><output id="speed-value">1.00×</output>
+              </div>
+              <input
+                id="speed"
+                type="range"
+                min="0.5"
+                max="2"
+                step="0.05"
+                value="1"
+              />
+              <div class="range-labels">
+                <span>0.5× ゆっくり</span
+                ><button id="normal-speed" class="text-button">
+                  1.0× に戻す</button
+                ><span>2.0×</span>
+              </div>
+              <p class="small">対応ブラウザでは声の高さを維持します。</p>
+            </div>
+          </fieldset>
+          <div class="tip">
+            <span aria-hidden="true">✦</span>
+            <p>
+              短い区間をくり返し聴いて、そのあと声に出してみましょう。無音時間を入れると、発話の練習にも。
+            </p>
+          </div>
+        </section>
+        <section class="card repeat-card" aria-labelledby="repeat-heading">
+          <div class="section-heading">
+            <h2 id="repeat-heading">
+              <span class="step">02</span> リピート設定
+            </h2>
+            <span id="repeat-progress" class="tag">—</span>
+          </div>
+          <fieldset id="repeat-controls" disabled>
+            <label for="repeat-mode">リピートする範囲</label
+            ><select id="repeat-mode">
+              <option value="off">リピート OFF</option>
+              <option value="ab">A–B 区間</option>
+              <option value="all">音声全体</option>
+            </select>
+            <div class="points">
+              <div class="point">
+                <div class="point-heading">
+                  <label for="point-a"
+                    ><span class="point-letter">A</span> 開始点</label
+                  ><button id="set-a" class="text-button">
+                    現在位置を設定
+                  </button>
+                </div>
+                <input
+                  id="point-a"
+                  type="text"
+                  inputmode="decimal"
+                  value="0:00.000"
+                  aria-describedby="time-help"
+                  autocomplete="off"
+                />
+              </div>
+              <div class="point">
+                <div class="point-heading">
+                  <label for="point-b"
+                    ><span class="point-letter b">B</span> 終了点</label
+                  ><button id="set-b" class="text-button">
+                    現在位置を設定
+                  </button>
+                </div>
+                <input
+                  id="point-b"
+                  type="text"
+                  inputmode="decimal"
+                  value="0:00.000"
+                  aria-describedby="time-help"
+                  autocomplete="off"
+                />
+              </div>
+            </div>
+            <p id="time-help" class="small">
+              分:秒（例 1:23.500）または秒数で入力。Enter
+              または入力欄を離れると反映。
+            </p>
+            <p id="range-error" class="error" role="alert" hidden></p>
+            <div class="repeat-options">
+              <div>
+                <label for="repeat-count">再生回数</label
+                ><select id="repeat-count">
+                  <option value="2">2回</option>
+                  <option value="3">3回</option>
+                  <option value="5">5回</option>
+                  <option value="10">10回</option>
+                  <option value="0">無制限</option>
+                </select>
+              </div>
+              <div>
+                <label for="gap">リピート間の無音</label>
+                <div class="gap-input">
+                  <input
+                    id="gap"
+                    type="number"
+                    min="0"
+                    max="10"
+                    step="0.1"
+                    value="0"
+                  /><span>秒</span>
+                </div>
+              </div>
+            </div>
+            <p class="small">
+              回数は最初の再生を含みます。無音時間は速度にかかわらず実時間です。設定変更時は回数をリセットします。
+            </p>
+          </fieldset>
+        </section>
+        <section class="card saved-card" aria-labelledby="saved-heading">
+          <div class="section-heading">
+            <h2 id="saved-heading">
+              <span class="step">03</span> 保存した練習区間
+            </h2>
+            <span id="saved-count" class="tag">0件</span>
+          </div>
+          <fieldset id="save-controls" disabled>
+            <form id="save-form" class="save-form">
+              <label for="segment-name" class="visually-hidden"
+                >練習区間の名前</label
+              ><input
+                id="segment-name"
+                type="text"
+                maxlength="60"
+                placeholder="区間の名前（例：冒頭のフレーズ）"
+                required
+              /><button class="button secondary" type="submit">
+                区間を保存
+              </button>
+            </form>
+          </fieldset>
+          <ul id="segments" class="segments"></ul>
+          <p id="empty-segments" class="empty">
+            覚えたいフレーズを、ここに残しておこう。<br /><span class="small"
+              >A–B区間・速度・回数・無音時間をまとめて保存します。</span
+            >
+          </p>
+          <p class="small storage-note">
+            設定はこのブラウザ内に保存。次回は同じ音声ファイルを選び直してください。
+          </p>
+        </section>
+      </div>
+      <footer>
+        <p class="footer-brand">COACHING-L</p>
+        <p>音声ファイルはサーバーへ送信されません。</p>
+        <p>
+          画面ロック・別アプリへの切り替え中は、OSの制限により区間や無音時間がずれることがあります。正確な練習は画面を開いた状態で。
+        </p>
+      </footer>
+      <div id="audio-container" hidden></div>
+    </main>
+  </body>
+</html>

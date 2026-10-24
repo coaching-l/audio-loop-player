@@ -1,0 +1,19 @@
+{
+  "name": "audio-loop-player",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node scripts/serve.mjs",
+    "test": "playwright test --project=chromium",
+    "test:android": "playwright test --project=android-chrome",
+    "test:safari": "playwright test --project=webkit --project=iphone-webkit",
+    "test:all": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.58.2"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
