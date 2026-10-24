@@ -101,6 +101,44 @@ async function saveRecord(file, data) {
     transaction.onerror = () => {};
   });
 }
+// Undo for a deletion: put the record back with bytes read before it was deleted.
+export async function restoreAudio(record, bytes) {
+  const save = (data) => putBack({ ...record, blob: data });
+  try {
+    return await save(new Blob([bytes], { type: record.type }));
+  } catch (error) {
+    if (error.name !== "UnknownError") throw error;
+    return save(bytes);
+  }
+}
+async function putBack(record) {
+  const db = await openLibrary();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction("audio", "readwrite");
+    const store = transaction.objectStore("audio");
+    let problem;
+    const count = store.count();
+    count.onsuccess = () => {
+      if (count.result >= MAX_AUDIO_FILES) {
+        problem = new Error(
+          "登録できる音声が10件に達しているため、元に戻せません。",
+        );
+        transaction.abort();
+        return;
+      }
+      try {
+        store.put(record);
+      } catch (error) {
+        problem = error;
+        transaction.abort();
+      }
+    };
+    transaction.oncomplete = () => resolve(record);
+    transaction.onabort = () =>
+      reject(problem || transaction.error || new Error("元に戻せません。"));
+    transaction.onerror = () => {};
+  });
+}
 export async function removeAudio(id) {
   const db = await openLibrary();
   return new Promise((resolve, reject) => {
