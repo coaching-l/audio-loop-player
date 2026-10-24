@@ -102,7 +102,7 @@ test("switching registered audio cancels pending silence and keeps per-file sett
   await page.locator("#gap").press("Tab");
   await page.locator("#repeat-mode").selectOption("ab");
   await page.locator("#play").click();
-  await expect(page.locator("#play-status")).toHaveText("無音待ち中");
+  await expect(page.locator("#play-status")).toHaveText("無音中");
   await page
     .getByRole("button", { name: "lesson-2.wavを開く", exact: true })
     .click();
@@ -171,13 +171,11 @@ test("quota failure keeps registered audio and reports that the new audio was no
       throw new DOMException("full", "QuotaExceededError");
     };
   });
-  await page
-    .locator("#file-input")
-    .setInputFiles({
-      name: "quota.wav",
-      mimeType: "audio/wav",
-      buffer: makeWav(),
-    });
+  await page.locator("#file-input").setInputFiles({
+    name: "quota.wav",
+    mimeType: "audio/wav",
+    buffer: makeWav(),
+  });
   await expect(page.locator("#library-status")).toContainText("保存容量が不足");
   await expect(page.locator("#audio-list .audio-item")).toHaveCount(1);
   await expect(page.locator("#play")).toBeEnabled();
@@ -188,4 +186,28 @@ test("quota failure keeps registered audio and reports that the new audio was no
   await expect(
     page.getByRole("button", { name: "quota.wavを開く", exact: true }),
   ).toHaveCount(0);
+});
+test("saving audio requests persistent storage once and shows the space used", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    window.persistCalls = 0;
+    let granted = false;
+    navigator.storage.persisted = async () => granted;
+    navigator.storage.persist = async () => {
+      window.persistCalls++;
+      granted = true;
+      return true;
+    };
+  });
+  await page.goto("/");
+  await expect(page.locator("#storage-info")).toBeHidden();
+  await add(page, 1);
+  await expect(page.locator("#storage-info")).toContainText("使用中の容量");
+  await expect(page.locator("#storage-info")).toContainText("自動で消さない");
+  // Injected files get a fresh lastModified, so both count as new audio.
+  await page.locator("#file-input").setInputFiles(files(2));
+  await expect(page.locator("#audio-list .audio-item")).toHaveCount(3);
+  await expect(page.locator("#library-status")).not.toContainText("保存中");
+  expect(await page.evaluate(() => window.persistCalls)).toBe(1);
 });

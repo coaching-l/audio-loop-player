@@ -7,7 +7,7 @@ import { resolve, join } from "node:path";
 // Dedicated HTTP server exercises real SW fetches, including failed installs and upgrades.
 // Playwright route mocks cannot reliably intercept fetches initiated inside a worker.
 async function server() {
-  const state = { fail: false, version: "v4" };
+  const state = { fail: false, version: "v5" };
   const host = createServer(async (req, res) => {
     const path = new URL(req.url, "http://localhost").pathname;
     if (path === "/pomodoro/") {
@@ -33,6 +33,8 @@ async function server() {
       "icons/logo-144.png",
       "icons/favicon-32.png",
       "icons/icon-192.png",
+      "icons/icon-512.png",
+      "icons/icon-maskable-512.png",
       "icons/apple-touch-icon.png",
     ];
     if (

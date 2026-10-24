@@ -1,4 +1,6 @@
 // All repeat delays use wall-clock milliseconds, independently of playbackRate.
+// A relative gap (gapRatio) lasts as long as the interval took to play at the current speed.
+export const GAP_RATIOS = [0, 1, 1.5, 2];
 export class LoopPlayer {
   constructor(audio, onChange = () => {}, onError = () => {}) {
     this.audio = audio;
@@ -9,6 +11,7 @@ export class LoopPlayer {
     this.b = 0;
     this.limit = 2;
     this.gap = 0;
+    this.gapRatio = 0;
     this.completed = 0;
     this.phase = "paused";
     this.timer = null;
@@ -40,7 +43,13 @@ export class LoopPlayer {
     this.timer = null;
     this.epoch++;
   }
-  configure({ mode, a, b, limit, gap }) {
+  get gapMilliseconds() {
+    if (!this.gapRatio) return this.gap * 1000;
+    return (
+      ((this.end - this.start) / this.audio.playbackRate) * this.gapRatio * 1000
+    );
+  }
+  configure({ mode, a, b, limit, gap, gapRatio = 0 }) {
     if (
       !["off", "ab", "all"].includes(mode) ||
       !Number.isFinite(a) ||
@@ -51,10 +60,11 @@ export class LoopPlayer {
       ![0, 2, 3, 5, 10].includes(limit) ||
       !Number.isFinite(gap) ||
       gap < 0 ||
-      gap > 10
+      gap > 10 ||
+      !GAP_RATIOS.includes(gapRatio)
     ) {
       throw new Error(
-        "開始点は終了点より前、終了点は音声の長さ以内にしてください。",
+        "開始点Aは終了点Bより前に、Bは音声の長さ以内にしてください。",
       );
     }
     if (
@@ -62,12 +72,13 @@ export class LoopPlayer {
       this.a === a &&
       this.b === b &&
       this.limit === limit &&
-      this.gap === gap
+      this.gap === gap &&
+      this.gapRatio === gapRatio
     )
       return;
     const wasActive = this.active;
     this.pause();
-    Object.assign(this, { mode, a, b, limit, gap });
+    Object.assign(this, { mode, a, b, limit, gap, gapRatio });
     this.completed = 0;
     this.remaining = 0;
     this.phase = "paused";
@@ -115,7 +126,7 @@ export class LoopPlayer {
       this.onError(
         error.name === "NotAllowedError"
           ? "ブラウザが再生を止めました。再生ボタンをもう一度押してください。"
-          : "音声を再生できません。対応形式の別のファイルを選んでください。",
+          : "音声を再生できません。MP3・M4A・WAVなど、別のファイルをお試しください。",
       );
     }
   }
@@ -145,7 +156,7 @@ export class LoopPlayer {
       this.finish();
       return;
     }
-    this.wait(this.gap * 1000);
+    this.wait(this.gapMilliseconds);
   }
   wait(milliseconds) {
     this.clearTimer();

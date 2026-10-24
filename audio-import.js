@@ -19,7 +19,7 @@ export function readableAudio(file) {
                 reject(
                   importError(
                     "AudioReadTimeout",
-                    "音声ファイルの取得に時間がかかっています。端末へのダウンロードを完了してから選び直してください。",
+                    "ファイルの読み取りに時間がかかっています。クラウド上のファイルは、端末へのダウンロードを済ませてから選び直してください。",
                   ),
                 ),
               60000,
@@ -29,7 +29,7 @@ export function readableAudio(file) {
         if (!bytes.byteLength)
           throw importError(
             "AudioReadError",
-            "音声ファイルが空です。元ファイルを確認してください。",
+            "ファイルの中身が空です。元のファイルを確認してください。",
           );
         const extension = file.name.split(".").pop().toLowerCase();
         const types = {
@@ -54,7 +54,7 @@ export function readableAudio(file) {
           throw error;
         throw importError(
           "AudioReadError",
-          "音声ファイルを端末から読み取れません。ファイル管理アプリでダウンロードを完了し、端末内に保存してから選び直してください。",
+          "ファイルを読み取れません。「ファイル」アプリなどでダウンロードを済ませ、端末に保存してから選び直してください。",
         );
       } finally {
         clearTimeout(timer);

@@ -1,11 +1,14 @@
 import { existsSync } from "node:fs";
 import { defineConfig, devices } from "@playwright/test";
 
+// CI uses the Chromium that Playwright installs; locally a system Chromium is reused if present.
 const chromium = {
   launchOptions: {
     executablePath:
       process.env.CHROMIUM_PATH ||
-      (existsSync("/usr/bin/chromium") ? "/usr/bin/chromium" : undefined),
+      (!process.env.CI && existsSync("/usr/bin/chromium")
+        ? "/usr/bin/chromium"
+        : undefined),
     args: ["--no-sandbox"],
   },
 };
