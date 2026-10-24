@@ -165,6 +165,12 @@ function drawPlayer(player) {
   $("current-time").textContent = formatTime(player.audio.currentTime, 1);
   $("mini-time").textContent = $("current-time").textContent;
   $("seek").value = player.audio.currentTime;
+  // While zoomed, the view follows playback that runs past its edges.
+  const time = player.audio.currentTime;
+  if (zoomed() && player.active && (time < view.start || time > view.end)) {
+    const span = view.end - view.start;
+    setView(time + span * 0.4, span);
+  }
   const active = player.active;
   $("play").dataset.state = active ? "playing" : "paused";
   $("play").setAttribute("aria-label", active ? "一時停止" : "再生");
@@ -311,7 +317,8 @@ async function loadFile(file) {
   $("current-time").textContent = "0:00.0";
   $("duration").textContent = "0:00.0";
   $("seek").value = 0;
-  $("seek").max = 0;
+  view = { start: 0, end: 0 };
+  applyView();
   $("repeat-progress").textContent = "—";
   $("a-legend").textContent = "A —";
   $("b-legend").textContent = "B —";
@@ -372,7 +379,7 @@ async function loadFile(file) {
       if (Number.isFinite(stored?.position))
         currentEngine.seek(stored.position);
       $("duration").textContent = formatTime(audio.duration, 1);
-      $("seek").max = audio.duration;
+      resetView();
       syncFields();
       enable(true);
       renderSegments();
@@ -575,7 +582,8 @@ function drawGauge() {
     drawWaveform(
       $("waveform"),
       analysis,
-      engine.audio.duration,
+      view.start,
+      view.end,
       engine.a,
       engine.b,
     );
@@ -605,16 +613,73 @@ function stepPhrase(direction) {
     return;
   }
   const b = Math.min(target.end, engine.audio.duration);
-  if (updateSettings({ a: target.start, b, mode: "ab" }))
+  if (updateSettings({ a: target.start, b, mode: "ab" })) {
+    if (zoomed()) fitView();
     engine.seek(target.start);
+  }
 }
 $("prev-phrase").addEventListener("click", () => stepPhrase(-1));
 $("next-phrase").addEventListener("click", () => stepPhrase(1));
+// The gauge can show part of the audio, so a short phrase gets room for A and B.
+const MIN_VIEW = 0.5;
+let view = { start: 0, end: 0 };
+function zoomed() {
+  return ready && view.end - view.start < engine.audio.duration - 0.001;
+}
+function percent(time) {
+  const span = view.end - view.start;
+  return span > 0 ? ((time - view.start) / span) * 100 : 0;
+}
+function setView(center, span) {
+  const duration = engine.audio.duration;
+  span = Math.min(duration, Math.max(Math.min(MIN_VIEW, duration), span));
+  const start = Math.min(Math.max(0, center - span / 2), duration - span);
+  view = { start, end: start + span };
+  applyView();
+}
+function resetView() {
+  view = { start: 0, end: ready ? engine.audio.duration : 0 };
+  applyView();
+}
+function applyView() {
+  $("seek").min = view.start;
+  $("seek").max = view.end;
+  $("seek").step = zoomed() ? "0.001" : "0.01";
+  if (!ready) return;
+  $("seek").value = engine.audio.currentTime;
+  $("zoom-out").disabled = !zoomed();
+  $("zoom-in").disabled = view.end - view.start <= MIN_VIEW + 0.001;
+  $("zoom-range").textContent = zoomed()
+    ? `${formatTime(view.start, 2)}–${formatTime(view.end, 2)} を表示中`
+    : "全体を表示中";
+  syncGauge();
+}
+function fitView() {
+  const pad = Math.max(0.2, (engine.b - engine.a) * 0.25);
+  setView((engine.a + engine.b) / 2, engine.b - engine.a + pad * 2);
+}
+$("zoom-in").addEventListener("click", () => {
+  const span = view.end - view.start;
+  // Zoom toward the practice interval when it is on screen, else toward playback.
+  const middle = (engine.a + engine.b) / 2;
+  const center =
+    engine.mode === "ab" && middle >= view.start && middle <= view.end
+      ? middle
+      : engine.audio.currentTime;
+  setView(center, span / 2);
+});
+$("zoom-out").addEventListener("click", () =>
+  setView((view.start + view.end) / 2, (view.end - view.start) * 2),
+);
+$("zoom-fit").addEventListener("click", fitView);
 function syncGauge() {
   const duration = engine.audio.duration;
   for (const point of ["a", "b"]) {
     const marker = $("marker-" + point);
-    marker.style.left = (engine[point] / duration) * 100 + "%";
+    const left = percent(engine[point]);
+    marker.style.left = left + "%";
+    // A handle outside the zoomed range is hidden until the view reaches it.
+    marker.style.visibility = left < -0.01 || left > 100.01 ? "hidden" : "";
     marker.setAttribute("aria-valuenow", engine[point]);
     marker.setAttribute("aria-valuemin", point === "a" ? 0 : engine.a + 0.001);
     marker.setAttribute(
@@ -623,8 +688,9 @@ function syncGauge() {
     );
     marker.setAttribute("aria-valuetext", formatTime(engine[point]));
   }
-  $("interval-fill").style.left = (engine.a / duration) * 100 + "%";
-  $("interval-fill").style.right = 100 - (engine.b / duration) * 100 + "%";
+  const clamp = (value) => Math.min(100, Math.max(0, value));
+  $("interval-fill").style.left = clamp(percent(engine.a)) + "%";
+  $("interval-fill").style.right = 100 - clamp(percent(engine.b)) + "%";
   $("toggle-ab").setAttribute("aria-pressed", String(engine.mode === "ab"));
   $("toggle-ab").textContent =
     "区間リピート " + (engine.mode === "ab" ? "ON" : "OFF");
@@ -667,10 +733,11 @@ for (const point of ["a", "b"]) {
     const rect = document
       .querySelector(".interval-markers")
       .getBoundingClientRect();
-    moveMarker(
-      point,
-      ((event.clientX - rect.left) / rect.width) * engine.audio.duration,
+    const fraction = Math.min(
+      1,
+      Math.max(0, (event.clientX - rect.left) / rect.width),
     );
+    moveMarker(point, view.start + fraction * (view.end - view.start));
   });
   function finish(event) {
     if (
@@ -690,7 +757,11 @@ for (const point of ["a", "b"]) {
   marker.addEventListener("lostpointercapture", finish);
   marker.addEventListener("keydown", (event) => {
     if (!ready) return;
-    const step = event.shiftKey ? 1 : 0.1;
+    // Finer steps when zoomed in: about 1% of the visible range.
+    const fine = zoomed()
+      ? Math.max(0.01, Math.min(0.1, (view.end - view.start) / 100))
+      : 0.1;
+    const step = event.shiftKey ? fine * 10 : fine;
     const values = {
       ArrowLeft: engine[point] - step,
       ArrowDown: engine[point] - step,
@@ -768,7 +839,8 @@ function closeCurrentAudio() {
   $("current-time").textContent = "0:00.0";
   $("duration").textContent = "0:00.0";
   $("seek").value = 0;
-  $("seek").max = 0;
+  view = { start: 0, end: 0 };
+  applyView();
 }
 async function deleteAudio(record, button) {
   button.disabled = true;

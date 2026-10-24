@@ -42,8 +42,8 @@
       content="端末の音声で、繰り返し聴く・声に出す。アップロード不要の語学学習プレーヤー。"
     />
     <title>音声リピートプレーヤー | COACHING-L</title>
-    <link rel="stylesheet" href="./style.css?v=11" />
-    <script type="module" src="./app.js?v=11"></script>
+    <link rel="stylesheet" href="./style.css?v=12" />
+    <script type="module" src="./app.js?v=12"></script>
   </head>
   <body>
     <main>
@@ -182,9 +182,32 @@
               <div class="ab-legend">
                 <span id="a-legend">A —</span><span id="b-legend">B —</span>
               </div>
+              <div class="zoom-tools">
+                <span id="zoom-range" class="zoom-range">全体を表示中</span>
+                <div class="zoom-buttons">
+                  <button
+                    id="zoom-out"
+                    class="text-button"
+                    type="button"
+                    aria-label="ゲージを縮小"
+                    disabled
+                  >
+                    縮小</button
+                  ><button
+                    id="zoom-in"
+                    class="text-button"
+                    type="button"
+                    aria-label="ゲージを拡大"
+                  >
+                    拡大</button
+                  ><button id="zoom-fit" class="text-button" type="button">
+                    区間に合わせる
+                  </button>
+                </div>
+              </div>
             </div>
             <p id="gauge-help" class="small">
-              AとBを左右に動かして、くり返す範囲を決めます。上の丸いつまみは再生位置です。
+              AとBを左右に動かして、くり返す範囲を決めます。上の丸いつまみは再生位置です。短い区間は「拡大」や「区間に合わせる」でゲージを広げると、細かく指定できます。
             </p>
             <div class="gauge-actions">
               <button id="gauge-set-a" class="button secondary" type="button">
@@ -496,7 +519,7 @@
           <section>
             <h2>聴く・くり返す・保存する</h2>
             <p>
-              再生・一時停止、5秒戻る／進む、速度の変更ができます。くり返したい範囲は、ゲージのA・Bを動かして決めます（A・Bを動かすと、区間リピートがONになります）。時刻を数字で入力したり、音声全体をくり返したり、回数や無音の長さを変えたりもできます。
+              再生・一時停止、5秒戻る／進む、速度の変更ができます。くり返したい範囲は、ゲージのA・Bを動かして決めます（A・Bを動かすと、区間リピートがONになります）。短い区間は「拡大」や「区間に合わせる」でゲージを広げると、細かく指定できます。時刻を数字で入力したり、音声全体をくり返したり、回数や無音の長さを変えたりもできます。
             </p>
             <p>
               覚えたい区間は、名前を付けて保存できます。練習区間・速度・再生位置は、音声ごとに記録されます。
