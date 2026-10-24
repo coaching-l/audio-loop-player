@@ -1,13 +1,14 @@
 import { test, expect } from "@playwright/test";
 import { createServer } from "node:http";
 import { readFile, mkdtemp, rm } from "node:fs/promises";
+import { shellVersion } from "../scripts/bump-shell.mjs";
 import { tmpdir } from "node:os";
 import { resolve, join } from "node:path";
 
 // Dedicated HTTP server exercises real SW fetches, including failed installs and upgrades.
 // Playwright route mocks cannot reliably intercept fetches initiated inside a worker.
 async function server() {
-  const state = { fail: false, version: "v7" };
+  const state = { fail: false, version: shellVersion() };
   const host = createServer(async (req, res) => {
     const path = new URL(req.url, "http://localhost").pathname;
     if (path === "/pomodoro/") {
@@ -28,6 +29,8 @@ async function server() {
       "player.js",
       "audio-library.js",
       "audio-import.js",
+      "waveform.js",
+      "recorder.js",
       "style.css",
       "manifest.webmanifest",
       "icons/logo-144.png",

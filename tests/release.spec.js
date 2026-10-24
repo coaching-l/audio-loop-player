@@ -31,3 +31,17 @@ test("manifest meets install requirements for Android", () => {
   expect(sizes).toEqual(expect.arrayContaining(["192x192", "512x512"]));
   expect(icons.some((icon) => icon.purpose === "maskable")).toBe(true);
 });
+
+test("changed offline files come with a new cache version", async () => {
+  const { shellHash, shellVersion, recordPath } =
+    await import("../scripts/bump-shell.mjs");
+  const record = JSON.parse(read(recordPath));
+  expect(
+    shellHash(),
+    "Files in sw.js FILES changed. Run `npm run bump-shell` before releasing.",
+  ).toBe(record.hash);
+  expect(
+    shellVersion(),
+    "sw.js VERSION differs from the recorded release. Run `npm run bump-shell`.",
+  ).toBe(record.version);
+});

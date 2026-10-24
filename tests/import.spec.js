@@ -79,9 +79,8 @@ test("unreadable provider file reports the read failure without registering it",
   expect(result.message).toContain("ダウンロード");
   await expect(page.locator(".audio-item")).toHaveCount(0);
 });
-test("metadata deferred until an explicit play gesture still saves and reopens audio", async ({
-  page,
-}) => {
+// Simulates iOS: media does not load until play() is called from a tap.
+async function deferMetadata(page) {
   await page.addInitScript(() => {
     const src = Object.getOwnPropertyDescriptor(
       HTMLMediaElement.prototype,
@@ -111,14 +110,17 @@ test("metadata deferred until an explicit play gesture still saves and reopens a
       return play.call(this);
     };
   });
+}
+test("metadata deferred until an explicit play gesture still saves and reopens audio", async ({
+  page,
+}) => {
+  await deferMetadata(page);
   await page.goto("/");
-  await page
-    .locator("#file-input")
-    .setInputFiles({
-      name: "mobile.wav",
-      mimeType: "application/octet-stream",
-      buffer: makeWav(),
-    });
+  await page.locator("#file-input").setInputFiles({
+    name: "mobile.wav",
+    mimeType: "application/octet-stream",
+    buffer: makeWav(),
+  });
   await expect(page.locator(".audio-item")).toHaveCount(1, { timeout: 12000 });
   await expect(page.locator("#library-status")).toContainText("再生できるか");
   await expect(page.locator("#load-audio")).toBeVisible();
@@ -134,4 +136,22 @@ test("metadata deferred until an explicit play gesture still saves and reopens a
     .click();
   await page.locator("#load-audio").click();
   await expect(page.locator("#play")).toBeEnabled();
+});
+test("after one deferred probe, a batch does not wait the full probe time per file", async ({
+  page,
+}) => {
+  await deferMetadata(page);
+  await page.goto("/");
+  const started = Date.now();
+  await page.locator("#file-input").setInputFiles(
+    [1, 2, 3, 4].map((n) => ({
+      name: `batch-${n}.wav`,
+      mimeType: "audio/wav",
+      buffer: makeWav(1, 300 + n * 40),
+    })),
+  );
+  // 8 s for the first file, then about 1 s each (it used to be 8 s each: over 30 s).
+  await expect(page.locator(".audio-item")).toHaveCount(4, { timeout: 20000 });
+  await expect(page.locator("#library-status")).not.toContainText("保存中");
+  expect(Date.now() - started).toBeLessThan(16000);
 });

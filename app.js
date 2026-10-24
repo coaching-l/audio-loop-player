@@ -9,7 +9,15 @@ import {
   storedFile,
   validateAudio,
 } from "./audio-library.js";
-import { LoopPlayer, GAP_RATIOS, parseTime, formatTime } from "./player.js";
+import {
+  LoopPlayer,
+  GAP_RATIOS,
+  RAMP_STEPS,
+  parseTime,
+  formatTime,
+} from "./player.js";
+import { analyzeAudio, drawWaveform } from "./waveform.js";
+import { VoiceRecorder, recordingSupported } from "./recorder.js";
 const $ = (id) => document.getElementById(id);
 const storageKey = "kotonoha.audio.v1";
 let library = {};
@@ -68,7 +76,8 @@ function settings() {
     limit: engine.limit,
     gap: engine.gap,
     gapRatio: engine.gapRatio,
-    rate: engine.audio.playbackRate,
+    rampStep: engine.rampStep,
+    rate: engine.baseRate,
   };
 }
 function persist() {
@@ -112,6 +121,7 @@ function validSettings(s, duration) {
     s.gap <= 10 &&
     // Settings saved before relative gaps existed have no gapRatio.
     (s.gapRatio === undefined || GAP_RATIOS.includes(s.gapRatio)) &&
+    (s.rampStep === undefined || RAMP_STEPS.includes(s.rampStep)) &&
     Number.isFinite(s.rate) &&
     s.rate >= 0.5 &&
     s.rate <= 2
@@ -126,17 +136,17 @@ function syncFields() {
   $("gap").value = String(engine.gap);
   $("gap-mode").value = String(engine.gapRatio);
   $("gap-seconds").hidden = engine.gapRatio !== 0;
-  $("speed").value = String(engine.audio.playbackRate);
-  $("speed-value").textContent = engine.audio.playbackRate.toFixed(2) + "×";
+  $("ramp-step").value = String(engine.rampStep);
+  $("speed").value = String(engine.baseRate);
+  $("speed-value").textContent = engine.baseRate.toFixed(2) + "×";
   $("a-legend").textContent = "A " + formatTime(engine.a, 1);
   $("b-legend").textContent = "B " + formatTime(engine.b, 1);
   syncGauge();
 }
+// The player checks the interval end every 15 ms; the screen only needs one update per frame.
+let renderFrame = 0;
 function render(player) {
   if (!ready) return;
-  $("current-time").textContent = formatTime(player.audio.currentTime, 1);
-  $("mini-time").textContent = $("current-time").textContent;
-  $("seek").value = player.audio.currentTime;
   if (
     player.phase === "playing" &&
     performance.now() - lastPositionSave > 2000
@@ -144,6 +154,17 @@ function render(player) {
     lastPositionSave = performance.now();
     persist();
   }
+  // Media Session updates also run while the page is hidden, when frames do not.
+  updateMediaSession(player);
+  renderFrame ||= requestAnimationFrame(() => {
+    renderFrame = 0;
+    if (ready && player === engine) drawPlayer(player);
+  });
+}
+function drawPlayer(player) {
+  $("current-time").textContent = formatTime(player.audio.currentTime, 1);
+  $("mini-time").textContent = $("current-time").textContent;
+  $("seek").value = player.audio.currentTime;
   const active = player.active;
   $("play").dataset.state = active ? "playing" : "paused";
   $("play").setAttribute("aria-label", active ? "一時停止" : "再生");
@@ -170,13 +191,17 @@ function render(player) {
   const progress =
     player.mode === "off"
       ? "くり返しなし"
-      : `完了 ${player.completed} / ${player.limit || "∞"} 回`;
+      : `完了 ${player.completed} / ${player.limit || "∞"} 回` +
+        (player.rampStep && player.baseRate < 1
+          ? ` · ${player.audio.playbackRate.toFixed(2)}×`
+          : "");
   if ($("repeat-progress").textContent !== progress)
     $("repeat-progress").textContent = progress;
 }
 function enable(value) {
   for (const id of ["player-controls", "repeat-controls", "save-controls"])
     $(id).disabled = !value;
+  $("record-controls").disabled = !value || !recordingSupported();
   syncMiniPlayer();
 }
 // A compact bar at the bottom keeps play/pause reachable once the main controls are scrolled past.
@@ -222,7 +247,7 @@ function renderSegments() {
     name.textContent = segment.name;
     const details = document.createElement("p");
     details.className = "small";
-    details.textContent = `${formatTime(segment.a, 2)} – ${formatTime(segment.b, 2)} · ${segment.rate.toFixed(2)}× · ${segment.limit ? segment.limit + "回" : "無制限"} · 無音 ${gapLabel(segment)}`;
+    details.textContent = `${formatTime(segment.a, 2)} – ${formatTime(segment.b, 2)} · ${segment.rate.toFixed(2)}× · ${segment.limit ? segment.limit + "回" : "無制限"} · 無音 ${gapLabel(segment)}${segment.rampStep ? ` · ${segment.rampStep}倍ずつ速く` : ""}`;
     info.append(name, details);
     const load = document.createElement("button");
     load.className = "button secondary";
@@ -263,8 +288,11 @@ function renderSegments() {
 async function loadFile(file) {
   if (!file) return;
   settleUndo();
+  discardRecording();
   persist();
   const generation = ++loadGeneration;
+  analysis = null;
+  showAnalysis();
   clearTimeout(loadTimeout);
   markerDrag = null;
   if (engine) engine.dispose();
@@ -350,6 +378,18 @@ async function loadFile(file) {
       renderSegments();
       render(currentEngine);
       persist();
+      setMediaMetadata(file.name);
+      // The waveform comes after playback is ready, so drawing it never delays practice.
+      readableAudio(file)
+        .then(analyzeAudio)
+        .then((result) => {
+          if (generation !== loadGeneration || !result) return;
+          analysis = result;
+          showAnalysis();
+        })
+        .catch(() => {
+          /* Without a waveform the plain gauge still works. */
+        });
       if (!storageWarning)
         notice("音声を読み込みました。再生ボタンを押すと練習を始めます。");
     },
@@ -399,6 +439,7 @@ window.addEventListener("dragover", (event) => event.preventDefault());
 window.addEventListener("drop", (event) => event.preventDefault());
 function togglePlay() {
   if (!ready) return;
+  stopCompare();
   error("");
   if (engine.active) {
     engine.pause();
@@ -406,6 +447,7 @@ function togglePlay() {
   } else void engine.play();
 }
 function skip(seconds) {
+  stopCompare();
   if (ready) engine.seek(engine.audio.currentTime + seconds);
 }
 $("play").addEventListener("click", togglePlay);
@@ -449,6 +491,7 @@ function updateSettings(overrides = {}) {
     limit: Number($("repeat-count").value),
     gap: $("gap").value.trim() === "" ? NaN : Number($("gap").value),
     gapRatio: Number($("gap-mode").value),
+    rampStep: Number($("ramp-step").value),
     ...overrides,
   };
   // The seconds field is hidden for a relative gap, so a stale entry there must not block changes.
@@ -475,6 +518,7 @@ for (const id of [
   "repeat-count",
   "gap-mode",
   "gap",
+  "ramp-step",
 ]) {
   $(id).addEventListener("change", () => updateSettings());
   $(id).addEventListener("keydown", (event) => {
@@ -509,6 +553,56 @@ document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "hidden") persist();
 });
 
+let analysis = null;
+function showAnalysis() {
+  const shown = Boolean(analysis && ready);
+  $("waveform").hidden = !shown;
+  $("interval-gauge").classList.toggle("has-waveform", shown);
+  const phrases = shown && analysis.phrases.length >= 2;
+  $("phrase-actions").hidden = !phrases;
+  $("phrase-help").hidden = !phrases;
+  if (shown) drawGauge();
+}
+function drawGauge() {
+  if (analysis && ready)
+    drawWaveform(
+      $("waveform"),
+      analysis,
+      engine.audio.duration,
+      engine.a,
+      engine.b,
+    );
+}
+let redrawFrame = 0;
+function redrawSoon() {
+  redrawFrame ||= requestAnimationFrame(() => {
+    redrawFrame = 0;
+    drawGauge();
+  });
+}
+window.addEventListener("resize", redrawSoon);
+matchMedia("(prefers-color-scheme: dark)").addEventListener?.(
+  "change",
+  redrawSoon,
+);
+function stepPhrase(direction) {
+  if (!ready || !analysis) return;
+  const here = engine.mode === "ab" ? engine.a : engine.audio.currentTime;
+  const phrases = analysis.phrases;
+  const target =
+    direction > 0
+      ? phrases.find((p) => p.start > here + 0.05)
+      : phrases.findLast((p) => p.start < here - 0.05);
+  if (!target) {
+    notice(direction > 0 ? "これが最後の文です。" : "これが最初の文です。");
+    return;
+  }
+  const b = Math.min(target.end, engine.audio.duration);
+  if (updateSettings({ a: target.start, b, mode: "ab" }))
+    engine.seek(target.start);
+}
+$("prev-phrase").addEventListener("click", () => stepPhrase(-1));
+$("next-phrase").addEventListener("click", () => stepPhrase(1));
 function syncGauge() {
   const duration = engine.audio.duration;
   for (const point of ["a", "b"]) {
@@ -527,6 +621,7 @@ function syncGauge() {
   $("toggle-ab").setAttribute("aria-pressed", String(engine.mode === "ab"));
   $("toggle-ab").textContent =
     "区間リピート " + (engine.mode === "ab" ? "ON" : "OFF");
+  drawGauge();
 }
 function moveMarker(point, time) {
   const duration = engine.audio.duration;
@@ -641,6 +736,10 @@ function renderAudioList() {
 }
 function closeCurrentAudio() {
   persist();
+  setMediaMetadata(null);
+  discardRecording();
+  analysis = null;
+  showAnalysis();
   ++loadGeneration;
   clearTimeout(loadTimeout);
   markerDrag = null;
@@ -717,10 +816,13 @@ function importFiles(files) {
         "音声を保存中です。終わるまでこのページを閉じないでください。";
       let saved = 0;
       let deferred = 0;
+      // iOS defers metadata for every file alike; after the first, do not wait 8 s per file.
+      let probeWait = 8000;
       const problems = [];
       for (const file of files) {
         try {
-          const validation = await validateAudio(file);
+          const validation = await validateAudio(file, probeWait);
+          if (validation.metadataDeferred) probeWait = 1000;
           const record = await addAudio(file);
           if (validation.metadataDeferred) deferred++;
           if (!audioItems.some((item) => item.id === record.id))
@@ -949,4 +1051,229 @@ $("import-backup").addEventListener("change", async (event) => {
       ? `練習区間を${added}件読み込みました。対象の音声を開くと使えます。今ある練習区間はそのまま残っています。`
       : "このバックアップの練習区間は、すべてこの端末に入っています。足すものはありません。",
   );
+});
+
+// Lock screen, headset and keyboard media keys act on the same player as the on-screen buttons.
+const mediaSession =
+  "mediaSession" in navigator ? navigator.mediaSession : null;
+let lastPositionState = 0;
+function setMediaMetadata(name) {
+  if (!mediaSession) return;
+  mediaSession.metadata =
+    name && "MediaMetadata" in window
+      ? new MediaMetadata({
+          title: name,
+          artist: "COACHING-L 音声リピートプレーヤー",
+          artwork: [
+            {
+              src: "./icons/icon-192.png",
+              sizes: "192x192",
+              type: "image/png",
+            },
+            {
+              src: "./icons/icon-512.png",
+              sizes: "512x512",
+              type: "image/png",
+            },
+          ],
+        })
+      : null;
+  mediaSession.playbackState = name ? "paused" : "none";
+}
+function updateMediaSession(player) {
+  if (!mediaSession) return;
+  mediaSession.playbackState = player.active ? "playing" : "paused";
+  // Position updates let the lock screen show progress; once a second is enough.
+  if (performance.now() - lastPositionState < 1000 && player.active) return;
+  lastPositionState = performance.now();
+  try {
+    mediaSession.setPositionState({
+      duration: player.audio.duration,
+      playbackRate: player.audio.playbackRate,
+      position: Math.min(player.audio.currentTime, player.audio.duration),
+    });
+  } catch {
+    /* Older browsers lack position state; the controls still work. */
+  }
+}
+if (mediaSession) {
+  const actions = {
+    play: () => ready && !engine.active && togglePlay(),
+    pause: () => ready && engine.active && togglePlay(),
+    seekbackward: (details) => skip(-(details.seekOffset || 5)),
+    seekforward: (details) => skip(details.seekOffset || 5),
+    seekto: (details) => ready && engine.seek(details.seekTime),
+    // "Previous" returns to the start of the practice interval.
+    previoustrack: () => ready && engine.seek(engine.start),
+  };
+  for (const [action, handler] of Object.entries(actions)) {
+    try {
+      mediaSession.setActionHandler(action, handler);
+    } catch {
+      /* Not every browser supports every action. */
+    }
+  }
+}
+
+function stepRate(delta) {
+  const rate = Math.round((engine.baseRate + delta) * 100) / 100;
+  changeRate(Math.min(2, Math.max(0.5, rate)));
+}
+const shortcuts = {
+  " ": togglePlay,
+  k: togglePlay,
+  arrowleft: () => skip(-5),
+  j: () => skip(-5),
+  arrowright: () => skip(5),
+  l: () => skip(5),
+  a: () => updateSettings({ a: engine.audio.currentTime, mode: "ab" }),
+  b: () => updateSettings({ b: engine.audio.currentTime, mode: "ab" }),
+  r: () => updateSettings({ mode: engine.mode === "ab" ? "off" : "ab" }),
+  "[": () => stepRate(-0.05),
+  "]": () => stepRate(0.05),
+};
+document.addEventListener("keydown", (event) => {
+  if (
+    !ready ||
+    event.defaultPrevented ||
+    event.isComposing ||
+    event.altKey ||
+    event.ctrlKey ||
+    event.metaKey
+  )
+    return;
+  // Typing in a field and the A/B handles' own arrow keys come first.
+  if (
+    event.target.closest?.(
+      "input, select, textarea, [contenteditable], [role=slider]",
+    )
+  )
+    return;
+  if (event.key === " " && event.target.closest?.("button, summary, a, label"))
+    return;
+  const action = shortcuts[event.key.toLowerCase()];
+  if (!action) return;
+  event.preventDefault();
+  action();
+});
+
+// Record the learner, then play the model interval and the recording back to back.
+const voice = new Audio();
+let recordingURL = null;
+let recordTick = null;
+let compareToken = 0;
+// A recording still running when its audio is closed belongs to that audio; drop it.
+let dropNextRecording = false;
+function recordStatus(text) {
+  $("record-status").textContent = text;
+}
+function recordError(message) {
+  $("record-error").textContent = message;
+  $("record-error").hidden = !message;
+}
+const recorder = new VoiceRecorder((blob) => {
+  clearInterval(recordTick);
+  $("record").textContent = "録音する";
+  if (dropNextRecording) {
+    dropNextRecording = false;
+    return;
+  }
+  if (!blob) {
+    recordStatus(recordingURL ? "録音あり" : "録音なし");
+    recordError("録音できませんでした。もう一度お試しください。");
+    return;
+  }
+  discardRecording();
+  recordingURL = URL.createObjectURL(blob);
+  voice.src = recordingURL;
+  $("play-recording").disabled = false;
+  $("compare").disabled = false;
+  recordStatus("録音あり");
+});
+function discardRecording() {
+  if (recorder.recording) {
+    dropNextRecording = true;
+    recorder.stop();
+  }
+  stopCompare();
+  voice.removeAttribute("src");
+  voice.load();
+  if (recordingURL) URL.revokeObjectURL(recordingURL);
+  recordingURL = null;
+  $("play-recording").disabled = true;
+  $("compare").disabled = true;
+  recordStatus("録音なし");
+}
+function stopCompare() {
+  compareToken++;
+  if (!voice.paused) voice.pause();
+  if (recordingURL && !recorder.recording) recordStatus("録音あり");
+}
+if (!recordingSupported()) recordError("このブラウザでは録音できません。");
+$("record").addEventListener("click", async () => {
+  recordError("");
+  if (recorder.recording) {
+    recorder.stop();
+    return;
+  }
+  stopCompare();
+  try {
+    await recorder.start();
+  } catch (e) {
+    recorder.release();
+    recordError(
+      e.name === "NotAllowedError"
+        ? "マイクの使用が許可されていません。ブラウザの設定で、このページにマイクの使用を許可してください。"
+        : "マイクを使えません。ほかのアプリがマイクを使っていないか確認してください。",
+    );
+    return;
+  }
+  $("record").textContent = "録音を止める";
+  recordStatus("録音中 0:00");
+  recordTick = setInterval(
+    () => recordStatus("録音中 " + formatTime(recorder.elapsed, 0)),
+    250,
+  );
+});
+$("play-recording").addEventListener("click", () => {
+  if (!recordingURL) return;
+  stopCompare();
+  if (engine?.active) engine.pause();
+  const token = compareToken;
+  recordStatus("自分の声を再生中");
+  voice.currentTime = 0;
+  voice.play().catch(() => {});
+  voice.onended = () => token === compareToken && recordStatus("録音あり");
+});
+$("compare").addEventListener("click", async () => {
+  if (!ready || !recordingURL) return;
+  stopCompare();
+  const token = compareToken;
+  const { a, b } = engine;
+  const audio = engine.audio;
+  engine.pause();
+  engine.seek(a);
+  recordStatus("お手本を再生中");
+  try {
+    await audio.play();
+  } catch {
+    if (token === compareToken) recordStatus("録音あり");
+    return;
+  }
+  // Any other control (play, seek, switching audio) stops the comparison.
+  const reached = await new Promise((resolve) => {
+    const check = setInterval(() => {
+      const done = audio.ended || audio.currentTime >= b;
+      if (done || audio.paused || token !== compareToken) {
+        clearInterval(check);
+        resolve(done && token === compareToken);
+      }
+    }, 20);
+  });
+  if (!reached) return;
+  audio.pause();
+  recordStatus("自分の声を再生中");
+  voice.currentTime = 0;
+  voice.onended = () => token === compareToken && recordStatus("録音あり");
+  voice.play().catch(() => {});
 });

@@ -97,7 +97,11 @@ for (const count of ["2", "3", "5", "10"])
   test(`A–B stops after exactly ${count} total plays`, async ({ page }) => {
     await load(page);
     await configure(page, { a: ".2", b: ".35", count });
-    await traceStatus(page);
+    // Count real playback starts; the screen shows at most one status per frame.
+    await page.locator("#audio").evaluate((audio) => {
+      window.plays = 0;
+      audio.addEventListener("play", () => window.plays++);
+    });
     await page.locator("#play").click();
     await expect(page.locator("#play-status")).toHaveText("再生完了", {
       timeout: 10000,
@@ -110,10 +114,7 @@ for (const count of ["2", "3", "5", "10"])
         .locator("#audio")
         .evaluate((a) => a.paused && Math.abs(a.currentTime - 0.35) < 0.02),
     ).toBe(true);
-    const trace = await page.evaluate(() => window.statusTrace);
-    expect(trace.filter((x) => x.text === "再生中")).toHaveLength(
-      Number(count),
-    );
+    expect(await page.evaluate(() => window.plays)).toBe(Number(count));
     await page.waitForTimeout(250);
     await expect(page.locator("#play-status")).toHaveText("再生完了");
   });
