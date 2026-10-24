@@ -30,7 +30,11 @@ test("read file bytes once, normalize provider MIME, and persist owned Blob byte
         reads,
         same: a === b,
         mime: a.type,
-        stored: record.blob instanceof Blob,
+        // Owned bytes, never the provider's File: a Blob, or an ArrayBuffer where
+        // the browser cannot store Blobs (WebKit private browsing).
+        stored:
+          !(record.blob instanceof File) &&
+          (record.blob instanceof Blob || record.blob instanceof ArrayBuffer),
         name: copy.name,
         size: copy.size,
         stamp: copy.lastModified,

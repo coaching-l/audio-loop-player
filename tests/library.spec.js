@@ -190,15 +190,22 @@ test("quota failure keeps registered audio and reports that the new audio was no
 test("saving audio requests persistent storage once and shows the space used", async ({
   page,
 }) => {
+  // A full stub keeps the check independent of each engine's Storage API support.
   await page.addInitScript(() => {
     window.persistCalls = 0;
     let granted = false;
-    navigator.storage.persisted = async () => granted;
-    navigator.storage.persist = async () => {
-      window.persistCalls++;
-      granted = true;
-      return true;
-    };
+    Object.defineProperty(navigator, "storage", {
+      configurable: true,
+      value: {
+        persisted: async () => granted,
+        persist: async () => {
+          window.persistCalls++;
+          granted = true;
+          return true;
+        },
+        estimate: async () => ({ usage: 600 * 1024, quota: 2 * 1024 ** 3 }),
+      },
+    });
   });
   await page.goto("/");
   await expect(page.locator("#storage-info")).toBeHidden();
@@ -210,4 +217,31 @@ test("saving audio requests persistent storage once and shows the space used", a
   await expect(page.locator("#audio-list .audio-item")).toHaveCount(3);
   await expect(page.locator("#library-status")).not.toContainText("保存中");
   expect(await page.evaluate(() => window.persistCalls)).toBe(1);
+});
+test("audio is saved as bytes where the browser cannot store Blobs, and reopens after reload", async ({
+  page,
+}) => {
+  // Safari private browsing rejects Blob values in IndexedDB with UnknownError.
+  await page.addInitScript(() => {
+    const add = IDBObjectStore.prototype.add;
+    IDBObjectStore.prototype.add = function (value, ...rest) {
+      if (value?.blob instanceof Blob)
+        throw new DOMException(
+          "Error preparing Blob/File data to be stored in object store",
+          "UnknownError",
+        );
+      return add.call(this, value, ...rest);
+    };
+  });
+  await add(page, 1);
+  await expect(page.locator("#library-status")).toContainText("保存しました");
+  await page.reload();
+  await page
+    .getByRole("button", { name: "lesson-1.wavを開く", exact: true })
+    .click();
+  await expect(page.locator("#play")).toBeEnabled();
+  await page.locator("#play").click();
+  await expect
+    .poll(() => page.locator("#audio").evaluate((a) => a.currentTime))
+    .toBeGreaterThan(0.1);
 });
