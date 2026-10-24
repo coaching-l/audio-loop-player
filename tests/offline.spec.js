@@ -7,7 +7,7 @@ import { resolve, join } from "node:path";
 // Dedicated HTTP server exercises real SW fetches, including failed installs and upgrades.
 // Playwright route mocks cannot reliably intercept fetches initiated inside a worker.
 async function server() {
-  const state = { fail: false, version: "v3" };
+  const state = { fail: false, version: "v4" };
   const host = createServer(async (req, res) => {
     const path = new URL(req.url, "http://localhost").pathname;
     if (path === "/pomodoro/") {
@@ -83,8 +83,9 @@ async function server() {
   };
 }
 async function prepared(page) {
-  await expect(page.locator("#offline-status")).toContainText(
-    "オフライン準備完了",
+  await expect(page.locator("#offline-status")).toHaveAttribute(
+    "data-ready",
+    "true",
     { timeout: 15000 },
   );
 }
@@ -110,8 +111,10 @@ for (const prefix of ["/", "/audio-loop-player/"])
       await context.setOffline(true);
       const offline = await context.newPage();
       await offline.goto(host.url + prefix + "?practice=1");
-      await expect(offline.locator("#offline-status")).toContainText(
-        "オフラインで利用中",
+      await expect(offline.locator("#offline-status")).toHaveAttribute(
+        "data-ready",
+        "true",
+        { timeout: 15000 },
       );
       await offline
         .getByRole("button", { name: "tone.wavを開く", exact: true })
@@ -170,7 +173,7 @@ test("failed update keeps the old offline app; successful update preserves audio
       const c = await caches.open("pomodoro-offline-v1");
       await c.put("/pomodoro/", new Response("keep"));
     });
-    host.state.version = "test-v4";
+    host.state.version = "test-v5";
     host.state.fail = true;
     await page.evaluate(async () => {
       const r = await navigator.serviceWorker.getRegistration();
@@ -185,8 +188,10 @@ test("failed update keeps the old offline app; successful update preserves audio
     });
     await context.setOffline(true);
     await page.reload();
-    await expect(page.locator("#offline-status")).toContainText(
-      "オフラインで利用中",
+    await expect(page.locator("#offline-status")).toHaveAttribute(
+      "data-ready",
+      "true",
+      { timeout: 15000 },
     );
     await expect(page.locator(".audio-item")).toHaveCount(1);
     await context.setOffline(false);
@@ -207,9 +212,9 @@ test("failed update keeps the old offline app; successful update preserves audio
         return (
           keys.includes("pomodoro-offline-v1") &&
           keys.includes(
-            "coaching-l-audio-offline:/audio-loop-player/:test-v4",
+            "coaching-l-audio-offline:/audio-loop-player/:test-v5",
           ) &&
-          !keys.includes("coaching-l-audio-offline:/audio-loop-player/:v3")
+          !keys.includes("coaching-l-audio-offline:/audio-loop-player/:v4")
         );
       }),
     ).toBe(true);
@@ -251,8 +256,10 @@ test("missing shell cache is detected and can be prepared again", async ({
     await prepared(page);
     await context.setOffline(true);
     await page.reload();
-    await expect(page.locator("#offline-status")).toContainText(
-      "オフラインで利用中",
+    await expect(page.locator("#offline-status")).toHaveAttribute(
+      "data-ready",
+      "true",
+      { timeout: 15000 },
     );
   } finally {
     await context.setOffline(false);
@@ -291,8 +298,10 @@ test("cold browser restart can open the saved app and audio offline", async ({
       .launchPersistentContext(profile, { ...options, offline: true });
     page = await session.newPage();
     await page.goto(host.url + "/audio-loop-player/");
-    await expect(page.locator("#offline-status")).toContainText(
-      "オフラインで利用中",
+    await expect(page.locator("#offline-status")).toHaveAttribute(
+      "data-ready",
+      "true",
+      { timeout: 15000 },
     );
     await page
       .getByRole("button", { name: "tone.wavを開く", exact: true })

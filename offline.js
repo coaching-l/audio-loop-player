@@ -1,6 +1,15 @@
 const status = document.getElementById("offline-status");
 const retry = document.getElementById("offline-retry");
 const update = document.getElementById("offline-update");
+const panel = status.closest(".offline-card");
+function refreshPanel() {
+  panel.hidden = status.hidden && retry.hidden && update.hidden;
+}
+function showStatus(message) {
+  status.textContent = message;
+  status.hidden = !message;
+  refreshPanel();
+}
 let registration,
   checking = 0,
   reloadForUpdate = false;
@@ -9,11 +18,14 @@ const badge = document.getElementById("help-badge");
 function showUpdate(available) {
   update.hidden = !available;
   if (badge) badge.hidden = !available;
+  refreshPanel();
 }
 function unavailable() {
   cachedReady = false;
-  status.textContent =
-    "オフライン準備が完了していません。オンラインで「準備をやり直す」を押してください。";
+  status.dataset.ready = "false";
+  showStatus(
+    "オフライン準備が完了していません。オンラインで「準備をやり直す」を押してください。",
+  );
   retry.hidden = false;
 }
 async function workerStatus(type = "OFFLINE_STATUS") {
@@ -43,9 +55,8 @@ async function check() {
     }
     cachedReady = true;
     retry.hidden = true;
-    status.textContent = navigator.onLine
-      ? "オフライン準備完了"
-      : "オフラインで利用中";
+    status.dataset.ready = "true";
+    showStatus("");
     showUpdate(Boolean(registration.waiting));
   } catch {
     if (checkId === checking) unavailable();
@@ -64,14 +75,14 @@ function watch(worker) {
 }
 async function prepare() {
   if (!("serviceWorker" in navigator) || !window.isSecureContext) {
-    status.textContent =
-      "このブラウザ・接続ではオフライン起動を準備できません。HTTPSの公開ページでお試しください。";
+    showStatus(
+      "このブラウザ・接続ではオフライン起動を準備できません。HTTPSの公開ページでお試しください。",
+    );
     retry.hidden = true;
     return;
   }
   retry.hidden = true;
-  status.textContent =
-    "オフライン利用を準備中です。この画面を閉じずにお待ちください。";
+  showStatus("オフライン利用を準備中です。この画面を閉じずにお待ちください。");
   try {
     registration = await navigator.serviceWorker.register(
       new URL("./sw.js", import.meta.url),
@@ -119,8 +130,9 @@ retry.addEventListener("click", async () => {
 update.addEventListener("click", () => {
   if (!registration?.waiting) return;
   if (!navigator.onLine) {
-    status.textContent =
-      "更新はオンラインに戻ってから行ってください。現在の版で練習できます。";
+    showStatus(
+      "更新はオンラインに戻ってから行ってください。現在の版で練習できます。",
+    );
     return;
   }
   // Give the app a chance to save the current position before replacing the page.

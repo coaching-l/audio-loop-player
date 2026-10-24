@@ -37,8 +37,8 @@
       content="端末の音声で、繰り返し聴く・声に出す。アップロード不要の語学学習プレーヤー。"
     />
     <title>音声リピートプレーヤー | COACHING-L</title>
-    <link rel="stylesheet" href="./style.css?v=6" />
-    <script type="module" src="./app.js?v=6"></script>
+    <link rel="stylesheet" href="./style.css?v=7" />
+    <script type="module" src="./app.js?v=7"></script>
   </head>
   <body>
     <main>
@@ -371,15 +371,23 @@
           <section>
             <h2>オフラインで使う</h2>
             <p>
-              音声の保存とアプリの準備が済めば、通信なしで起動・再読み込みして練習できます。出発前に一度オンラインで開き、下の準備状況と音声保存の完了を確認してから、機内モードで開き直して再生を試してください。
+              音声の保存とアプリの準備が済めば、通信なしで起動・再読み込みして練習できます。出発前に一度オンラインで開き、音声保存が完了し、準備に関するエラーがないことを確認してから、機内モードで開き直して再生を試してください。
             </p>
             <p>
               画面ロックや別アプリへの切り替え中は、OSの制限で再生やリピートのタイミングがずれる場合があります。正確な練習は画面を開いた状態で行ってください。
             </p>
-            <section class="offline-card" aria-label="オフライン利用の準備">
-              <p id="offline-status" class="small" role="status">
-                オフライン利用を確認中…
-              </p>
+            <section
+              class="offline-card"
+              aria-label="オフライン利用の準備"
+              hidden
+            >
+              <p
+                id="offline-status"
+                class="small"
+                role="status"
+                data-ready="false"
+                hidden
+              ></p>
               <button
                 id="offline-retry"
                 class="text-button"

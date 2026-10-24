@@ -16,6 +16,9 @@ test("usage guide is collapsed at the bottom and explains storage and practice",
   await expect(page.locator("#offline-status")).not.toBeVisible();
   await page.locator("#usage-guide > summary").click();
   await expect(page.locator(".usage-body")).toBeVisible();
+  await expect(page.locator("#offline-status")).toHaveAttribute("data-ready", "true");
+  await expect(page.locator("#offline-status")).toBeEmpty();
+  await expect(page.locator("#offline-status")).not.toBeVisible();
   await expect(page.locator(".usage-body")).toContainText("端末・ブラウザ内");
   await expect(page.locator(".usage-body")).toContainText("通信なしで起動");
   await expect(page.locator(".usage-body")).toContainText("A・B");
