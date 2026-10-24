@@ -10,6 +10,7 @@ let ready = false;
 let segments = [];
 let storageWarning = false;
 let loadTimeout;
+let markerDrag = null;
 function notice(message) {
   $("notice").textContent = message;
 }
@@ -82,6 +83,7 @@ function syncFields() {
   $("speed-value").textContent = engine.audio.playbackRate.toFixed(2) + "×";
   $("a-legend").textContent = "A " + formatTime(engine.a, 1);
   $("b-legend").textContent = "B " + formatTime(engine.b, 1);
+  syncGauge();
 }
 function render(player) {
   if (!ready) return;
@@ -163,6 +165,7 @@ async function loadFile(file) {
   if (!file) return;
   const generation = ++loadGeneration;
   clearTimeout(loadTimeout);
+  markerDrag = null;
   if (engine) engine.dispose();
   if (objectURL) URL.revokeObjectURL(objectURL);
   ready = false;
@@ -365,3 +368,107 @@ window.addEventListener("pagehide", () => {
     persist();
   }
 });
+
+function syncGauge() {
+  const duration = engine.audio.duration;
+  for (const point of ["a", "b"]) {
+    const marker = $("marker-" + point);
+    marker.style.left = (engine[point] / duration) * 100 + "%";
+    marker.setAttribute("aria-valuenow", engine[point]);
+    marker.setAttribute("aria-valuemin", point === "a" ? 0 : engine.a + 0.001);
+    marker.setAttribute(
+      "aria-valuemax",
+      point === "a" ? engine.b - 0.001 : duration,
+    );
+    marker.setAttribute("aria-valuetext", formatTime(engine[point]));
+  }
+  $("interval-fill").style.left = (engine.a / duration) * 100 + "%";
+  $("interval-fill").style.right = 100 - (engine.b / duration) * 100 + "%";
+  $("toggle-ab").setAttribute("aria-pressed", String(engine.mode === "ab"));
+  $("toggle-ab").textContent =
+    "区間リピート " + (engine.mode === "ab" ? "ON" : "OFF");
+}
+function moveMarker(point, time) {
+  const duration = engine.audio.duration;
+  const minimum = Math.min(0.01, duration / 2);
+  const value =
+    point === "a"
+      ? Math.max(0, Math.min(engine.b - minimum, time))
+      : Math.min(duration, Math.max(engine.a + minimum, time));
+  engine.configure({ ...settings(), [point]: value, mode: "ab" });
+  syncFields();
+  rangeError("");
+}
+for (const point of ["a", "b"]) {
+  const marker = $("marker-" + point);
+  marker.addEventListener("pointerdown", (event) => {
+    if (!ready || !event.isPrimary || event.button !== 0) return;
+    event.preventDefault();
+    marker.focus();
+    markerDrag = {
+      point,
+      id: event.pointerId,
+      player: engine,
+      resume: engine.active,
+    };
+    engine.pause();
+    marker.setPointerCapture(event.pointerId);
+  });
+  marker.addEventListener("pointermove", (event) => {
+    if (
+      !markerDrag ||
+      markerDrag.id !== event.pointerId ||
+      markerDrag.point !== point ||
+      markerDrag.player !== engine
+    )
+      return;
+    const rect = document
+      .querySelector(".interval-markers")
+      .getBoundingClientRect();
+    moveMarker(
+      point,
+      ((event.clientX - rect.left) / rect.width) * engine.audio.duration,
+    );
+  });
+  function finish(event) {
+    if (
+      !markerDrag ||
+      markerDrag.id !== event.pointerId ||
+      markerDrag.point !== point
+    )
+      return;
+    const drag = markerDrag;
+    markerDrag = null;
+    if (drag.player !== engine || !ready) return;
+    persist();
+    if (event.type === "pointerup" && drag.resume) void engine.play();
+  }
+  marker.addEventListener("pointerup", finish);
+  marker.addEventListener("pointercancel", finish);
+  marker.addEventListener("lostpointercapture", finish);
+  marker.addEventListener("keydown", (event) => {
+    if (!ready) return;
+    const step = event.shiftKey ? 1 : 0.1;
+    const values = {
+      ArrowLeft: engine[point] - step,
+      ArrowDown: engine[point] - step,
+      ArrowRight: engine[point] + step,
+      ArrowUp: engine[point] + step,
+      Home: 0,
+      End: engine.audio.duration,
+    };
+    if (!(event.key in values)) return;
+    event.preventDefault();
+    moveMarker(point, values[event.key]);
+    persist();
+  });
+}
+$("toggle-ab").addEventListener("click", () =>
+  updateSettings({ mode: engine.mode === "ab" ? "off" : "ab" }),
+);
+$("gauge-set-a").addEventListener("click", () =>
+  updateSettings({ a: engine.audio.currentTime, mode: "ab" }),
+);
+$("gauge-set-b").addEventListener("click", () =>
+  updateSettings({ b: engine.audio.currentTime, mode: "ab" }),
+);

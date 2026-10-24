@@ -142,7 +142,6 @@
   font-family: var(--font);
   color: var(--text);
   background: var(--bg);
-  font-synthesis: none;
   line-height: 1.7;
   font-size: 16px;
 }
@@ -820,4 +819,166 @@ footer p {
     padding: max(28px, env(safe-area-inset-top)) 20px
       max(16px, env(safe-area-inset-bottom));
   }
+}
+
+/* Typography follows pomodoro body, field-label, hint and button rules. */
+body {
+  font-family: var(--font);
+  font-size: 16px;
+  line-height: 1.7;
+  letter-spacing: 0.02em;
+  -webkit-font-smoothing: antialiased;
+}
+button,
+input,
+select {
+  font-family: inherit;
+}
+.small,
+.file-copy > p,
+.intro > p:last-child,
+.tip {
+  font-size: 0.875rem;
+}
+label {
+  font-size: 0.9375rem;
+}
+.button {
+  font-size: 1rem;
+}
+.gauge-tools {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.875rem;
+  margin-top: 10px;
+}
+.gauge-tools button {
+  white-space: nowrap;
+}
+#toggle-ab[aria-pressed="true"] {
+  color: var(--gold-label);
+  font-weight: 700;
+}
+.interval-gauge {
+  position: relative;
+  height: 140px;
+  margin-top: 4px;
+}
+.interval-track {
+  position: absolute;
+  left: 22px;
+  right: 22px;
+  top: 24px;
+  height: 8px;
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  pointer-events: none;
+}
+#interval-fill {
+  position: absolute;
+  height: 100%;
+  left: 0;
+  right: 0;
+  background: var(--gold);
+  opacity: 0.8;
+}
+.interval-gauge #seek {
+  position: absolute;
+  top: 6px;
+  left: 10px;
+  width: calc(100% - 20px);
+  margin: 0;
+  height: 44px;
+  background: transparent;
+  appearance: none;
+  -webkit-appearance: none;
+}
+#seek::-webkit-slider-runnable-track {
+  height: 8px;
+  background: transparent;
+}
+#seek::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 24px;
+  height: 24px;
+  margin-top: -8px;
+  border: 2px solid var(--surface);
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+#seek::-moz-range-track {
+  height: 8px;
+  background: transparent;
+}
+#seek::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--surface);
+  border-radius: 50%;
+  background: var(--accent);
+}
+.interval-markers {
+  position: absolute;
+  left: 22px;
+  right: 22px;
+  top: 0;
+  bottom: 0;
+  pointer-events: none;
+}
+.interval-marker {
+  position: absolute;
+  left: 0;
+  transform: translateX(-50%);
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--accent);
+  font-weight: 700;
+  touch-action: none;
+  pointer-events: auto;
+  cursor: ew-resize;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.marker-a {
+  top: 48px;
+}
+.marker-b {
+  top: 94px;
+  left: 100%;
+  border-color: var(--gold-label);
+  color: var(--gold-label);
+}
+.interval-marker::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 100%;
+  height: 22px;
+  border-left: 1px solid currentColor;
+  pointer-events: none;
+}
+.marker-b::before {
+  height: 68px;
+}
+.interval-marker:active {
+  background: var(--accent-soft);
+}
+.gauge-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+}
+.gauge-actions button {
+  flex: 1;
+  font-size: 0.875rem;
+  padding: 8px;
 }

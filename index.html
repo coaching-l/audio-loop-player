@@ -35,8 +35,8 @@
       content="端末の音声で、繰り返し聴く・声に出す。アップロード不要の語学学習プレーヤー。"
     />
     <title>音声リピートプレーヤー | COACHING-L</title>
-    <link rel="stylesheet" href="./style.css" />
-    <script type="module" src="./app.js"></script>
+    <link rel="stylesheet" href="./style.css?v=2" />
+    <script type="module" src="./app.js?v=2"></script>
   </head>
   <body>
     <main>
@@ -95,18 +95,72 @@
                 <output id="current-time">0:00.0</output
                 ><span id="duration">0:00.0</span>
               </div>
-              <label for="seek" class="visually-hidden">再生位置</label
-              ><input
-                id="seek"
-                type="range"
-                min="0"
-                max="0"
-                step="0.01"
-                value="0"
-              />
+              <div class="gauge-tools">
+                <span>練習する区間</span
+                ><button
+                  id="toggle-ab"
+                  type="button"
+                  class="text-button"
+                  aria-pressed="false"
+                >
+                  区間リピート OFF
+                </button>
+              </div>
+              <div id="interval-gauge" class="interval-gauge">
+                <div class="interval-track" aria-hidden="true">
+                  <div id="interval-fill"></div>
+                </div>
+                <label for="seek" class="visually-hidden">再生位置</label
+                ><input
+                  id="seek"
+                  type="range"
+                  min="0"
+                  max="0"
+                  step="0.01"
+                  value="0"
+                />
+                <div class="interval-markers">
+                  <button
+                    id="marker-a"
+                    class="interval-marker marker-a"
+                    type="button"
+                    role="slider"
+                    aria-label="ゲージで開始点Aを調整"
+                    aria-valuemin="0"
+                    aria-valuemax="0"
+                    aria-valuenow="0"
+                    aria-describedby="gauge-help"
+                  >
+                    A
+                  </button>
+                  <button
+                    id="marker-b"
+                    class="interval-marker marker-b"
+                    type="button"
+                    role="slider"
+                    aria-label="ゲージで終了点Bを調整"
+                    aria-valuemin="0"
+                    aria-valuemax="0"
+                    aria-valuenow="0"
+                    aria-describedby="gauge-help"
+                  >
+                    B
+                  </button>
+                </div>
+              </div>
               <div class="ab-legend">
                 <span id="a-legend">A —</span><span id="b-legend">B —</span>
               </div>
+            </div>
+            <p id="gauge-help" class="small">
+              A・Bを左右にドラッグして区間を指定。上のつまみで再生位置を移動できます。
+            </p>
+            <div class="gauge-actions">
+              <button id="gauge-set-a" class="button secondary" type="button">
+                今の位置をAに</button
+              ><button id="gauge-set-b" class="button secondary" type="button">
+                今の位置をBに
+              </button>
             </div>
             <div class="transport">
               <button id="back" class="skip" aria-label="5秒戻る">
