@@ -60,7 +60,8 @@ export function findPhrases(levels, step = STEP) {
   return phrases;
 }
 
-export function drawWaveform(canvas, analysis, duration, a, b) {
+// Draws the part of the audio from viewStart to viewEnd across the whole canvas.
+export function drawWaveform(canvas, analysis, viewStart, viewEnd, a, b) {
   const ratio = window.devicePixelRatio || 1;
   const width = Math.round(canvas.clientWidth * ratio);
   const height = Math.round(canvas.clientHeight * ratio);
@@ -76,17 +77,19 @@ export function drawWaveform(canvas, analysis, duration, a, b) {
   for (const level of levels) if (level > peak) peak = level;
   const bar = Math.max(1, Math.round(2 * ratio));
   const gapWidth = Math.max(1, Math.round(ratio));
+  const span = viewEnd - viewStart;
+  // Zoomed in, a bar can cover less than one level, so blocky steps are expected.
   for (let x = 0; x < width; x += bar + gapWidth) {
-    const from = Math.floor(((x / width) * duration) / step);
+    const from = Math.floor((viewStart + (x / width) * span) / step);
     const to = Math.max(
       from + 1,
-      Math.floor((((x + bar) / width) * duration) / step),
+      Math.floor((viewStart + ((x + bar) / width) * span) / step),
     );
     let level = 0;
     for (let i = from; i < to && i < levels.length; i++)
       if (levels[i] > level) level = levels[i];
     const h = Math.max(ratio, (peak ? level / peak : 0) * height);
-    const time = ((x + bar / 2) / width) * duration;
+    const time = viewStart + ((x + bar / 2) / width) * span;
     context.fillStyle = time >= a && time <= b ? inside : outside;
     context.fillRect(x, (height - h) / 2, bar, h);
   }

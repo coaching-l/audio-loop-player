@@ -236,3 +236,70 @@ test("recording pauses the model, and playing ends the recording first", async (
   await expect.poll(() => playing(page)).toBe(true);
   await expect(page.locator("#notice")).toContainText("録音を止めて");
 });
+
+test("zooming the gauge spreads a short interval out for finer A and B", async ({
+  page,
+}) => {
+  const seconds = (text) => {
+    const [m, s] = text.split(":");
+    return Number(m) * 60 + Number(s);
+  };
+  const seekRange = async () => [
+    Number(await page.locator("#seek").getAttribute("min")),
+    Number(await page.locator("#seek").getAttribute("max")),
+  ];
+  await page.goto("/");
+  // 2.7 seconds long.
+  await load(page, {
+    name: "phrases.wav",
+    mimeType: "audio/wav",
+    buffer: makePhrasesWav(),
+  });
+  await setPoints(page, "1.1", "1.6");
+  await expect(page.locator("#zoom-out")).toBeDisabled();
+  await page.locator("#zoom-fit").click();
+  // 0.2 s of margin on each side of A–B.
+  let [min, max] = await seekRange();
+  expect(min).toBeCloseTo(0.9, 2);
+  expect(max).toBeCloseTo(1.8, 2);
+  await expect(page.locator("#zoom-range")).toContainText("0:00.90–0:01.80");
+  await expect(page.locator("#zoom-out")).toBeEnabled();
+  // Half the gauge is now 0.45 s instead of 1.35 s.
+  await page.locator("#marker-a").scrollIntoViewIfNeeded();
+  const box = await page.locator("#marker-a").boundingBox();
+  const rail = await page.locator(".interval-markers").boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(rail.x + rail.width / 2, box.y + box.height / 2, {
+    steps: 4,
+  });
+  await page.mouse.up();
+  expect(seconds(await page.locator("#point-a").inputValue())).toBeCloseTo(
+    1.35,
+    1,
+  );
+  await page.locator("#zoom-out").click();
+  await page.locator("#zoom-out").click();
+  await expect(page.locator("#zoom-range")).toHaveText("全体を表示中");
+  await expect(page.locator("#zoom-out")).toBeDisabled();
+  [min, max] = await seekRange();
+  expect(min).toBe(0);
+  expect(max).toBeCloseTo(2.7, 1);
+});
+
+test("a zoomed gauge follows playback past its edge", async ({ page }) => {
+  await page.goto("/");
+  await load(page, {
+    name: "phrases.wav",
+    mimeType: "audio/wav",
+    buffer: makePhrasesWav(),
+  });
+  await page.locator("#zoom-in").click();
+  await page.locator("#zoom-in").click();
+  expect(Number(await page.locator("#seek").getAttribute("min"))).toBe(0);
+  await page.locator("#play").click();
+  await expect.poll(() => currentTime(page)).toBeGreaterThan(1);
+  await expect
+    .poll(async () => Number(await page.locator("#seek").getAttribute("min")))
+    .toBeGreaterThan(0.3);
+});

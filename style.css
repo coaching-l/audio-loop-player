@@ -1302,3 +1302,26 @@ label {
 .shortcut-list dd {
   margin: 0;
 }
+
+/* ゲージの拡大・縮小 */
+/* 表示範囲の文字はボタンの下の行に置き、拡大しても高さが変わらないようにする */
+.zoom-tools {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  margin-top: 4px;
+}
+.zoom-range {
+  order: 2;
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+}
+.zoom-buttons {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+}
+.zoom-buttons .text-button {
+  padding: 6px 8px;
+}
