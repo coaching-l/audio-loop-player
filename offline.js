@@ -24,7 +24,7 @@ function unavailable() {
   cachedReady = false;
   status.dataset.ready = "false";
   showStatus(
-    "オフライン準備が完了していません。オンラインで「準備をやり直す」を押してください。",
+    "通信なしで使うための準備が完了していません。インターネットにつながった状態で「準備をやり直す」を押してください。",
   );
   retry.hidden = false;
 }
@@ -76,13 +76,15 @@ function watch(worker) {
 async function prepare() {
   if (!("serviceWorker" in navigator) || !window.isSecureContext) {
     showStatus(
-      "このブラウザ・接続ではオフライン起動を準備できません。HTTPSの公開ページでお試しください。",
+      "この開き方では、通信なしで使うための準備ができません。公開ページ（https://で始まるアドレス）で開いてください。",
     );
     retry.hidden = true;
     return;
   }
   retry.hidden = true;
-  showStatus("オフライン利用を準備中です。この画面を閉じずにお待ちください。");
+  showStatus(
+    "通信なしで使うための準備をしています。終わるまでこのページを閉じないでください。",
+  );
   try {
     registration = await navigator.serviceWorker.register(
       new URL("./sw.js", import.meta.url),
@@ -131,7 +133,7 @@ update.addEventListener("click", () => {
   if (!registration?.waiting) return;
   if (!navigator.onLine) {
     showStatus(
-      "更新はオンラインに戻ってから行ってください。現在の版で練習できます。",
+      "更新は、インターネットにつながってから行ってください。今のバージョンのままでも練習できます。",
     );
     return;
   }

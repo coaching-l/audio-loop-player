@@ -116,7 +116,7 @@ test("metadata deferred until an explicit play gesture still saves and reopens a
       buffer: makeWav(),
     });
   await expect(page.locator(".audio-item")).toHaveCount(1, { timeout: 12000 });
-  await expect(page.locator("#library-status")).toContainText("再生確認");
+  await expect(page.locator("#library-status")).toContainText("再生できるか");
   await expect(page.locator("#load-audio")).toBeVisible();
   await page.locator("#load-audio").click();
   await expect(page.locator("#play")).toBeEnabled();

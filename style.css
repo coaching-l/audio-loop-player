@@ -241,24 +241,8 @@ h2 {
   font-weight: 700;
   line-height: 1.45;
 }
-.local-badge {
-  font-size: 13px;
-  color: var(--text-muted);
-}
-.local-badge span {
-  color: var(--gold-label);
-  font-size: 9px;
-  margin-right: 6px;
-}
 .intro {
   padding: 38px 0 27px;
-}
-.eyebrow {
-  font-size: 12px;
-  letter-spacing: 0.19em;
-  color: var(--gold-label);
-  margin-bottom: 10px;
-  font-weight: 600;
 }
 h1 {
   font-size: 32px;
@@ -289,7 +273,6 @@ h1 {
   border-color: var(--accent);
 }
 .file-symbol {
-  font-size: 30px;
   color: var(--accent);
   width: 52px;
   height: 55px;
@@ -303,15 +286,15 @@ h1 {
   min-width: 0;
 }
 .file-copy h2 {
-  font-size: 14px;
+  font-size: 1rem;
 }
 .file-copy > p {
-  font-size: 12px;
+  font-size: 0.9375rem;
   color: var(--text-muted);
   overflow-wrap: anywhere;
 }
 .file-copy .small {
-  font-size: 12px;
+  font-size: 0.875rem;
   margin-top: 4px;
 }
 .button {
@@ -319,10 +302,13 @@ h1 {
   align-items: center;
   justify-content: center;
   border-radius: 8px;
-  min-height: 44px;
-  padding: 10px 19px;
-  font-size: 15px;
-  font-weight: 600;
+  min-height: 48px;
+  padding: 10px 20px;
+  border: 1.5px solid transparent;
+  font-size: 1.0625rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  line-height: 1.3;
   white-space: nowrap;
 }
 .primary {
@@ -361,9 +347,11 @@ h1 {
 }
 .tag {
   background: var(--surface-muted);
-  padding: 4px 8px;
+  padding: 2px 10px;
   border-radius: 5px;
-  font-size: 12px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  white-space: nowrap;
   color: var(--text-muted);
 }
 .tag.waiting {
@@ -382,7 +370,7 @@ fieldset {
   align-items: baseline;
   font-variant-numeric: tabular-nums;
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: 0.875rem;
 }
 .time-row output {
   font-size: 29px;
@@ -401,7 +389,7 @@ input[type="range"] {
   display: flex;
   justify-content: space-between;
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: 0.8125rem;
   font-variant-numeric: tabular-nums;
 }
 .transport {
@@ -412,18 +400,34 @@ input[type="range"] {
   padding: 17px 0 27px;
 }
 .play-button {
-  width: 62px;
-  height: 62px;
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
   border-radius: 50%;
   background: var(--accent);
   color: var(--accent-contrast);
-  font-size: 21px;
-  box-shadow: 0 5px 15px transparent;
+}
+.play-button svg {
+  width: 28px;
+  height: 28px;
+  fill: currentColor;
+}
+.play-button[data-state="playing"] .icon-play,
+.play-button[data-state="paused"] .icon-pause {
+  display: none;
+}
+.skip svg,
+.file-symbol svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 .skip {
   background: none;
   color: var(--text-muted);
-  font-size: 26px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -432,7 +436,8 @@ input[type="range"] {
   min-height: 48px;
 }
 .skip span {
-  font-size: 12px;
+  font-size: 0.8125rem;
+  font-weight: 600;
   margin-top: 4px;
 }
 .speed-section {
@@ -461,22 +466,25 @@ label {
   justify-content: space-between;
   align-items: center;
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: 0.8125rem;
   margin-bottom: 8px;
 }
 .text-button {
   background: none;
-  color: var(--accent);
+  color: var(--heading);
+  font-weight: 600;
   text-decoration: underline;
   text-underline-offset: 3px;
-  font-size: 12px;
+  font-size: 0.875rem;
   padding: 6px 3px;
   min-height: 32px;
 }
 .small {
-  font-size: 12px;
+  font-size: 0.875rem;
   color: var(--text-muted);
-  line-height: 1.8;
+}
+.repeat-card .small + .small {
+  margin-top: 6px;
 }
 .tip {
   display: flex;
@@ -484,12 +492,9 @@ label {
   margin-top: 20px;
   border-radius: 8px;
   background: var(--surface-muted);
-  padding: 13px;
+  padding: 14px 16px;
   color: var(--text-muted);
-  font-size: 14px;
-}
-.tip > span {
-  color: var(--gold-label);
+  font-size: 0.9375rem;
 }
 .repeat-card label {
   display: block;
@@ -523,7 +528,7 @@ select {
   margin-bottom: 6px;
 }
 .point-heading label {
-  font-size: 13px;
+  font-size: 0.9375rem;
   white-space: nowrap;
 }
 .point-letter {
@@ -564,7 +569,10 @@ select {
   right: 12px;
   top: 10px;
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: 0.875rem;
+}
+.gap-seconds {
+  margin-bottom: 12px;
 }
 .saved-card {
   grid-column: 1/-1;
@@ -581,7 +589,7 @@ select {
   text-align: center;
   padding: 28px 10px;
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: 0.9375rem;
 }
 .storage-note {
   border-top: 1px solid var(--line);
@@ -605,8 +613,9 @@ select {
   min-width: 0;
 }
 .segment-name {
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--heading);
   overflow-wrap: anywhere;
 }
 .segment .button {
@@ -616,7 +625,8 @@ select {
 .delete-button {
   background: none;
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: 0.875rem;
+  font-weight: 600;
   min-width: 44px;
   min-height: 44px;
 }
@@ -624,15 +634,15 @@ select {
   background: var(--gold-soft);
   border-radius: var(--radius-small);
   color: var(--gold-label);
-  padding: 10px 13px;
-  font-size: 12px;
+  padding: 14px 16px;
+  font-size: 0.9375rem;
   margin: 10px 0;
 }
 .error[hidden] {
   display: none;
 }
 .notice {
-  font-size: 12px;
+  font-size: 0.9375rem;
   color: var(--text-muted);
   min-height: 26px;
   margin: 6px 0;
@@ -719,8 +729,8 @@ footer p:last-child {
     gap: 7px;
   }
   .segment .button {
-    font-size: 13px;
-    padding: 8px;
+    font-size: 0.9375rem;
+    padding: 8px 12px;
   }
   footer {
     display: block;
@@ -781,7 +791,6 @@ input[type="number"] {
   font-size: 16px;
 }
 .text-button {
-  font-size: 12px;
   min-height: 44px;
 }
 .primary:hover,
@@ -789,11 +798,12 @@ input[type="number"] {
   background: var(--accent-strong);
 }
 .secondary {
-  border: 1px solid var(--border);
+  border-color: var(--border);
   background: var(--surface);
+  color: var(--heading);
 }
 .secondary:hover {
-  background: var(--accent-soft);
+  border-color: var(--heading);
 }
 .save-form {
   flex-direction: column;
@@ -810,9 +820,9 @@ footer p {
 }
 .footer-brand {
   color: var(--heading);
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 700;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.16em;
 }
 @media (max-width: 720px) {
   main {
@@ -828,23 +838,16 @@ body {
   line-height: 1.7;
   letter-spacing: 0.02em;
   -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
 }
-button,
-input,
-select {
-  font-family: inherit;
-}
-.small,
-.file-copy > p,
-.intro > p:last-child,
-.tip {
-  font-size: 0.875rem;
+.intro > p:last-child {
+  font-size: 0.9375rem;
 }
 label {
   font-size: 0.9375rem;
 }
-.button {
-  font-size: 1rem;
+.file-button {
+  min-height: 56px;
 }
 .gauge-tools {
   display: flex;
@@ -979,7 +982,8 @@ label {
 }
 .gauge-actions button {
   flex: 1;
-  font-size: 0.875rem;
+  font-size: 0.9375rem;
+  font-weight: 500;
   padding: 8px;
 }
 .audio-library {
@@ -1009,7 +1013,8 @@ label {
   padding: 10px 8px;
   min-height: 44px;
   overflow-wrap: anywhere;
-  font-size: 14px;
+  font-size: 1rem;
+  font-weight: 600;
   border-radius: 8px;
 }
 .audio-open:hover,
@@ -1021,8 +1026,10 @@ label {
   border-left: 3px solid var(--gold);
 }
 .audio-item .delete-button {
-  font-size: 12px;
   flex-shrink: 0;
+}
+.storage-info {
+  margin-top: 4px;
 }
 #library-status {
   overflow-wrap: anywhere;
@@ -1052,26 +1059,43 @@ label {
   background: var(--surface);
 }
 .usage-guide > summary {
-  padding: 18px 20px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 18px;
   cursor: pointer;
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 600;
-  color: var(--heading);
-  min-height: 48px;
+  color: var(--text-muted);
+  min-height: 52px;
+  list-style: none;
 }
-.usage-guide > summary .tag {
-  margin-left: 8px;
+.usage-guide > summary::-webkit-details-marker {
+  display: none;
+}
+.usage-guide > summary::after {
+  content: "";
+  width: 8px;
+  height: 8px;
+  margin-left: auto;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(45deg) translateY(-2px);
+  transition: transform 0.15s ease;
+}
+.usage-guide[open] > summary::after {
+  transform: rotate(-135deg) translateY(-2px);
 }
 .usage-body {
-  padding: 0 20px 20px;
-  font-size: 14px;
+  padding: 0 18px 20px;
+  font-size: 0.9375rem;
   color: var(--text-muted);
 }
 .usage-body section + section {
   margin-top: 20px;
 }
 .usage-body h2 {
-  font-size: 15px;
+  font-size: 1rem;
   color: var(--heading);
   margin-bottom: 8px;
 }

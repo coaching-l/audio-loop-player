@@ -16,7 +16,11 @@ export function openLibrary() {
       };
       request.onblocked = () => {
         connection = null;
-        reject(new Error("別のタブを閉じてから、もう一度お試しください。"));
+        reject(
+          new Error(
+            "このページを開いているほかのタブを閉じてから、もう一度お試しください。",
+          ),
+        );
       };
       request.onsuccess = () => {
         const db = request.result;
@@ -123,7 +127,7 @@ export async function validateAudio(file) {
         : reject(
             Object.assign(
               new Error(
-                "このブラウザで再生できない形式か、音声ファイルが破損しています。MP3・M4A・WAVなどの別ファイルをお試しください。",
+                "このブラウザでは再生できない形式か、ファイルが壊れています。MP3・M4A・WAVなど、別のファイルをお試しください。",
               ),
               { name: "AudioFormatError" },
             ),

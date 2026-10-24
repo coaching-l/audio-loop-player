@@ -37,8 +37,8 @@
       content="端末の音声で、繰り返し聴く・声に出す。アップロード不要の語学学習プレーヤー。"
     />
     <title>音声リピートプレーヤー | COACHING-L</title>
-    <link rel="stylesheet" href="./style.css?v=7" />
-    <script type="module" src="./app.js?v=7"></script>
+    <link rel="stylesheet" href="./style.css?v=8" />
+    <script type="module" src="./app.js?v=8"></script>
   </head>
   <body>
     <main>
@@ -66,11 +66,20 @@
         <p>いつもの音声から、あなただけの練習区間を。</p>
       </div>
       <section id="drop-zone" class="file-card" aria-labelledby="file-heading">
-        <div class="file-symbol" aria-hidden="true">♫</div>
+        <div class="file-symbol" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="26" height="26">
+            <path d="M9 18V5l11-2v13" />
+            <circle cx="6" cy="18" r="3" />
+            <circle cx="17" cy="16" r="3" />
+          </svg>
+        </div>
         <div class="file-copy">
           <h2 id="file-heading">練習する音声を選ぶ</h2>
-          <p id="file-name">ここに音声ファイルをドロップ</p>
-          <p class="small">MP3 / M4A / WAV ほか、ブラウザ対応形式</p>
+          <p id="file-name">音声ファイルを選んでください</p>
+          <p class="small">
+            MP3・M4A・WAV
+            など。パソコンでは、ここにファイルをドラッグして追加することもできます。
+          </p>
         </div>
         <label class="button primary file-button" for="file-input"
           >ファイルを選択</label
@@ -91,10 +100,11 @@
           保存した音声を確認中…
         </p>
         <ul id="audio-list" class="audio-list"></ul>
+        <p id="storage-info" class="small storage-info" hidden></p>
       </section>
       <div class="load-actions">
         <button id="load-audio" class="button primary" type="button" hidden>
-          タップして読み込みを開始
+          音声の読み込みを始める
         </button>
       </div>
       <p id="error" class="error" role="alert" hidden></p>
@@ -104,7 +114,7 @@
           <div class="section-heading">
             <h2 id="player-heading"><span class="step">01</span> プレーヤー</h2>
             <span id="play-status" class="tag" role="status"
-              >音声を選択してください</span
+              >音声を選んでください</span
             >
           </div>
           <fieldset id="player-controls" disabled>
@@ -171,7 +181,7 @@
               </div>
             </div>
             <p id="gauge-help" class="small">
-              A・Bを左右にドラッグして区間を指定。上のつまみで再生位置を移動できます。
+              AとBを左右に動かして、くり返す範囲を決めます。上の丸いつまみは再生位置です。
             </p>
             <div class="gauge-actions">
               <button id="gauge-set-a" class="button secondary" type="button">
@@ -182,10 +192,39 @@
             </div>
             <div class="transport">
               <button id="back" class="skip" aria-label="5秒戻る">
-                ↶ <span>5秒</span></button
-              ><button id="play" class="play-button" aria-label="再生">▶</button
+                <svg
+                  viewBox="0 0 24 24"
+                  width="26"
+                  height="26"
+                  aria-hidden="true"
+                >
+                  <path d="M4 12a8 8 0 1 0 2.4-5.7" />
+                  <path d="M4 4v4.5h4.5" />
+                </svg>
+                <span>5秒</span></button
+              ><button
+                id="play"
+                class="play-button"
+                aria-label="再生"
+                data-state="paused"
+              >
+                <svg class="icon-play" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M8 5.5v13l10.5-6.5z" />
+                </svg>
+                <svg class="icon-pause" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z" />
+                </svg></button
               ><button id="forward" class="skip" aria-label="5秒進む">
-                ↷ <span>5秒</span>
+                <svg
+                  viewBox="0 0 24 24"
+                  width="26"
+                  height="26"
+                  aria-hidden="true"
+                >
+                  <path d="M20 12a8 8 0 1 1-2.4-5.7" />
+                  <path d="M20 4v4.5h-4.5" />
+                </svg>
+                <span>5秒</span>
               </button>
             </div>
             <div class="speed-section">
@@ -202,18 +241,19 @@
                 value="1"
               />
               <div class="range-labels">
-                <span>0.5× ゆっくり</span
+                <span>0.5×（ゆっくり）</span
                 ><button id="normal-speed" class="text-button">
-                  1.0× に戻す</button
-                ><span>2.0×</span>
+                  1.0×に戻す</button
+                ><span>2.0×（速い）</span>
               </div>
-              <p class="small">対応ブラウザでは声の高さを維持します。</p>
+              <p class="small">
+                速度を変えても、声の高さはなるべく変わらないようにしています（ブラウザによって異なります）。
+              </p>
             </div>
           </fieldset>
           <div class="tip">
-            <span aria-hidden="true">✦</span>
             <p>
-              短い区間をくり返し聴いて、そのあと声に出してみましょう。無音時間を入れると、発話の練習にも。
+              短い区間をくり返し聴いたら、声に出してまねしてみましょう。くり返しの間に無音を入れると、その時間に声に出す練習ができます。
             </p>
           </div>
         </section>
@@ -225,10 +265,10 @@
             <span id="repeat-progress" class="tag">—</span>
           </div>
           <fieldset id="repeat-controls" disabled>
-            <label for="repeat-mode">リピートする範囲</label
+            <label for="repeat-mode">くり返す範囲</label
             ><select id="repeat-mode">
-              <option value="off">リピート OFF</option>
-              <option value="ab">A–B 区間</option>
+              <option value="off">くり返さない</option>
+              <option value="ab">AからBまで（区間）</option>
               <option value="all">音声全体</option>
             </select>
             <div class="points">
@@ -237,7 +277,7 @@
                   <label for="point-a"
                     ><span class="point-letter">A</span> 開始点</label
                   ><button id="set-a" class="text-button">
-                    現在位置を設定
+                    今の位置にする
                   </button>
                 </div>
                 <input
@@ -254,7 +294,7 @@
                   <label for="point-b"
                     ><span class="point-letter b">B</span> 終了点</label
                   ><button id="set-b" class="text-button">
-                    現在位置を設定
+                    今の位置にする
                   </button>
                 </div>
                 <input
@@ -268,13 +308,12 @@
               </div>
             </div>
             <p id="time-help" class="small">
-              分:秒（例 1:23.500）または秒数で入力。Enter
-              または入力欄を離れると反映。
+              「分:秒」（例：1:23.5）か秒数（例：83.5）で入力します。Enterキーを押すか、入力欄の外をタップすると反映されます。
             </p>
             <p id="range-error" class="error" role="alert" hidden></p>
             <div class="repeat-options">
               <div>
-                <label for="repeat-count">再生回数</label
+                <label for="repeat-count">再生する回数</label
                 ><select id="repeat-count">
                   <option value="2">2回</option>
                   <option value="3">3回</option>
@@ -284,21 +323,36 @@
                 </select>
               </div>
               <div>
-                <label for="gap">リピート間の無音</label>
-                <div class="gap-input">
-                  <input
-                    id="gap"
-                    type="number"
-                    min="0"
-                    max="10"
-                    step="0.1"
-                    value="0"
-                  /><span>秒</span>
-                </div>
+                <label for="gap-mode">くり返しの間の無音</label
+                ><select id="gap-mode">
+                  <option value="0">秒数で決める</option>
+                  <option value="1">区間と同じ</option>
+                  <option value="1.5">区間の1.5倍</option>
+                  <option value="2">区間の2倍</option>
+                </select>
+              </div>
+            </div>
+            <div id="gap-seconds" class="gap-seconds">
+              <label for="gap">無音の秒数（0〜10秒）</label>
+              <div class="gap-input">
+                <input
+                  id="gap"
+                  type="number"
+                  min="0"
+                  max="10"
+                  step="0.1"
+                  value="0"
+                /><span>秒</span>
               </div>
             </div>
             <p class="small">
-              回数は最初の再生を含みます。無音時間は速度にかかわらず実時間です。設定変更時は回数をリセットします。
+              回数には最初の1回も含みます（2回なら「聴く→無音→もう一度聴く」で止まります）。
+            </p>
+            <p class="small">
+              「区間と同じ」にすると、区間を聴いたのと同じ時間だけ無音になり、その間に声に出して練習できます（ゆっくり再生なら、無音もそのぶん長くなります）。
+            </p>
+            <p class="small">
+              秒数で決めた無音は、再生速度を変えても同じ長さです。設定を変えると、回数は0から数え直します。
             </p>
           </fieldset>
         </section>
@@ -344,37 +398,37 @@
           <section>
             <h2>音声を追加して練習する</h2>
             <p>
-              「ファイルを選択」から音声を追加します。複数選択・まとめてドロップに対応し、10件まで登録できます。一覧の音声名を押すと切り替えられます。読み込み開始ボタンが出た場合は押してください。
+              「ファイルを選択」から音声を追加します。10件まで登録でき、複数のファイルをまとめて選ぶこともできます。練習する音声は、一覧の音声名を押して切り替えます。「音声の読み込みを始める」ボタンが出たときは、押してください。
             </p>
             <p>
-              端末に保存したMP3・M4A・WAVなどを使います。音楽アプリの曲や配信サービスの楽曲を直接取り込む機能はありません。ファイルとして取り出せる音声を選んでください。選択画面の項目はOS・ブラウザによって異なります。
+              端末に保存したMP3・M4A・WAVなどのファイルを使います。音楽アプリや配信サービスの曲は、直接は取り込めません。ファイルを選ぶ画面の見た目は、端末やブラウザによって異なります。
             </p>
           </section>
           <section>
             <h2>聴く・くり返す・保存する</h2>
             <p>
-              再生・一時停止、5秒戻る／進む、速度変更ができます。ゲージのA・Bを動かして区間を指定し、リピートをONにします。時刻の直接入力、音声全体のリピート、回数や無音時間の調整もできます。
+              再生・一時停止、5秒戻る／進む、速度の変更ができます。くり返したい範囲は、ゲージのA・Bを動かして決めます（A・Bを動かすと、区間リピートがONになります）。時刻を数字で入力したり、音声全体をくり返したり、回数や無音の長さを変えたりもできます。
             </p>
             <p>
-              覚えたい区間には名前を付けて保存できます。練習区間・速度・再生位置は音声ごとに記録されます。
+              覚えたい区間は、名前を付けて保存できます。練習区間・速度・再生位置は、音声ごとに記録されます。
             </p>
           </section>
           <section>
             <h2>保存先とデータの扱い</h2>
             <p>
-              音声と設定は、使っている端末・ブラウザ内に保存します。他の端末やブラウザとは同期されず、サーバーにも音声を送りません。
+              音声と設定は、いま使っている端末・ブラウザ内に保存します。ほかの端末やブラウザには引き継がれません。音声をサーバーへ送ることもありません。
             </p>
             <p>
-              サイトデータの削除や保存容量の制限により消える場合があります。元ファイルは保管してください。「音声を削除」はアプリ内のコピーだけを削除し、端末の元ファイルは変更しません。
+              音声を保存すると、ブラウザが自動で消さないように設定を求めます。それでも、ブラウザの履歴・サイトデータを削除すると消えます。元のファイルは残しておいてください。「音声を削除」で消えるのはこのアプリ内のコピーだけで、端末の元ファイルはそのまま残ります。
             </p>
           </section>
           <section>
             <h2>オフラインで使う</h2>
             <p>
-              音声の保存とアプリの準備が済めば、通信なしで起動・再読み込みして練習できます。出発前に一度オンラインで開き、音声保存が完了し、準備に関するエラーがないことを確認してから、機内モードで開き直して再生を試してください。
+              一度インターネットにつながった状態で開いて音声を保存しておけば、機内などでも通信なしで起動して練習できます。出発前に、音声を追加して「保存しました」と出ることを確かめ、そのあと機内モードにしてページを開き直し、再生できるか試しておくと安心です。
             </p>
             <p>
-              画面ロックや別アプリへの切り替え中は、OSの制限で再生やリピートのタイミングがずれる場合があります。正確な練習は画面を開いた状態で行ってください。
+              画面をロックしたり別のアプリに切り替えたりすると、再生やくり返しのタイミングがずれることがあります。練習は画面を開いたまま行ってください。
             </p>
             <section
               class="offline-card"
@@ -402,7 +456,7 @@
                 type="button"
                 hidden
               >
-                新しい版に更新して再読み込み
+                新しいバージョンに更新する
               </button>
             </section>
           </section>

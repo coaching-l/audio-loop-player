@@ -8,7 +8,7 @@ import {
   storedFile,
   validateAudio,
 } from "./audio-library.js";
-import { LoopPlayer, parseTime, formatTime } from "./player.js";
+import { LoopPlayer, GAP_RATIOS, parseTime, formatTime } from "./player.js";
 const $ = (id) => document.getElementById(id);
 const storageKey = "kotonoha.audio.v1";
 let library = {};
@@ -42,7 +42,7 @@ try {
 } catch {
   storageWarning = true;
   notice(
-    "ブラウザの保存機能を利用できないか、保存データを読み込めません。設定は今回の画面内で利用できます。",
+    "このブラウザでは設定を保存できません。このページを開いている間は使えますが、閉じると設定は残りません。",
   );
 }
 function settings() {
@@ -52,6 +52,7 @@ function settings() {
     b: engine.b,
     limit: engine.limit,
     gap: engine.gap,
+    gapRatio: engine.gapRatio,
     rate: engine.audio.playbackRate,
   };
 }
@@ -67,7 +68,7 @@ function persist() {
   } catch {
     storageWarning = true;
     notice(
-      "ブラウザに保存できません。容量やプライベートブラウズの設定を確認してください。今回の画面内では利用できます。",
+      "設定を保存できません。保存容量やプライベートブラウズの設定を確認してください。このページを開いている間は使えます。",
     );
   }
 }
@@ -84,6 +85,8 @@ function validSettings(s, duration) {
     Number.isFinite(s.gap) &&
     s.gap >= 0 &&
     s.gap <= 10 &&
+    // Settings saved before relative gaps existed have no gapRatio.
+    (s.gapRatio === undefined || GAP_RATIOS.includes(s.gapRatio)) &&
     Number.isFinite(s.rate) &&
     s.rate >= 0.5 &&
     s.rate <= 2
@@ -96,6 +99,8 @@ function syncFields() {
   $("repeat-mode").value = engine.mode;
   $("repeat-count").value = String(engine.limit);
   $("gap").value = String(engine.gap);
+  $("gap-mode").value = String(engine.gapRatio);
+  $("gap-seconds").hidden = engine.gapRatio !== 0;
   $("speed").value = String(engine.audio.playbackRate);
   $("speed-value").textContent = engine.audio.playbackRate.toFixed(2) + "×";
   $("a-legend").textContent = "A " + formatTime(engine.a, 1);
@@ -114,12 +119,12 @@ function render(player) {
     persist();
   }
   const active = player.active;
-  $("play").textContent = active ? "Ⅱ" : "▶";
+  $("play").dataset.state = active ? "playing" : "paused";
   $("play").setAttribute("aria-label", active ? "一時停止" : "再生");
   const statuses = {
     playing: "再生中",
-    waiting: "無音待ち中",
-    "gap-paused": "無音待ちを一時停止",
+    waiting: "無音中",
+    "gap-paused": "無音中に一時停止",
     paused: "一時停止",
     done: "再生完了",
   };
@@ -132,7 +137,7 @@ function render(player) {
   );
   const progress =
     player.mode === "off"
-      ? "OFF"
+      ? "くり返しなし"
       : `完了 ${player.completed} / ${player.limit || "∞"} 回`;
   if ($("repeat-progress").textContent !== progress)
     $("repeat-progress").textContent = progress;
@@ -140,6 +145,10 @@ function render(player) {
 function enable(value) {
   for (const id of ["player-controls", "repeat-controls", "save-controls"])
     $(id).disabled = !value;
+}
+function gapLabel({ gap, gapRatio }) {
+  if (!gapRatio) return gap + "秒";
+  return gapRatio === 1 ? "区間と同じ" : `区間の${gapRatio}倍`;
 }
 function renderSegments() {
   $("segments").replaceChildren();
@@ -155,7 +164,7 @@ function renderSegments() {
     name.textContent = segment.name;
     const details = document.createElement("p");
     details.className = "small";
-    details.textContent = `${formatTime(segment.a, 2)} – ${formatTime(segment.b, 2)} · ${segment.rate.toFixed(2)}× · ${segment.limit || "無制限"}回 · 無音 ${segment.gap}秒`;
+    details.textContent = `${formatTime(segment.a, 2)} – ${formatTime(segment.b, 2)} · ${segment.rate.toFixed(2)}× · ${segment.limit ? segment.limit + "回" : "無制限"} · 無音 ${gapLabel(segment)}`;
     info.append(name, details);
     const load = document.createElement("button");
     load.className = "button secondary";
@@ -169,7 +178,9 @@ function renderSegments() {
       syncFields();
       rangeError("");
       persist();
-      notice(`「${segment.name}」を呼び出しました。再生ボタンで練習できます。`);
+      notice(
+        `「${segment.name}」を呼び出しました。再生ボタンを押すと練習を始めます。`,
+      );
     });
     const remove = document.createElement("button");
     remove.className = "delete-button";
@@ -201,7 +212,7 @@ async function loadFile(file) {
   $("load-audio").hidden = false;
   $("file-name").textContent = file.name;
   $("play-status").textContent = "音声を読み込み中…";
-  $("play").textContent = "▶";
+  $("play").dataset.state = "paused";
   $("play").setAttribute("aria-label", "再生");
   $("current-time").textContent = "0:00.0";
   $("duration").textContent = "0:00.0";
@@ -233,7 +244,7 @@ async function loadFile(file) {
   }
   audio.addEventListener("error", () =>
     fail(
-      "この音声を読み込めません。形式がブラウザに対応していないか、ファイルが破損しています。MP3・M4A・WAVなどの別のファイルをお試しください。",
+      "この音声を読み込めません。形式がブラウザに対応していないか、ファイルが壊れています。MP3・M4A・WAVなど、別のファイルをお試しください。",
     ),
   );
   audio.addEventListener(
@@ -279,7 +290,7 @@ async function loadFile(file) {
       render(currentEngine);
       persist();
       if (!storageWarning)
-        notice("音声を読み込みました。再生ボタンで練習できます。");
+        notice("音声を読み込みました。再生ボタンを押すと練習を始めます。");
     },
     { once: true },
   );
@@ -289,13 +300,13 @@ async function loadFile(file) {
     if (generation !== loadGeneration) return;
     objectURL = URL.createObjectURL(copy);
     notice(
-      "読み込みが始まらない場合は「タップして読み込みを開始」を押してください。",
+      "読み込みが始まらないときは「音声の読み込みを始める」を押してください。",
     );
     loadTimeout = setTimeout(() => {
       if (generation !== loadGeneration || ready) return;
-      $("play-status").textContent = "タップして読み込み";
+      $("play-status").textContent = "読み込みを待っています";
       notice(
-        "ブラウザが読み込みを待機しています。「タップして読み込みを開始」を押してください。端末に未保存の場合は、ダウンロードを完了してから選び直してください。",
+        "ブラウザが読み込みを止めています。「音声の読み込みを始める」を押してください。クラウド上のファイルは、端末へのダウンロードを済ませてから選び直してください。",
       );
     }, 15000);
     audio.src = objectURL;
@@ -357,8 +368,11 @@ function updateSettings(overrides = {}) {
     b: parseTime($("point-b").value),
     limit: Number($("repeat-count").value),
     gap: $("gap").value.trim() === "" ? NaN : Number($("gap").value),
+    gapRatio: Number($("gap-mode").value),
     ...overrides,
   };
+  // The seconds field is hidden for a relative gap, so a stale entry there must not block changes.
+  if (s.gapRatio && !(s.gap >= 0 && s.gap <= 10)) s.gap = engine.gap;
   try {
     engine.configure(s);
     rangeError("");
@@ -368,13 +382,20 @@ function updateSettings(overrides = {}) {
   } catch (e) {
     rangeError(
       s.gap < 0 || s.gap > 10 || !Number.isFinite(s.gap)
-        ? "無音時間は0〜10秒で指定してください。"
+        ? "無音の秒数は0〜10秒で入力してください。"
         : e.message,
     );
     return false;
   }
 }
-for (const id of ["repeat-mode", "point-a", "point-b", "repeat-count", "gap"]) {
+for (const id of [
+  "repeat-mode",
+  "point-a",
+  "point-b",
+  "repeat-count",
+  "gap-mode",
+  "gap",
+]) {
   $(id).addEventListener("change", () => updateSettings());
   $(id).addEventListener("keydown", (event) => {
     if (event.key === "Enter") {
@@ -555,9 +576,9 @@ function renderAudioList() {
           segments = [];
           enable(false);
           renderSegments();
-          $("file-name").textContent = "ここに音声ファイルをドロップ";
-          $("play-status").textContent = "音声を選択してください";
-          $("play").textContent = "▶";
+          $("file-name").textContent = "音声ファイルを選んでください";
+          $("play-status").textContent = "音声を選んでください";
+          $("play").dataset.state = "paused";
           $("play").setAttribute("aria-label", "再生");
           $("current-time").textContent = "0:00.0";
           $("duration").textContent = "0:00.0";
@@ -565,11 +586,12 @@ function renderAudioList() {
           $("seek").max = 0;
         }
         renderAudioList();
+        void showStorageInfo();
         $("library-status").textContent =
-          "音声を削除しました。保存した練習区間は、同じ元ファイルを追加すると再利用できます。";
+          "音声を削除しました。練習区間は残っているので、同じファイルをもう一度追加すると使えます。";
       } catch {
         $("library-status").textContent =
-          "削除できませんでした。音声は一覧に残しています。";
+          "削除できませんでした。音声は一覧に残っています。";
         remove.disabled = false;
       }
     });
@@ -584,7 +606,7 @@ function importFiles(files) {
   importQueue = importQueue
     .then(async () => {
       $("library-status").textContent =
-        "音声を保存中です。この画面を閉じずにお待ちください。";
+        "音声を保存中です。終わるまでこのページを閉じないでください。";
       let saved = 0;
       let deferred = 0;
       const problems = [];
@@ -609,20 +631,22 @@ function importFiles(files) {
                 ? e.message
                 : e.message?.includes("10件")
                   ? e.message
-                  : "音声を保存できませんでした。形式・保存容量・ブラウザの保存設定を確認してください。";
+                  : "音声を保存できませんでした。ファイルの形式・保存容量・ブラウザの設定を確認してください。";
           problems.push(file.name + "：" + message);
         }
       }
+      if (saved) await requestPersistentStorage();
       $("library-status").textContent = problems.length
         ? saved +
-          "件保存。" +
+          "件を保存しました。保存できなかった音声：" +
           problems.join(" / ") +
-          " 保存できない音声も今回の画面では再生を試せますが、再訪問時には残りません。"
+          " 保存できなかった音声も、このページを開いている間は再生できますが、閉じると残りません。"
         : saved +
           "件の音声を保存しました。次回も一覧から開けます。" +
           (deferred
-            ? " 再生確認が必要な音声があります。音声を開き、読み込み開始ボタンを押して再生できるか確認してください。"
+            ? " まだ再生を確認できていない音声があります。その音声を開き、「音声の読み込みを始める」を押して、再生できるか確かめてください。"
             : "");
+      void showStorageInfo();
     })
     .catch(() => {
       $("library-status").textContent =
@@ -635,12 +659,13 @@ importQueue = listAudio()
     audioItems = items;
     renderAudioList();
     $("library-status").textContent = items.length
-      ? "音声を選ぶと前回の設定で開けます。"
-      : "音声を10件まで追加できます。複数選択・まとめてドロップにも対応。";
+      ? "音声名を押すと、前回の設定のまま練習を再開できます。"
+      : "音声は10件まで登録できます。複数のファイルをまとめて選ぶこともできます。";
+    void showStorageInfo();
   })
   .catch(() => {
     $("library-status").textContent =
-      "音声の保存機能が利用できません。ファイルを選ぶと今回の画面内では再生できます。";
+      "このブラウザでは音声を保存できません。ファイルを選べば、このページを開いている間は再生できます。";
   });
 
 window.addEventListener("offline-update", () => {
@@ -653,7 +678,7 @@ window.addEventListener("offline-update", () => {
 $("load-audio").addEventListener("click", () => {
   if (!engine || !engine.audio.src) {
     notice(
-      "まだファイルを取得中です。端末へのダウンロードが完了しているか確認してください。",
+      "まだファイルを読み取っています。クラウド上のファイルは、端末へのダウンロードが済んでいるか確認してください。",
     );
     return;
   }
@@ -663,8 +688,43 @@ $("load-audio").addEventListener("click", () => {
     if (player !== engine || error.name === "AbortError") return;
     notice(
       error.name === "NotAllowedError"
-        ? "再度このボタンをタップしてください。別アプリ内で開いている場合は、通常のブラウザで開いてください。"
-        : "音声を再生できません。端末に保存済みの別のMP3・M4A・WAVもお試しください。",
+        ? "もう一度このボタンを押してください。ほかのアプリの中でこのページを開いているときは、SafariやChromeなどのブラウザで開き直してください。"
+        : "音声を再生できません。端末に保存してある別のMP3・M4A・WAVもお試しください。",
     );
   });
 });
+
+// Without persistent storage, browsers may evict saved audio when the device runs low on space.
+async function requestPersistentStorage() {
+  try {
+    if (navigator.storage?.persist && !(await navigator.storage.persisted()))
+      await navigator.storage.persist();
+  } catch {
+    /* The audio stays saved; it is only less protected from eviction. */
+  }
+}
+function formatBytes(bytes) {
+  if (bytes >= 1024 ** 3) return (bytes / 1024 ** 3).toFixed(1) + "GB";
+  return Math.max(0.1, bytes / 1024 ** 2).toFixed(1) + "MB";
+}
+async function showStorageInfo() {
+  const info = $("storage-info");
+  if (!navigator.storage?.estimate || !audioItems.length) {
+    info.hidden = true;
+    return;
+  }
+  try {
+    const [{ usage = 0 }, persisted] = await Promise.all([
+      navigator.storage.estimate(),
+      navigator.storage.persisted?.() ?? false,
+    ]);
+    info.textContent =
+      `使用中の容量：約${formatBytes(usage)}。` +
+      (persisted
+        ? "空き容量が少なくなっても、ブラウザが自動で消さない設定です。"
+        : "空き容量が少なくなると、ブラウザが音声を消す場合があります。元のファイルは残しておいてください。");
+    info.hidden = false;
+  } catch {
+    info.hidden = true;
+  }
+}

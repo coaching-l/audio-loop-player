@@ -128,28 +128,73 @@ for (const rate of [0.5, 2])
       timeout: 10000,
     });
     const trace = await page.evaluate(() => window.statusTrace);
-    const waitIndex = trace.findIndex((x) => x.text === "無音待ち中");
+    const waitIndex = trace.findIndex((x) => x.text === "無音中");
     expect(waitIndex).toBeGreaterThan(-1);
     const next = trace.slice(waitIndex + 1).find((x) => x.text === "再生中");
     expect(next.at - trace[waitIndex].at).toBeGreaterThanOrEqual(380);
     expect(next.at - trace[waitIndex].at).toBeLessThan(800);
   });
+for (const [rate, expected] of [
+  [1, 600],
+  [2, 300],
+])
+  test(`relative silence matches the interval's real playing time at ${rate}×`, async ({
+    page,
+  }) => {
+    await load(page);
+    await configure(page, { a: "0.2", b: "0.8" });
+    await page.locator("#gap-mode").selectOption("1");
+    await expect(page.locator("#gap")).toBeHidden();
+    await setRate(page, rate);
+    await traceStatus(page);
+    await page.locator("#play").click();
+    await expect(page.locator("#play-status")).toHaveText("再生完了", {
+      timeout: 10000,
+    });
+    const trace = await page.evaluate(() => window.statusTrace);
+    const waitIndex = trace.findIndex((x) => x.text === "無音中");
+    const next = trace.slice(waitIndex + 1).find((x) => x.text === "再生中");
+    expect(next.at - trace[waitIndex].at).toBeGreaterThanOrEqual(expected - 20);
+    expect(next.at - trace[waitIndex].at).toBeLessThan(expected + 400);
+  });
+test("relative silence is saved with segments and restored after reload", async ({
+  page,
+}) => {
+  await load(page);
+  await configure(page, { a: "0.2", b: "0.8" });
+  await page.locator("#gap-mode").selectOption("1.5");
+  await page.locator("#segment-name").fill("相対");
+  await page.getByRole("button", { name: "区間を保存", exact: true }).click();
+  await expect(page.locator(".segment .small")).toContainText(
+    "無音 区間の1.5倍",
+  );
+  await page.reload();
+  await load(page);
+  await expect(page.locator("#gap-mode")).toHaveValue("1.5");
+  await expect(page.locator("#gap")).toBeHidden();
+  await page.locator("#gap-mode").selectOption("0");
+  await expect(page.locator("#gap")).toBeVisible();
+  await page
+    .getByRole("button", { name: "相対を呼び出す", exact: true })
+    .click();
+  await expect(page.locator("#gap-mode")).toHaveValue("1.5");
+});
 test("pause during silence retains the remaining silence and never auto-resumes", async ({
   page,
 }) => {
   await load(page);
   await configure(page, { gap: "1" });
   await page.locator("#play").click();
-  await expect(page.locator("#play-status")).toHaveText("無音待ち中");
+  await expect(page.locator("#play-status")).toHaveText("無音中");
   await page.locator("#play").click();
-  await expect(page.locator("#play-status")).toHaveText("無音待ちを一時停止");
+  await expect(page.locator("#play-status")).toHaveText("無音中に一時停止");
   await page.waitForTimeout(1150);
-  await expect(page.locator("#play-status")).toHaveText("無音待ちを一時停止");
+  await expect(page.locator("#play-status")).toHaveText("無音中に一時停止");
   expect(await page.locator("#audio").evaluate((a) => a.paused)).toBe(true);
   await page.locator("#play").click();
-  await expect(page.locator("#play-status")).toHaveText("無音待ち中");
+  await expect(page.locator("#play-status")).toHaveText("無音中");
   await page.waitForTimeout(200);
-  await expect(page.locator("#play-status")).toHaveText("無音待ち中");
+  await expect(page.locator("#play-status")).toHaveText("無音中");
   await expect(page.locator("#play-status")).toHaveText("再生完了", {
     timeout: 5000,
   });
@@ -161,7 +206,7 @@ test("switching files cancels old repeat timers and revokes old object URLs", as
   await configure(page, { gap: ".8" });
   const oldURL = await page.locator("#audio").getAttribute("src");
   await page.locator("#play").click();
-  await expect(page.locator("#play-status")).toHaveText("無音待ち中");
+  await expect(page.locator("#play-status")).toHaveText("無音中");
   await load(page, {
     name: "other.wav",
     mimeType: "audio/wav",
@@ -417,11 +462,11 @@ test("changing speed during silence preserves the existing wall-clock deadline",
   await configure(page, { gap: ".8" });
   await traceStatus(page);
   await page.locator("#play").click();
-  await expect(page.locator("#play-status")).toHaveText("無音待ち中");
+  await expect(page.locator("#play-status")).toHaveText("無音中");
   await setRate(page, 2);
   await expect(page.locator("#play-status")).toHaveText("再生完了");
   const trace = await page.evaluate(() => window.statusTrace);
-  const index = trace.findIndex((x) => x.text === "無音待ち中");
+  const index = trace.findIndex((x) => x.text === "無音中");
   const next = trace.slice(index + 1).find((x) => x.text === "再生中");
   expect(next.at - trace[index].at).toBeGreaterThan(770);
   expect(next.at - trace[index].at).toBeLessThan(1100);

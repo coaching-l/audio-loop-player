@@ -42,9 +42,9 @@ test("touch pause during silence, segment save and landscape layout", async ({
   await page.locator("#gap").fill("1");
   await page.locator("#repeat-mode").selectOption("ab");
   await page.locator("#play").tap();
-  await expect(page.locator("#play-status")).toHaveText("無音待ち中");
+  await expect(page.locator("#play-status")).toHaveText("無音中");
   await page.locator("#play").tap();
-  await expect(page.locator("#play-status")).toHaveText("無音待ちを一時停止");
+  await expect(page.locator("#play-status")).toHaveText("無音中に一時停止");
   await page.waitForTimeout(1100);
   expect(await page.locator("#audio").evaluate((a) => a.paused)).toBe(true);
   await page.locator("#segment-name").fill("タッチで保存");
