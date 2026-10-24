@@ -7,7 +7,7 @@ import { resolve, join } from "node:path";
 // Dedicated HTTP server exercises real SW fetches, including failed installs and upgrades.
 // Playwright route mocks cannot reliably intercept fetches initiated inside a worker.
 async function server() {
-  const state = { fail: false, version: "v2" };
+  const state = { fail: false, version: "v3" };
   const host = createServer(async (req, res) => {
     const path = new URL(req.url, "http://localhost").pathname;
     if (path === "/pomodoro/") {
@@ -150,6 +150,7 @@ test("failed preparation does not claim readiness and retry recovers", async ({
       "完了していません",
     );
     host.state.fail = false;
+    await page.locator("#usage-guide > summary").click();
     await page.locator("#offline-retry").click();
     await prepared(page);
   } finally {
@@ -169,7 +170,7 @@ test("failed update keeps the old offline app; successful update preserves audio
       const c = await caches.open("pomodoro-offline-v1");
       await c.put("/pomodoro/", new Response("keep"));
     });
-    host.state.version = "test-v3";
+    host.state.version = "test-v4";
     host.state.fail = true;
     await page.evaluate(async () => {
       const r = await navigator.serviceWorker.getRegistration();
@@ -193,6 +194,7 @@ test("failed update keeps the old offline app; successful update preserves audio
     await page.evaluate(async () => {
       await (await navigator.serviceWorker.getRegistration()).update();
     });
+    await page.locator("#usage-guide > summary").click();
     await expect(page.locator("#offline-update")).toBeVisible();
     await Promise.all([
       page.waitForEvent("load"),
@@ -205,9 +207,9 @@ test("failed update keeps the old offline app; successful update preserves audio
         return (
           keys.includes("pomodoro-offline-v1") &&
           keys.includes(
-            "coaching-l-audio-offline:/audio-loop-player/:test-v3",
+            "coaching-l-audio-offline:/audio-loop-player/:test-v4",
           ) &&
-          !keys.includes("coaching-l-audio-offline:/audio-loop-player/:v2")
+          !keys.includes("coaching-l-audio-offline:/audio-loop-player/:v3")
         );
       }),
     ).toBe(true);
@@ -244,6 +246,7 @@ test("missing shell cache is detected and can be prepared again", async ({
     await expect(page.locator("#offline-status")).toContainText(
       "完了していません",
     );
+    await page.locator("#usage-guide > summary").click();
     await page.locator("#offline-retry").click();
     await prepared(page);
     await context.setOffline(true);

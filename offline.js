@@ -5,6 +5,11 @@ let registration,
   checking = 0,
   reloadForUpdate = false;
 let cachedReady = false;
+const badge = document.getElementById("help-badge");
+function showUpdate(available) {
+  update.hidden = !available;
+  if (badge) badge.hidden = !available;
+}
 function unavailable() {
   cachedReady = false;
   status.textContent =
@@ -39,9 +44,9 @@ async function check() {
     cachedReady = true;
     retry.hidden = true;
     status.textContent = navigator.onLine
-      ? "オフライン準備完了。登録した音声で、機内でも練習できます。"
-      : "オフラインで利用中。登録した音声で練習できます。";
-    update.hidden = !registration.waiting;
+      ? "オフライン準備完了"
+      : "オフラインで利用中";
+    showUpdate(Boolean(registration.waiting));
   } catch {
     if (checkId === checking) unavailable();
   }
@@ -51,7 +56,7 @@ function watch(worker) {
   worker.addEventListener("statechange", () => {
     if (worker.state === "activated") void check();
     if (worker.state === "installed" && registration.active) {
-      update.hidden = false;
+      showUpdate(true);
       void check();
     }
     if (worker.state === "redundant" && !registration.active) unavailable();
@@ -79,7 +84,7 @@ async function prepare() {
       watch(registration.installing),
     );
     watch(registration.installing);
-    if (registration.waiting) update.hidden = false;
+    if (registration.waiting) showUpdate(true);
     if (registration.active) await check();
     if (
       !registration.active &&

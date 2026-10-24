@@ -278,7 +278,8 @@ async function loadFile(file) {
       renderSegments();
       render(currentEngine);
       persist();
-      if (!storageWarning) notice("音声を読み込みました。再生ボタンで練習できます。");
+      if (!storageWarning)
+        notice("音声を読み込みました。再生ボタンで練習できます。");
     },
     { once: true },
   );
@@ -294,7 +295,7 @@ async function loadFile(file) {
       if (generation !== loadGeneration || ready) return;
       $("play-status").textContent = "タップして読み込み";
       notice(
-        "ブラウザが読み込みを待機しています。「タップして読み込みを開始」を押してください。端末に未保存の場合は、先に「ファイル」アプリでダウンロードしてください。",
+        "ブラウザが読み込みを待機しています。「タップして読み込みを開始」を押してください。端末に未保存の場合は、ダウンロードを完了してから選び直してください。",
       );
     }, 15000);
     audio.src = objectURL;
@@ -652,7 +653,7 @@ window.addEventListener("offline-update", () => {
 $("load-audio").addEventListener("click", () => {
   if (!engine || !engine.audio.src) {
     notice(
-      "まだファイルを取得中です。「ファイル」アプリでダウンロードを完了しているか確認してください。",
+      "まだファイルを取得中です。端末へのダウンロードが完了しているか確認してください。",
     );
     return;
   }
@@ -662,7 +663,7 @@ $("load-audio").addEventListener("click", () => {
     if (player !== engine || error.name === "AbortError") return;
     notice(
       error.name === "NotAllowedError"
-        ? "再度このボタンをタップしてください。別アプリ内のブラウザの場合はSafariで開いてください。"
+        ? "再度このボタンをタップしてください。別アプリ内で開いている場合は、通常のブラウザで開いてください。"
         : "音声を再生できません。端末に保存済みの別のMP3・M4A・WAVもお試しください。",
     );
   });

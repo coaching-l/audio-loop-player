@@ -37,8 +37,8 @@
       content="端末の音声で、繰り返し聴く・声に出す。アップロード不要の語学学習プレーヤー。"
     />
     <title>音声リピートプレーヤー | COACHING-L</title>
-    <link rel="stylesheet" href="./style.css?v=5" />
-    <script type="module" src="./app.js?v=5"></script>
+    <link rel="stylesheet" href="./style.css?v=6" />
+    <script type="module" src="./app.js?v=6"></script>
   </head>
   <body>
     <main>
@@ -65,20 +65,6 @@
         <h2 class="lead">聴く。くり返す。<br />自分の言葉にする。</h2>
         <p>いつもの音声から、あなただけの練習区間を。</p>
       </div>
-      <section class="offline-card" aria-label="オフライン利用の準備">
-        <p id="offline-status" class="small" role="status">
-          オフライン利用を確認中…
-        </p>
-        <button id="offline-retry" class="text-button" type="button" hidden>
-          準備をやり直す
-        </button>
-        <button id="offline-update" class="text-button" type="button" hidden>
-          新しい版に更新して再読み込み
-        </button>
-        <p class="small">
-          出発前に準備完了と音声の保存を確認し、機内モードで一度試してください。
-        </p>
-      </section>
       <section id="drop-zone" class="file-card" aria-labelledby="file-heading">
         <div class="file-symbol" aria-hidden="true">♫</div>
         <div class="file-copy">
@@ -87,12 +73,12 @@
           <p class="small">MP3 / M4A / WAV ほか、ブラウザ対応形式</p>
         </div>
         <label class="button primary file-button" for="file-input"
-          >音声を追加（複数選択可）</label
+          >ファイルを選択</label
         ><input
           id="file-input"
           type="file"
           multiple
-          accept="audio/*,.mp3,.m4a,.wav,.aac,.ogg,.flac,.webm,.opus"
+          accept=".mp3,.m4a,.wav,.aac,.ogg,.flac,.weba,.opus"
           class="visually-hidden"
         />
       </section>
@@ -105,16 +91,12 @@
           保存した音声を確認中…
         </p>
         <ul id="audio-list" class="audio-list"></ul>
-        <p class="small">
-          音声本体と練習設定をこのブラウザに保存します。サーバーへの送信・端末間の同期はありません。サイトデータを削除すると消えるため、元ファイルは残してください。
-        </p>
       </section>
-      <button id="load-audio" class="button primary" type="button" hidden>
-        タップして読み込みを開始
-      </button>
-      <p class="small">
-        iPhoneで選べない・読み込めない場合は、「ファイル」アプリで端末内へのダウンロードを完了してから選んでください。
-      </p>
+      <div class="load-actions">
+        <button id="load-audio" class="button primary" type="button" hidden>
+          タップして読み込みを開始
+        </button>
+      </div>
       <p id="error" class="error" role="alert" hidden></p>
       <p id="notice" class="notice" role="status"></p>
       <div class="workspace">
@@ -353,12 +335,74 @@
           </p>
         </section>
       </div>
+      <details id="usage-guide" class="usage-guide">
+        <summary>
+          ご利用にあたって
+          <span id="help-badge" class="tag" hidden>更新あり</span>
+        </summary>
+        <div class="usage-body">
+          <section>
+            <h2>音声を追加して練習する</h2>
+            <p>
+              「ファイルを選択」から音声を追加します。複数選択・まとめてドロップに対応し、10件まで登録できます。一覧の音声名を押すと切り替えられます。読み込み開始ボタンが出た場合は押してください。
+            </p>
+            <p>
+              端末に保存したMP3・M4A・WAVなどを使います。音楽アプリの曲や配信サービスの楽曲を直接取り込む機能はありません。ファイルとして取り出せる音声を選んでください。選択画面の項目はOS・ブラウザによって異なります。
+            </p>
+          </section>
+          <section>
+            <h2>聴く・くり返す・保存する</h2>
+            <p>
+              再生・一時停止、5秒戻る／進む、速度変更ができます。ゲージのA・Bを動かして区間を指定し、リピートをONにします。時刻の直接入力、音声全体のリピート、回数や無音時間の調整もできます。
+            </p>
+            <p>
+              覚えたい区間には名前を付けて保存できます。練習区間・速度・再生位置は音声ごとに記録されます。
+            </p>
+          </section>
+          <section>
+            <h2>保存先とデータの扱い</h2>
+            <p>
+              音声と設定は、使っている端末・ブラウザ内に保存します。他の端末やブラウザとは同期されず、サーバーにも音声を送りません。
+            </p>
+            <p>
+              サイトデータの削除や保存容量の制限により消える場合があります。元ファイルは保管してください。「音声を削除」はアプリ内のコピーだけを削除し、端末の元ファイルは変更しません。
+            </p>
+          </section>
+          <section>
+            <h2>オフラインで使う</h2>
+            <p>
+              音声の保存とアプリの準備が済めば、通信なしで起動・再読み込みして練習できます。出発前に一度オンラインで開き、下の準備状況と音声保存の完了を確認してから、機内モードで開き直して再生を試してください。
+            </p>
+            <p>
+              画面ロックや別アプリへの切り替え中は、OSの制限で再生やリピートのタイミングがずれる場合があります。正確な練習は画面を開いた状態で行ってください。
+            </p>
+            <section class="offline-card" aria-label="オフライン利用の準備">
+              <p id="offline-status" class="small" role="status">
+                オフライン利用を確認中…
+              </p>
+              <button
+                id="offline-retry"
+                class="text-button"
+                type="button"
+                hidden
+              >
+                準備をやり直す
+              </button>
+              <button
+                id="offline-update"
+                class="text-button"
+                type="button"
+                hidden
+              >
+                新しい版に更新して再読み込み
+              </button>
+            </section>
+          </section>
+        </div>
+      </details>
       <footer>
         <p class="footer-brand">COACHING-L</p>
         <p>音声ファイルはサーバーへ送信されません。</p>
-        <p>
-          画面ロック・別アプリへの切り替え中は、OSの制限により区間や無音時間がずれることがあります。正確な練習は画面を開いた状態で。
-        </p>
       </footer>
       <div id="audio-container" hidden></div>
     </main>

@@ -1037,3 +1037,52 @@ label {
 .offline-card p + p {
   margin-top: 6px;
 }
+.load-actions {
+  display: flex;
+  justify-content: center;
+  margin: 24px 0;
+}
+.load-actions:has(> button[hidden]) {
+  display: none;
+}
+.usage-guide {
+  margin-top: 28px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.usage-guide > summary {
+  padding: 18px 20px;
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--heading);
+  min-height: 48px;
+}
+.usage-guide > summary .tag {
+  margin-left: 8px;
+}
+.usage-body {
+  padding: 0 20px 20px;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+.usage-body section + section {
+  margin-top: 20px;
+}
+.usage-body h2 {
+  font-size: 15px;
+  color: var(--heading);
+  margin-bottom: 8px;
+}
+.usage-body p + p {
+  margin-top: 8px;
+}
+.usage-body .offline-card {
+  margin: 12px 0 0;
+  padding: 12px;
+}
+.usage-guide > summary:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 3px;
+}

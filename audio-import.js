@@ -19,7 +19,7 @@ export function readableAudio(file) {
                 reject(
                   importError(
                     "AudioReadTimeout",
-                    "音声ファイルの取得に時間がかかっています。「ファイル」アプリで端末内にダウンロードしてから選び直してください。",
+                    "音声ファイルの取得に時間がかかっています。端末へのダウンロードを完了してから選び直してください。",
                   ),
                 ),
               60000,
@@ -54,7 +54,7 @@ export function readableAudio(file) {
           throw error;
         throw importError(
           "AudioReadError",
-          "音声ファイルを端末から読み取れません。「ファイル」アプリでダウンロードを完了し、「このiPhone内」など端末内に保存してから選び直してください。",
+          "音声ファイルを端末から読み取れません。ファイル管理アプリでダウンロードを完了し、端末内に保存してから選び直してください。",
         );
       } finally {
         clearTimeout(timer);
