@@ -1,3 +1,11 @@
+import {
+  audioKey,
+  listAudio,
+  addAudio,
+  removeAudio,
+  storedFile,
+  validateAudio,
+} from "./audio-library.js";
 import { LoopPlayer, parseTime, formatTime } from "./player.js";
 const $ = (id) => document.getElementById(id);
 const storageKey = "kotonoha.audio.v1";
@@ -11,6 +19,9 @@ let segments = [];
 let storageWarning = false;
 let loadTimeout;
 let markerDrag = null;
+let audioItems = [];
+let importQueue = Promise.resolve();
+let lastPositionSave = 0;
 function notice(message) {
   $("notice").textContent = message;
 }
@@ -44,7 +55,11 @@ function settings() {
 }
 function persist() {
   if (!ready || !fileKey) return;
-  library[fileKey] = { settings: settings(), segments };
+  library[fileKey] = {
+    settings: settings(),
+    segments,
+    position: engine.audio.currentTime,
+  };
   try {
     localStorage.setItem(storageKey, JSON.stringify(library));
   } catch {
@@ -89,6 +104,13 @@ function render(player) {
   if (!ready) return;
   $("current-time").textContent = formatTime(player.audio.currentTime, 1);
   $("seek").value = player.audio.currentTime;
+  if (
+    player.phase === "playing" &&
+    performance.now() - lastPositionSave > 2000
+  ) {
+    lastPositionSave = performance.now();
+    persist();
+  }
   const active = player.active;
   $("play").textContent = active ? "Ⅱ" : "▶";
   $("play").setAttribute("aria-label", active ? "一時停止" : "再生");
@@ -163,6 +185,7 @@ function renderSegments() {
 }
 async function loadFile(file) {
   if (!file) return;
+  persist();
   const generation = ++loadGeneration;
   clearTimeout(loadTimeout);
   markerDrag = null;
@@ -187,7 +210,8 @@ async function loadFile(file) {
   segments = [];
   renderSegments();
   // Metadata identifies the file locally; neither audio bytes nor filenames leave this browser.
-  fileKey = JSON.stringify([file.name, file.size, file.lastModified]);
+  fileKey = audioKey(file);
+  renderAudioList();
   const audio = document.createElement("audio");
   audio.id = "audio";
   audio.preload = "auto";
@@ -240,6 +264,8 @@ async function loadFile(file) {
       ready = true;
       currentEngine.configure(s);
       currentEngine.setRate(s.rate);
+      if (Number.isFinite(stored?.position))
+        currentEngine.seek(stored.position);
       $("duration").textContent = formatTime(audio.duration, 1);
       $("seek").max = audio.duration;
       syncFields();
@@ -262,8 +288,7 @@ async function loadFile(file) {
   audio.load();
 }
 $("file-input").addEventListener("change", (event) => {
-  const file = event.target.files[0];
-  void loadFile(file);
+  importFiles(Array.from(event.target.files));
   event.target.value = "";
 });
 const dropZone = $("drop-zone");
@@ -278,10 +303,7 @@ for (const eventName of ["dragleave", "drop"])
     dropZone.classList.remove("dragging");
   });
 dropZone.addEventListener("drop", (event) => {
-  const files = event.dataTransfer.files;
-  if (files.length > 1)
-    notice("音声は1ファイルずつ選択してください。最初のファイルを開きます。");
-  void loadFile(files[0]);
+  importFiles(Array.from(event.dataTransfer.files));
 });
 // Avoid browser navigation when a file is dropped outside the target.
 window.addEventListener("dragover", (event) => event.preventDefault());
@@ -289,8 +311,10 @@ window.addEventListener("drop", (event) => event.preventDefault());
 $("play").addEventListener("click", () => {
   if (!ready) return;
   error("");
-  if (engine.active) engine.pause();
-  else void engine.play();
+  if (engine.active) {
+    engine.pause();
+    persist();
+  } else void engine.play();
 });
 $("back").addEventListener("click", () =>
   engine.seek(engine.audio.currentTime - 5),
@@ -472,3 +496,119 @@ $("gauge-set-a").addEventListener("click", () =>
 $("gauge-set-b").addEventListener("click", () =>
   updateSettings({ b: engine.audio.currentTime, mode: "ab" }),
 );
+
+function renderAudioList() {
+  $("audio-list").replaceChildren();
+  $("audio-count").textContent = audioItems.length + " / 10件";
+  for (const record of audioItems) {
+    const li = document.createElement("li");
+    li.className = "audio-item";
+    const open = document.createElement("button");
+    open.className = "audio-open";
+    open.textContent = record.name;
+    open.setAttribute("aria-label", record.name + "を開く");
+    if (record.id === fileKey) {
+      open.setAttribute("aria-current", "true");
+      li.classList.add("current");
+    }
+    open.addEventListener("click", () => {
+      if (record.id !== fileKey || !ready) void loadFile(storedFile(record));
+    });
+    const remove = document.createElement("button");
+    remove.className = "delete-button";
+    remove.textContent = "音声を削除";
+    remove.setAttribute("aria-label", record.name + "の音声を削除");
+    remove.addEventListener("click", async () => {
+      remove.disabled = true;
+      try {
+        await removeAudio(record.id);
+        audioItems = audioItems.filter((item) => item.id !== record.id);
+        if (fileKey === record.id) {
+          persist();
+          ++loadGeneration;
+          clearTimeout(loadTimeout);
+          markerDrag = null;
+          engine?.dispose();
+          engine = null;
+          if (objectURL) URL.revokeObjectURL(objectURL);
+          objectURL = null;
+          ready = false;
+          fileKey = null;
+          segments = [];
+          enable(false);
+          renderSegments();
+          $("file-name").textContent = "ここに音声ファイルをドロップ";
+          $("play-status").textContent = "音声を選択してください";
+          $("play").textContent = "▶";
+          $("play").setAttribute("aria-label", "再生");
+          $("current-time").textContent = "0:00.0";
+          $("duration").textContent = "0:00.0";
+          $("seek").value = 0;
+          $("seek").max = 0;
+        }
+        renderAudioList();
+        $("library-status").textContent =
+          "音声を削除しました。保存した練習区間は、同じ元ファイルを追加すると再利用できます。";
+      } catch {
+        $("library-status").textContent =
+          "削除できませんでした。音声は一覧に残しています。";
+        remove.disabled = false;
+      }
+    });
+    li.append(open, remove);
+    $("audio-list").append(li);
+  }
+}
+function importFiles(files) {
+  if (!files.length) return;
+  void loadFile(files[0]);
+  // Serialize imports so overlapping selections cannot exceed the cap or lose entries.
+  importQueue = importQueue
+    .then(async () => {
+      $("library-status").textContent =
+        "音声を保存中です。この画面を閉じずにお待ちください。";
+      let saved = 0;
+      const problems = [];
+      for (const file of files) {
+        try {
+          await validateAudio(file);
+          const record = await addAudio(file);
+          if (!audioItems.some((item) => item.id === record.id))
+            audioItems.push(record);
+          saved++;
+          renderAudioList();
+        } catch (e) {
+          const message =
+            e.name === "QuotaExceededError"
+              ? "ブラウザの保存容量が不足しています。不要な登録音声を削除してください。"
+              : e.message?.includes("10件")
+                ? e.message
+                : "音声を保存できませんでした。形式・保存容量・ブラウザの保存設定を確認してください。";
+          problems.push(file.name + "：" + message);
+        }
+      }
+      $("library-status").textContent = problems.length
+        ? saved +
+          "件保存。" +
+          problems.join(" / ") +
+          " 保存できない音声も今回の画面では再生を試せますが、再訪問時には残りません。"
+        : saved + "件の音声を保存しました。次回も一覧から開けます。";
+    })
+    .catch(() => {
+      $("library-status").textContent =
+        "音声の保存に失敗しました。再度お試しください。";
+    });
+}
+// Avoid racing an import with the initial database read.
+importQueue = listAudio()
+  .then((items) => {
+    audioItems = items;
+    renderAudioList();
+    $("library-status").textContent = items.length
+      ? "音声を選ぶと前回の設定で開けます。"
+      : "音声を10件まで追加できます。複数選択・まとめてドロップにも対応。";
+  })
+  .catch(() => {
+    $("library-status").textContent =
+      "音声の保存機能が利用できません。ファイルを選ぶと今回の画面内では再生できます。";
+  });

@@ -76,3 +76,12 @@
 - 各結果は `test-results/gauge-regression.json`、`test-results/gesture-extra.json`、`test-results/gauge-timing-recheck.json`（Git管理対象外）に出力。
 - 参照元ポモドーロと本文の実際の計算済みスタイルを比較し、font-family、16px、ウェイト400、行高27.2px、字間0.32px、antialiased、font-synthesisが一致しました（Linux Chromium）。フォントファイルの外部取得はありません。
 - 320px・390px・1280px幅で横方向のはみ出しなし。Safari・Mac／iPhone／Android実機の未確認状態は変わりません。
+
+## 音声ライブラリ（10件保存）
+
+- 音声本体をIndexedDBに10件まで保存し、再読み込み後にファイルピッカーを使わず再生できることを検証。ファイル別の区間・設定・再生位置は既存のlocalStorageを引き継ぎます。
+- 10件の一括追加、11件目の拒否、重複の再利用、削除後の追加、削除の永続化、保存済み音声切り替え時の待機タイマー破棄、破損音声を含む一括追加、IndexedDB利用不可時の一時再生を検証。
+- 保存容量不足はIDBObjectStore.addにQuotaExceededErrorを注入して検証。失敗時に既存の登録を残し、未保存の新音声を成功扱いしないことを確認。実ディスクを埋める検証はしていません。
+- ブラウザのサイトデータ削除・OSによるデータ回収・実機Safariの保存制限は未検証です。保存先はブラウザ／端末ごとで、元ファイルのバックアップや端末間同期を保証するものではありません。
+- 回帰結果：**66件成功、失敗0件、対象外4件スキップ**（142.5秒）。デスクトップChromiumとAndroid想定で実行。結果は `test-results/audio-library-regression.json`（Git管理対象外）。
+- 10件登録した画面で、ライト／ダーク、320px・390px・1280px幅に横方向のはみ出しがないことを確認。

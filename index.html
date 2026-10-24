@@ -35,8 +35,8 @@
       content="端末の音声で、繰り返し聴く・声に出す。アップロード不要の語学学習プレーヤー。"
     />
     <title>音声リピートプレーヤー | COACHING-L</title>
-    <link rel="stylesheet" href="./style.css?v=2" />
-    <script type="module" src="./app.js?v=2"></script>
+    <link rel="stylesheet" href="./style.css?v=3" />
+    <script type="module" src="./app.js?v=3"></script>
   </head>
   <body>
     <main>
@@ -71,13 +71,27 @@
           <p class="small">MP3 / M4A / WAV ほか、ブラウザ対応形式</p>
         </div>
         <label class="button primary file-button" for="file-input"
-          >ファイルを選ぶ</label
+          >音声を追加（複数選択可）</label
         ><input
           id="file-input"
           type="file"
+          multiple
           accept="audio/*,.mp3,.m4a,.wav,.aac,.ogg,.flac,.webm,.opus"
           class="visually-hidden"
         />
+      </section>
+      <section class="card audio-library" aria-labelledby="library-heading">
+        <div class="section-heading">
+          <h2 id="library-heading">登録した音声</h2>
+          <span id="audio-count" class="tag">0 / 10件</span>
+        </div>
+        <p id="library-status" class="small" role="status">
+          保存した音声を確認中…
+        </p>
+        <ul id="audio-list" class="audio-list"></ul>
+        <p class="small">
+          音声本体と練習設定をこのブラウザに保存します。サーバーへの送信・端末間の同期はありません。サイトデータを削除すると消えるため、元ファイルは残してください。
+        </p>
       </section>
       <p id="error" class="error" role="alert" hidden></p>
       <p id="notice" class="notice" role="status"></p>
@@ -313,7 +327,7 @@
             >
           </p>
           <p class="small storage-note">
-            設定はこのブラウザ内に保存。次回は同じ音声ファイルを選び直してください。
+            練習区間・速度・再生位置は音声ごとに保存します。登録済みの音声は上の一覧から開けます。
           </p>
         </section>
       </div>

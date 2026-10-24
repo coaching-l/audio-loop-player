@@ -982,3 +982,48 @@ label {
   font-size: 0.875rem;
   padding: 8px;
 }
+.audio-library {
+  margin-top: 20px;
+}
+.audio-list {
+  max-height: 300px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  list-style: none;
+  margin: 12px 0;
+  padding: 0;
+}
+.audio-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-top: 1px solid var(--line);
+  padding: 8px 0;
+}
+.audio-open {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  background: transparent;
+  color: var(--heading);
+  padding: 10px 8px;
+  min-height: 44px;
+  overflow-wrap: anywhere;
+  font-size: 14px;
+  border-radius: 8px;
+}
+.audio-open:hover,
+.audio-item.current .audio-open {
+  background: var(--accent-soft);
+}
+.audio-item.current .audio-open {
+  font-weight: 700;
+  border-left: 3px solid var(--gold);
+}
+.audio-item .delete-button {
+  font-size: 12px;
+  flex-shrink: 0;
+}
+#library-status {
+  overflow-wrap: anywhere;
+}
