@@ -1,3 +1,4 @@
+import "./offline.js";
 import {
   audioKey,
   listAudio,
@@ -612,3 +613,10 @@ importQueue = listAudio()
     $("library-status").textContent =
       "音声の保存機能が利用できません。ファイルを選ぶと今回の画面内では再生できます。";
   });
+
+window.addEventListener("offline-update", () => {
+  if (engine) {
+    engine.pause();
+    persist();
+  }
+});

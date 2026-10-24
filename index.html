@@ -29,14 +29,16 @@
       sizes="192x192"
       type="image/png"
     />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <meta name="apple-mobile-web-app-title" content="音声リピート" />
     <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
     <meta
       name="description"
       content="端末の音声で、繰り返し聴く・声に出す。アップロード不要の語学学習プレーヤー。"
     />
     <title>音声リピートプレーヤー | COACHING-L</title>
-    <link rel="stylesheet" href="./style.css?v=3" />
-    <script type="module" src="./app.js?v=3"></script>
+    <link rel="stylesheet" href="./style.css?v=4" />
+    <script type="module" src="./app.js?v=4"></script>
   </head>
   <body>
     <main>
@@ -63,6 +65,20 @@
         <h2 class="lead">聴く。くり返す。<br />自分の言葉にする。</h2>
         <p>いつもの音声から、あなただけの練習区間を。</p>
       </div>
+      <section class="offline-card" aria-label="オフライン利用の準備">
+        <p id="offline-status" class="small" role="status">
+          オフライン利用を確認中…
+        </p>
+        <button id="offline-retry" class="text-button" type="button" hidden>
+          準備をやり直す
+        </button>
+        <button id="offline-update" class="text-button" type="button" hidden>
+          新しい版に更新して再読み込み
+        </button>
+        <p class="small">
+          出発前に準備完了と音声の保存を確認し、機内モードで一度試してください。
+        </p>
+      </section>
       <section id="drop-zone" class="file-card" aria-labelledby="file-heading">
         <div class="file-symbol" aria-hidden="true">♫</div>
         <div class="file-copy">

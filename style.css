@@ -1027,3 +1027,13 @@ label {
 #library-status {
   overflow-wrap: anywhere;
 }
+
+.offline-card {
+  margin-bottom: 20px;
+  padding: 14px 16px;
+  background: var(--accent-soft);
+  border-radius: var(--radius-small);
+}
+.offline-card p + p {
+  margin-top: 6px;
+}

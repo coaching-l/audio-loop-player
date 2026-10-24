@@ -1,0 +1,19 @@
+{
+  "id": "./",
+  "name": "COACHING-L 音声リピートプレーヤー",
+  "short_name": "音声リピート",
+  "lang": "ja",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f7f8fa",
+  "theme_color": "#042143",
+  "icons": [
+    {
+      "src": "./icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
