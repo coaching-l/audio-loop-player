@@ -5,6 +5,7 @@ import {
   listAudio,
   addAudio,
   removeAudio,
+  restoreAudio,
   storedFile,
   validateAudio,
 } from "./audio-library.js";
@@ -30,6 +31,20 @@ function notice(message) {
 function error(message) {
   $("error").textContent = message;
   $("error").hidden = !message;
+}
+// One deletion at a time can be undone; a newer deletion or switching audio settles the older one.
+let undo = null;
+function settleUndo() {
+  if (!undo) return;
+  clearTimeout(undo.timer);
+  undo = null;
+  $("undo-bar").hidden = true;
+}
+function offerUndo(message, revert) {
+  settleUndo();
+  $("undo-message").textContent = message;
+  $("undo-bar").hidden = false;
+  undo = { revert, timer: setTimeout(settleUndo, 10000) };
 }
 function rangeError(message) {
   $("range-error").textContent = message;
@@ -63,6 +78,9 @@ function persist() {
     segments,
     position: engine.audio.currentTime,
   };
+  saveLibrary();
+}
+function saveLibrary() {
   try {
     localStorage.setItem(storageKey, JSON.stringify(library));
   } catch {
@@ -71,6 +89,13 @@ function persist() {
       "設定を保存できません。保存容量やプライベートブラウズの設定を確認してください。このページを開いている間は使えます。",
     );
   }
+}
+function validSegment(x, duration) {
+  return (
+    validSettings({ ...x, mode: "ab" }, duration) &&
+    typeof x.id === "string" &&
+    typeof x.name === "string"
+  );
 }
 function validSettings(s, duration) {
   return (
@@ -110,6 +135,7 @@ function syncFields() {
 function render(player) {
   if (!ready) return;
   $("current-time").textContent = formatTime(player.audio.currentTime, 1);
+  $("mini-time").textContent = $("current-time").textContent;
   $("seek").value = player.audio.currentTime;
   if (
     player.phase === "playing" &&
@@ -131,6 +157,12 @@ function render(player) {
   const status = statuses[player.phase] || "";
   if ($("play-status").textContent !== status)
     $("play-status").textContent = status;
+  $("mini-status").textContent = status;
+  $("mini-play").dataset.state = $("play").dataset.state;
+  $("mini-play").setAttribute(
+    "aria-label",
+    "下のバー：" + (active ? "一時停止" : "再生"),
+  );
   $("play-status").classList.toggle(
     "waiting",
     player.phase === "waiting" || player.phase === "gap-paused",
@@ -145,7 +177,33 @@ function render(player) {
 function enable(value) {
   for (const id of ["player-controls", "repeat-controls", "save-controls"])
     $(id).disabled = !value;
+  syncMiniPlayer();
 }
+// A compact bar at the bottom keeps play/pause reachable once the main controls are scrolled past.
+let transportVisible = true;
+function syncMiniPlayer() {
+  const show = ready && !transportVisible;
+  $("mini-player").hidden = !show;
+  document.body.classList.toggle("has-mini-player", show);
+}
+// Show it only once the controls are above the viewport; below it, the player is still ahead.
+let transportFrame = 0;
+function checkTransport() {
+  transportFrame = 0;
+  const passed =
+    document.querySelector(".transport").getBoundingClientRect().bottom <= 0;
+  if (transportVisible === !passed) return;
+  transportVisible = !passed;
+  syncMiniPlayer();
+}
+for (const eventName of ["scroll", "resize"])
+  window.addEventListener(
+    eventName,
+    () => {
+      transportFrame ||= requestAnimationFrame(checkTransport);
+    },
+    { passive: true },
+  );
 function gapLabel({ gap, gapRatio }) {
   if (!gapRatio) return gap + "秒";
   return gapRatio === 1 ? "区間と同じ" : `区間の${gapRatio}倍`;
@@ -187,10 +245,16 @@ function renderSegments() {
     remove.textContent = "削除";
     remove.setAttribute("aria-label", segment.name + "を削除");
     remove.addEventListener("click", () => {
+      const index = segments.indexOf(segment);
       segments = segments.filter((item) => item.id !== segment.id);
       persist();
       renderSegments();
-      notice(`「${segment.name}」を削除しました。`);
+      notice("");
+      offerUndo(`「${segment.name}」を削除しました。`, () => {
+        segments.splice(index, 0, segment);
+        persist();
+        renderSegments();
+      });
     });
     li.append(info, load, remove);
     $("segments").append(li);
@@ -198,6 +262,7 @@ function renderSegments() {
 }
 async function loadFile(file) {
   if (!file) return;
+  settleUndo();
   persist();
   const generation = ++loadGeneration;
   clearTimeout(loadTimeout);
@@ -211,6 +276,7 @@ async function loadFile(file) {
   if (!storageWarning) notice("");
   $("load-audio").hidden = false;
   $("file-name").textContent = file.name;
+  $("mini-name").textContent = file.name;
   $("play-status").textContent = "音声を読み込み中…";
   $("play").dataset.state = "paused";
   $("play").setAttribute("aria-label", "再生");
@@ -269,12 +335,7 @@ async function loadFile(file) {
         ? stored.settings
         : defaults;
       segments = Array.isArray(stored?.segments)
-        ? stored.segments.filter(
-            (x) =>
-              validSettings({ ...x, mode: "ab" }, audio.duration) &&
-              typeof x.id === "string" &&
-              typeof x.name === "string",
-          )
+        ? stored.segments.filter((x) => validSegment(x, audio.duration))
         : [];
       ready = true;
       $("load-audio").hidden = true;
@@ -336,21 +397,40 @@ dropZone.addEventListener("drop", (event) => {
 // Avoid browser navigation when a file is dropped outside the target.
 window.addEventListener("dragover", (event) => event.preventDefault());
 window.addEventListener("drop", (event) => event.preventDefault());
-$("play").addEventListener("click", () => {
+function togglePlay() {
   if (!ready) return;
   error("");
   if (engine.active) {
     engine.pause();
     persist();
   } else void engine.play();
+}
+function skip(seconds) {
+  if (ready) engine.seek(engine.audio.currentTime + seconds);
+}
+$("play").addEventListener("click", togglePlay);
+$("mini-play").addEventListener("click", togglePlay);
+$("back").addEventListener("click", () => skip(-5));
+$("mini-back").addEventListener("click", () => skip(-5));
+$("forward").addEventListener("click", () => skip(5));
+$("mini-forward").addEventListener("click", () => skip(5));
+// Hold playback while the thumb is dragged, so each input does not restart the audio.
+let seekDrag = null;
+$("seek").addEventListener("pointerdown", () => {
+  if (!ready) return;
+  seekDrag = { player: engine, resume: engine.active };
+  engine.pause();
 });
-$("back").addEventListener("click", () =>
-  engine.seek(engine.audio.currentTime - 5),
-);
-$("forward").addEventListener("click", () =>
-  engine.seek(engine.audio.currentTime + 5),
-);
 $("seek").addEventListener("input", () => engine.seek(Number($("seek").value)));
+function endSeekDrag() {
+  const drag = seekDrag;
+  seekDrag = null;
+  if (!drag || drag.player !== engine || !ready) return;
+  persist();
+  if (drag.resume) void engine.play();
+}
+for (const eventName of ["change", "pointerup", "pointercancel"])
+  $("seek").addEventListener(eventName, endSeekDrag);
 function changeRate(rate) {
   engine.setRate(rate);
   syncFields();
@@ -404,12 +484,6 @@ for (const id of [
     }
   });
 }
-$("set-a").addEventListener("click", () =>
-  updateSettings({ a: engine.audio.currentTime }),
-);
-$("set-b").addEventListener("click", () =>
-  updateSettings({ b: engine.audio.currentTime }),
-);
 $("save-form").addEventListener("submit", (event) => {
   event.preventDefault();
   if (!ready || !updateSettings()) return;
@@ -429,6 +503,10 @@ window.addEventListener("pagehide", () => {
     engine.pause();
     persist();
   }
+});
+// iOS may suspend or discard a backgrounded page without firing pagehide.
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") persist();
 });
 
 function syncGauge() {
@@ -556,48 +634,78 @@ function renderAudioList() {
     remove.className = "delete-button";
     remove.textContent = "音声を削除";
     remove.setAttribute("aria-label", record.name + "の音声を削除");
-    remove.addEventListener("click", async () => {
-      remove.disabled = true;
-      try {
-        await removeAudio(record.id);
-        audioItems = audioItems.filter((item) => item.id !== record.id);
-        if (fileKey === record.id) {
-          persist();
-          ++loadGeneration;
-          clearTimeout(loadTimeout);
-          markerDrag = null;
-          engine?.dispose();
-          engine = null;
-          if (objectURL) URL.revokeObjectURL(objectURL);
-          objectURL = null;
-          ready = false;
-          $("load-audio").hidden = true;
-          fileKey = null;
-          segments = [];
-          enable(false);
-          renderSegments();
-          $("file-name").textContent = "音声ファイルを選んでください";
-          $("play-status").textContent = "音声を選んでください";
-          $("play").dataset.state = "paused";
-          $("play").setAttribute("aria-label", "再生");
-          $("current-time").textContent = "0:00.0";
-          $("duration").textContent = "0:00.0";
-          $("seek").value = 0;
-          $("seek").max = 0;
-        }
-        renderAudioList();
-        void showStorageInfo();
-        $("library-status").textContent =
-          "音声を削除しました。練習区間は残っているので、同じファイルをもう一度追加すると使えます。";
-      } catch {
-        $("library-status").textContent =
-          "削除できませんでした。音声は一覧に残っています。";
-        remove.disabled = false;
-      }
-    });
+    remove.addEventListener("click", () => void deleteAudio(record, remove));
     li.append(open, remove);
     $("audio-list").append(li);
   }
+}
+function closeCurrentAudio() {
+  persist();
+  ++loadGeneration;
+  clearTimeout(loadTimeout);
+  markerDrag = null;
+  seekDrag = null;
+  engine?.dispose();
+  engine = null;
+  if (objectURL) URL.revokeObjectURL(objectURL);
+  objectURL = null;
+  ready = false;
+  $("load-audio").hidden = true;
+  fileKey = null;
+  segments = [];
+  enable(false);
+  renderSegments();
+  $("file-name").textContent = "まだ音声を開いていません";
+  $("play-status").textContent = "音声を選んでください";
+  $("play").dataset.state = "paused";
+  $("play").setAttribute("aria-label", "再生");
+  $("current-time").textContent = "0:00.0";
+  $("duration").textContent = "0:00.0";
+  $("seek").value = 0;
+  $("seek").max = 0;
+}
+async function deleteAudio(record, button) {
+  button.disabled = true;
+  // Read the bytes first: a Blob backed by IndexedDB may be unreadable once its record is gone.
+  let bytes = null;
+  try {
+    bytes = await storedFile(record).arrayBuffer();
+  } catch {
+    /* Delete anyway; this deletion just cannot be undone. */
+  }
+  try {
+    await removeAudio(record.id);
+  } catch {
+    $("library-status").textContent =
+      "削除できませんでした。音声は一覧に残っています。";
+    button.disabled = false;
+    return;
+  }
+  audioItems = audioItems.filter((item) => item.id !== record.id);
+  if (fileKey === record.id) closeCurrentAudio();
+  renderAudioList();
+  void showStorageInfo();
+  $("library-status").textContent =
+    "音声を削除しました。練習区間は残っているので、同じファイルをもう一度追加すると使えます。";
+  if (!bytes) {
+    settleUndo();
+    return;
+  }
+  offerUndo(`「${record.name}」を削除しました。`, async () => {
+    try {
+      const restored = await restoreAudio(record, bytes);
+      audioItems = [...audioItems, restored].sort(
+        (a, b) => a.addedAt - b.addedAt,
+      );
+      renderAudioList();
+      void showStorageInfo();
+      $("library-status").textContent = `「${record.name}」を元に戻しました。`;
+    } catch (e) {
+      $("library-status").textContent = e.message.includes("10件")
+        ? e.message
+        : "元に戻せませんでした。元のファイルをもう一度追加してください。";
+    }
+  });
 }
 function importFiles(files) {
   if (!files.length) return;
@@ -675,6 +783,12 @@ window.addEventListener("offline-update", () => {
   }
 });
 
+$("undo-button").addEventListener("click", () => {
+  const revert = undo?.revert;
+  settleUndo();
+  void revert?.();
+});
+
 $("load-audio").addEventListener("click", () => {
   if (!engine || !engine.audio.src) {
     notice(
@@ -728,3 +842,111 @@ async function showStorageInfo() {
     info.hidden = true;
   }
 }
+
+// Backup holds settings and segments only; audio stays in the device's own files.
+const BACKUP_APP = "coachingl-audio-loop";
+function backupStatus(message) {
+  $("backup-status").textContent = message;
+  $("backup-status").hidden = !message;
+}
+function countSegments(entries) {
+  return Object.values(entries).reduce(
+    (total, entry) =>
+      total + (Array.isArray(entry?.segments) ? entry.segments.length : 0),
+    0,
+  );
+}
+$("export-backup").addEventListener("click", () => {
+  persist();
+  if (!Object.keys(library).length) {
+    backupStatus("まだ、保存する練習区間や設定がありません。");
+    return;
+  }
+  const date = new Date();
+  const stamp = [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, "0"),
+    String(date.getDate()).padStart(2, "0"),
+  ].join("-");
+  const body = JSON.stringify(
+    { app: BACKUP_APP, version: 1, exportedAt: date.toISOString(), library },
+    null,
+    2,
+  );
+  const url = URL.createObjectURL(
+    new Blob([body], { type: "application/json" }),
+  );
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `coachingl-audio-loop_data_${stamp}.json`;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  backupStatus(
+    `バックアップを保存しました（練習区間 ${countSegments(library)}件）。音声ファイルは入っていないので、元のファイルも残しておいてください。`,
+  );
+});
+$("import-backup").addEventListener("change", async (event) => {
+  const file = event.target.files[0];
+  event.target.value = "";
+  if (!file) return;
+  let data;
+  try {
+    data = JSON.parse(await file.text());
+  } catch {
+    data = null;
+  }
+  const entries = data?.library;
+  if (
+    data?.app !== BACKUP_APP ||
+    !entries ||
+    typeof entries !== "object" ||
+    Array.isArray(entries)
+  ) {
+    backupStatus(
+      "このファイルは、このアプリのバックアップではないようです。「バックアップを保存」で作ったファイル（coachingl-audio-loop_data_….json）を選んでください。",
+    );
+    return;
+  }
+  if (data.version > 1) {
+    backupStatus(
+      "このバックアップは、新しい版のアプリで作られています。このページを再読み込みしてから、もう一度読み込んでください。",
+    );
+    return;
+  }
+  persist();
+  let added = 0;
+  for (const [key, entry] of Object.entries(entries)) {
+    if (!entry || typeof entry !== "object") continue;
+    const local = library[key] || {};
+    // Local settings and position win; segments are added unless this device has them.
+    if (!local.settings && validSettings(entry.settings, Infinity))
+      local.settings = entry.settings;
+    if (local.position === undefined && Number.isFinite(entry.position))
+      local.position = entry.position;
+    const have = new Set((local.segments || []).map((x) => x.id));
+    const incoming = Array.isArray(entry.segments)
+      ? entry.segments.filter(
+          (x) => validSegment(x, Infinity) && !have.has(x.id),
+        )
+      : [];
+    if (incoming.length) {
+      local.segments = [...(local.segments || []), ...incoming];
+      added += incoming.length;
+    }
+    if (Object.keys(local).length) library[key] = local;
+  }
+  if (ready && library[fileKey]) {
+    segments = (library[fileKey].segments || []).filter((x) =>
+      validSegment(x, engine.audio.duration),
+    );
+    renderSegments();
+  }
+  saveLibrary();
+  backupStatus(
+    added
+      ? `練習区間を${added}件読み込みました。対象の音声を開くと使えます。今ある練習区間はそのまま残っています。`
+      : "このバックアップの練習区間は、すべてこの端末に入っています。足すものはありません。",
+  );
+});

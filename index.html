@@ -37,8 +37,8 @@
       content="端末の音声で、繰り返し聴く・声に出す。アップロード不要の語学学習プレーヤー。"
     />
     <title>音声リピートプレーヤー | COACHING-L</title>
-    <link rel="stylesheet" href="./style.css?v=8" />
-    <script type="module" src="./app.js?v=8"></script>
+    <link rel="stylesheet" href="./style.css?v=9" />
+    <script type="module" src="./app.js?v=9"></script>
   </head>
   <body>
     <main>
@@ -65,22 +65,19 @@
         <h2 class="lead">聴く。くり返す。<br />自分の言葉にする。</h2>
         <p>いつもの音声から、あなただけの練習区間を。</p>
       </div>
-      <section id="drop-zone" class="file-card" aria-labelledby="file-heading">
-        <div class="file-symbol" aria-hidden="true">
-          <svg viewBox="0 0 24 24" width="26" height="26">
-            <path d="M9 18V5l11-2v13" />
-            <circle cx="6" cy="18" r="3" />
-            <circle cx="17" cy="16" r="3" />
-          </svg>
+      <section
+        id="drop-zone"
+        class="card audio-library"
+        aria-labelledby="library-heading"
+      >
+        <div class="section-heading">
+          <h2 id="library-heading">練習する音声</h2>
+          <span id="audio-count" class="tag">0 / 10件</span>
         </div>
-        <div class="file-copy">
-          <h2 id="file-heading">練習する音声を選ぶ</h2>
-          <p id="file-name">音声ファイルを選んでください</p>
-          <p class="small">
-            MP3・M4A・WAV
-            など。パソコンでは、ここにファイルをドラッグして追加することもできます。
-          </p>
-        </div>
+        <p id="library-status" class="small" role="status">
+          保存した音声を確認中…
+        </p>
+        <ul id="audio-list" class="audio-list"></ul>
         <label class="button primary file-button" for="file-input"
           >ファイルを選択</label
         ><input
@@ -90,16 +87,10 @@
           accept=".mp3,.m4a,.wav,.aac,.ogg,.flac,.weba,.opus"
           class="visually-hidden"
         />
-      </section>
-      <section class="card audio-library" aria-labelledby="library-heading">
-        <div class="section-heading">
-          <h2 id="library-heading">登録した音声</h2>
-          <span id="audio-count" class="tag">0 / 10件</span>
-        </div>
-        <p id="library-status" class="small" role="status">
-          保存した音声を確認中…
+        <p class="small file-hint">
+          MP3・M4A・WAV
+          など。パソコンでは、このカードにファイルをドラッグして追加することもできます。
         </p>
-        <ul id="audio-list" class="audio-list"></ul>
         <p id="storage-info" class="small storage-info" hidden></p>
       </section>
       <div class="load-actions">
@@ -117,6 +108,7 @@
               >音声を選んでください</span
             >
           </div>
+          <p id="file-name" class="now-playing">まだ音声を開いていません</p>
           <fieldset id="player-controls" disabled>
             <div class="timeline">
               <div class="time-row">
@@ -276,9 +268,7 @@
                 <div class="point-heading">
                   <label for="point-a"
                     ><span class="point-letter">A</span> 開始点</label
-                  ><button id="set-a" class="text-button">
-                    今の位置にする
-                  </button>
+                  >
                 </div>
                 <input
                   id="point-a"
@@ -293,9 +283,7 @@
                 <div class="point-heading">
                   <label for="point-b"
                     ><span class="point-letter b">B</span> 終了点</label
-                  ><button id="set-b" class="text-button">
-                    今の位置にする
-                  </button>
+                  >
                 </div>
                 <input
                   id="point-b"
@@ -345,15 +333,18 @@
                 /><span>秒</span>
               </div>
             </div>
-            <p class="small">
-              回数には最初の1回も含みます（2回なら「聴く→無音→もう一度聴く」で止まります）。
-            </p>
-            <p class="small">
-              「区間と同じ」にすると、区間を聴いたのと同じ時間だけ無音になり、その間に声に出して練習できます（ゆっくり再生なら、無音もそのぶん長くなります）。
-            </p>
-            <p class="small">
-              秒数で決めた無音は、再生速度を変えても同じ長さです。設定を変えると、回数は0から数え直します。
-            </p>
+            <details class="hint-details">
+              <summary>くり返しのしくみ</summary>
+              <p class="small">
+                回数には最初の1回も含みます（2回なら「聴く→無音→もう一度聴く」で止まります）。
+              </p>
+              <p class="small">
+                「区間と同じ」にすると、区間を聴いたのと同じ時間だけ無音になり、その間に声に出して練習できます（ゆっくり再生なら、無音もそのぶん長くなります）。
+              </p>
+              <p class="small">
+                秒数で決めた無音は、再生速度を変えても同じ長さです。設定を変えると、回数は0から数え直します。
+              </p>
+            </details>
           </fieldset>
         </section>
         <section class="card saved-card" aria-labelledby="saved-heading">
@@ -387,6 +378,25 @@
           <p class="small storage-note">
             練習区間・速度・再生位置は音声ごとに保存します。登録済みの音声は上の一覧から開けます。
           </p>
+          <div class="backup">
+            <h3 class="backup-title">バックアップ</h3>
+            <p class="small">
+              練習区間と設定をファイルに保存して、別のブラウザやスマホに移せます。音声ファイルそのものは入りません。読み込んでも、今ある練習区間は消えません。
+            </p>
+            <div class="backup-actions">
+              <button id="export-backup" class="button secondary" type="button">
+                バックアップを保存</button
+              ><label class="button secondary" for="import-backup"
+                >バックアップを読み込む</label
+              ><input
+                id="import-backup"
+                type="file"
+                accept=".json,application/json"
+                class="visually-hidden"
+              />
+            </div>
+            <p id="backup-status" class="small" role="status" hidden></p>
+          </div>
         </section>
       </div>
       <details id="usage-guide" class="usage-guide">
@@ -416,10 +426,13 @@
           <section>
             <h2>保存先とデータの扱い</h2>
             <p>
+              練習区間と設定は、「保存した練習区間」の「バックアップを保存」でファイルにでき、別のブラウザやスマホで「バックアップを読み込む」と移せます。音声ファイルは入らないので、移した先でも同じファイルを追加してください。
+            </p>
+            <p>
               音声と設定は、いま使っている端末・ブラウザ内に保存します。ほかの端末やブラウザには引き継がれません。音声をサーバーへ送ることもありません。
             </p>
             <p>
-              音声を保存すると、ブラウザが自動で消さないように設定を求めます。それでも、ブラウザの履歴・サイトデータを削除すると消えます。元のファイルは残しておいてください。「音声を削除」で消えるのはこのアプリ内のコピーだけで、端末の元ファイルはそのまま残ります。
+              音声を保存すると、ブラウザが自動で消さないように設定を求めます。それでも、ブラウザの履歴・サイトデータを削除すると消えます。元のファイルは残しておいてください。「音声を削除」で消えるのはこのアプリ内のコピーだけで、端末の元ファイルはそのまま残ります。削除した直後は、画面下の「元に戻す」で戻せます。
             </p>
           </section>
           <section>
@@ -467,6 +480,57 @@
         <p>音声ファイルはサーバーへ送信されません。</p>
       </footer>
       <div id="audio-container" hidden></div>
+      <div id="undo-bar" class="undo-bar" hidden>
+        <p id="undo-message" role="status"></p>
+        <button id="undo-button" class="undo-button" type="button">
+          元に戻す
+        </button>
+      </div>
+      <div id="mini-player" class="mini-player" hidden>
+        <div class="mini-info">
+          <p id="mini-name" class="mini-name"></p>
+          <p class="mini-time">
+            <span id="mini-time">0:00.0</span>
+            <span id="mini-status"></span>
+          </p>
+        </div>
+        <button
+          id="mini-back"
+          class="mini-skip"
+          type="button"
+          aria-label="下のバー：巻き戻し 5秒"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 12a8 8 0 1 0 2.4-5.7" />
+            <path d="M4 4v4.5h4.5" />
+          </svg>
+        </button>
+        <button
+          id="mini-play"
+          class="mini-play"
+          type="button"
+          aria-label="下のバー：再生"
+          data-state="paused"
+        >
+          <svg class="icon-play" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M8 5.5v13l10.5-6.5z" />
+          </svg>
+          <svg class="icon-pause" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z" />
+          </svg>
+        </button>
+        <button
+          id="mini-forward"
+          class="mini-skip"
+          type="button"
+          aria-label="下のバー：早送り 5秒"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M20 12a8 8 0 1 1-2.4-5.7" />
+            <path d="M20 4v4.5h-4.5" />
+          </svg>
+        </button>
+      </div>
     </main>
   </body>
 </html>

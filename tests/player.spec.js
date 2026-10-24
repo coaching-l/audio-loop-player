@@ -429,13 +429,13 @@ test("capture A and B during playback, disable repeat, and restore settings", as
   await expect
     .poll(() => page.locator("#audio").evaluate((a) => a.currentTime))
     .toBeGreaterThan(0.2);
-  await page.locator("#set-a").click();
+  await page.locator("#gauge-set-a").click();
   const a = await page.locator("#point-a").inputValue();
   expect(Number(a.split(":")[1])).toBeGreaterThan(0.1);
   await expect
     .poll(() => page.locator("#audio").evaluate((el) => el.currentTime))
     .toBeGreaterThan(Number(a.split(":")[1]) + 0.2);
-  await page.locator("#set-b").click();
+  await page.locator("#gauge-set-b").click();
   const b = await page.locator("#point-b").inputValue();
   expect(Number(b.split(":")[1])).toBeGreaterThan(Number(a.split(":")[1]));
   await page.locator("#repeat-mode").selectOption("ab");
