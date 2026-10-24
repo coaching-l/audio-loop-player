@@ -46,6 +46,16 @@ export async function listAudio() {
 }
 export async function addAudio(file) {
   file = await readableAudio(file);
+  try {
+    return await saveRecord(file, new Blob([file], { type: file.type }));
+  } catch (error) {
+    // WebKit cannot store Blobs in private browsing (UnknownError); raw bytes still work there.
+    if (error.name !== "UnknownError") throw error;
+    return saveRecord(file, await file.arrayBuffer());
+  }
+}
+// `data` is a Blob, or an ArrayBuffer where Blobs cannot be stored; File accepts either.
+async function saveRecord(file, data) {
   const db = await openLibrary();
   return new Promise((resolve, reject) => {
     const transaction = db.transaction("audio", "readwrite");
@@ -73,7 +83,7 @@ export async function addAudio(file) {
           lastModified: file.lastModified,
           type: file.type,
           addedAt: Date.now(),
-          blob: new Blob([file], { type: file.type }),
+          blob: data,
         };
         try {
           store.add(record);

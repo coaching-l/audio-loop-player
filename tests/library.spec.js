@@ -211,3 +211,30 @@ test("saving audio requests persistent storage once and shows the space used", a
   await expect(page.locator("#library-status")).not.toContainText("保存中");
   expect(await page.evaluate(() => window.persistCalls)).toBe(1);
 });
+test("audio is saved as bytes where the browser cannot store Blobs, and reopens after reload", async ({
+  page,
+}) => {
+  // Safari private browsing rejects Blob values in IndexedDB with UnknownError.
+  await page.addInitScript(() => {
+    const add = IDBObjectStore.prototype.add;
+    IDBObjectStore.prototype.add = function (value, ...rest) {
+      if (value?.blob instanceof Blob)
+        throw new DOMException(
+          "Error preparing Blob/File data to be stored in object store",
+          "UnknownError",
+        );
+      return add.call(this, value, ...rest);
+    };
+  });
+  await add(page, 1);
+  await expect(page.locator("#library-status")).toContainText("保存しました");
+  await page.reload();
+  await page
+    .getByRole("button", { name: "lesson-1.wavを開く", exact: true })
+    .click();
+  await expect(page.locator("#play")).toBeEnabled();
+  await page.locator("#play").click();
+  await expect
+    .poll(() => page.locator("#audio").evaluate((a) => a.currentTime))
+    .toBeGreaterThan(0.1);
+});
