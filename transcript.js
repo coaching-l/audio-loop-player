@@ -165,9 +165,33 @@ export function retimeSentences(previous, sentences, duration, phrases = []) {
 }
 
 // A pause this long ends a sentence even without punctuation, which speech recognition
-// often leaves out; a sentence longer than MAX_SENTENCE seconds is cut at its longest pause.
+// often leaves out (Mandarin especially). A sentence longer than LONG_SENTENCE seconds is
+// also cut at a shorter pause, and one longer than MAX_SENTENCE at its longest pause.
 const LONG_PAUSE = 1;
+const SHORT_PAUSE = 0.5;
+const LONG_SENTENCE = 8;
 const MAX_SENTENCE = 12;
+// The same phrase (4 to 50 characters) again right after itself. Only a phrase of four
+// or more Chinese characters, or of three or more whole words, counts ("very very" stays);
+// case is ignored, so "Say it again, say it again" splits at the right place.
+const REPEAT = /(\S.{2,48}?\S)(?:[\s,，、]*\1)+/giu;
+const LETTER = /[\p{L}\p{N}]/u;
+function repeatedPhrase(text) {
+  const pattern = new RegExp(REPEAT.source, "giu");
+  for (let match; (match = pattern.exec(text)); ) {
+    const unit = match[1];
+    const end = match.index + match[0].length;
+    const cjk = unit.match(CJK)?.length || 0;
+    const words =
+      !cjk &&
+      unit.split(/\s+/).length >= 3 &&
+      !LETTER.test(text[match.index - 1] || "") &&
+      !LETTER.test(text[end] || "");
+    if (cjk >= 4 || words) return match;
+    pattern.lastIndex = match.index + 1;
+  }
+  return null;
+}
 
 // Speech recognition times each segment (a phrase or a sentence or two). Inside a segment
 // the time is shared out by length among its words (Chinese: characters, with the
@@ -353,9 +377,34 @@ function nearest(list, time, snap) {
   return best;
 }
 
-// Cuts a sentence (non-space characters from..to of the whole text) at long pauses, and
-// cuts one that runs too long at its longest pause, preferring a comma.
+// Cuts a sentence (non-space characters from..to of the whole text) where a phrase is
+// said again, at long pauses, and at shorter pauses when it runs long, preferring a comma.
 function cut(text, from, to, owner, words, pieces) {
+  // A phrase said several times in a row (read again for practice, or repeated by the
+  // recognizer) becomes one sentence each time.
+  const repeat = repeatedPhrase(text);
+  if (repeat) {
+    const lower = text.toLowerCase();
+    const unit = repeat[1].toLowerCase();
+    // Punctuation right after the last time stays with it.
+    let end = repeat.index + repeat[0].length;
+    while (/\p{P}/u.test(text[end] || "")) end++;
+    const bounds = [0, repeat.index];
+    for (
+      let at = lower.indexOf(unit, repeat.index + unit.length);
+      at >= 0 && at < end;
+      at = lower.indexOf(unit, at + unit.length)
+    )
+      bounds.push(at);
+    bounds.push(end, text.length);
+    for (let i = 0; i < bounds.length - 1; i++) {
+      const piece = text.slice(bounds[i], bounds[i + 1]);
+      if (!/\S/u.test(piece)) continue;
+      const start = from + nonSpace(text.slice(0, bounds[i]));
+      cut(piece.trim(), start, start + nonSpace(piece), owner, words, pieces);
+    }
+    return;
+  }
   const first = owner[from];
   const last = owner[to - 1];
   const length = words[last].end - words[first].start;
@@ -364,12 +413,16 @@ function cut(text, from, to, owner, words, pieces) {
   for (let k = first; k < last; k++) {
     const pause = words[k + 1].start - words[k].end;
     const comma = /[,，、;；:：]\s*$/u.test(words[k].text);
-    const balanced =
-      words[k].end - words[first].start >= 2 &&
-      words[last].end - words[k + 1].start >= 2;
+    const before = words[k].end - words[first].start;
+    const after = words[last].end - words[k + 1].start;
     const score = pause + (comma ? 0.3 : 0);
     if (
-      (pause >= LONG_PAUSE || (length > MAX_SENTENCE && balanced)) &&
+      (pause >= LONG_PAUSE ||
+        (length > LONG_SENTENCE &&
+          pause >= SHORT_PAUSE &&
+          before >= 1.5 &&
+          after >= 1.5) ||
+        (length > MAX_SENTENCE && before >= 2 && after >= 2)) &&
       score > bestScore
     ) {
       best = k;

@@ -190,6 +190,66 @@ test("a segment's time is shared by its sentences, cut at the pause between them
   ]);
 });
 
+test("a phrase said again and again, and a long run, become separate sentences", () => {
+  const texts = (result) => result.sentences.map((s) => s.text);
+  // Mandarin as Whisper often writes it: four readings and no full stops between.
+  const readings = transcriptFromSegments(
+    [
+      word(
+        "我以为你会不会有什么事我以为你会不会有什么事我以为你会不会有什么事我以为你会不会有什么事在这段关于中,你希望自己一怎样的姿态与对方相处。",
+        0,
+        15,
+      ),
+    ],
+    16,
+    [
+      [0, 2.2],
+      [2.8, 5],
+      [5.6, 7.8],
+      [8.4, 10.6],
+      [11.2, 15],
+    ].map(([start, end]) => ({ start, end })),
+  );
+  expect(readings.sentences.map((s) => [s.text, s.start, s.end])).toEqual([
+    ["我以为你会不会有什么事", 0, 2.2],
+    ["我以为你会不会有什么事", 2.8, 5],
+    ["我以为你会不会有什么事", 5.6, 7.8],
+    ["我以为你会不会有什么事", 8.4, 10.6],
+    ["在这段关于中,你希望自己一怎样的姿态与对方相处。", 11.2, 15],
+  ]);
+  expect(splitSentences(readings.text).map((s) => s.text)).toEqual(
+    texts(readings),
+  );
+  // Case and commas between the times do not matter; short repeats stay as they are.
+  expect(
+    texts(
+      transcriptFromSegments(
+        [word(" It was very very good. Say it again, say it again.", 0, 6)],
+        6,
+      ),
+    ),
+  ).toEqual(["It was very very good.", "Say it again,", "say it again."]);
+  expect(
+    texts(
+      transcriptFromSegments([word("一天一天过去了，谢谢谢谢。", 0, 3)], 3),
+    ),
+  ).toEqual(["一天一天过去了，谢谢谢谢。"]);
+  // A run of over 8 seconds is also cut at a half-second pause.
+  expect(
+    texts(
+      transcriptFromSegments(
+        [word("今天我们去公园散步 天气很好 我们看到很多花", 0, 9)],
+        9,
+        [
+          [0, 3],
+          [3.6, 6],
+          [6.6, 9],
+        ].map(([start, end]) => ({ start, end })),
+      ),
+    ),
+  ).toEqual(["今天我们去公园散步", "天气很好 我们看到很多花"]);
+});
+
 test("editing keeps the times of unchanged sentences", () => {
   const phrases = [
     { start: 0, end: 0.6 },

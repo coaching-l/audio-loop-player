@@ -1061,6 +1061,16 @@ label {
 .usage-body p + p {
   margin-top: 8px;
 }
+/* 個人情報の注意：本文より目立たせ、太字の一文を見出しのように読ませる */
+.usage-body .privacy-note {
+  padding: 10px 12px;
+  border-radius: var(--radius-small);
+  background: var(--accent-soft);
+  color: var(--text);
+}
+.usage-body .privacy-note strong {
+  color: var(--heading);
+}
 .usage-body .offline-card {
   margin: 12px 0 0;
   padding: 12px;
