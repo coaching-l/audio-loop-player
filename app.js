@@ -18,6 +18,14 @@ import {
 } from "./player.js";
 import { analyzeAudio, drawWaveform } from "./waveform.js";
 import { VoiceRecorder, recordingSupported } from "./recorder.js";
+import {
+  splitSentences,
+  alignSentences,
+  sentenceAt,
+  isCjk,
+  decodeText,
+  validTranscript,
+} from "./transcript.js";
 const $ = (id) => document.getElementById(id);
 const storageKey = "kotonoha.audio.v1";
 let library = {};
@@ -171,6 +179,7 @@ function drawPlayer(player) {
     const span = view.end - view.start;
     setView(time + span * 0.4, span);
   }
+  highlightSentence(player.audio.currentTime, player.active);
   const active = player.active;
   $("play").dataset.state = active ? "playing" : "paused";
   $("play").setAttribute("aria-label", active ? "一時停止" : "再生");
@@ -208,6 +217,7 @@ function enable(value) {
   for (const id of ["player-controls", "repeat-controls", "save-controls"])
     $(id).disabled = !value;
   $("record-controls").disabled = !value || !recordingSupported();
+  $("transcript-controls").disabled = !value;
   syncMiniPlayer();
 }
 // A compact bar at the bottom keeps play/pause reachable once the main controls are scrolled past.
@@ -299,6 +309,8 @@ async function loadFile(file) {
   const generation = ++loadGeneration;
   analysis = null;
   showAnalysis();
+  transcript = null;
+  renderTranscript();
   clearTimeout(loadTimeout);
   markerDrag = null;
   if (engine) engine.dispose();
@@ -386,12 +398,14 @@ async function loadFile(file) {
       render(currentEngine);
       persist();
       setMediaMetadata(file.name);
+      openTranscript();
       // The waveform comes after playback is ready, so drawing it never delays practice.
       readableAudio(file)
         .then(analyzeAudio)
         .then((result) => {
           if (generation !== loadGeneration || !result) return;
           analysis = result;
+          realignTranscript();
           showAnalysis();
         })
         .catch(() => {
@@ -817,6 +831,8 @@ function closeCurrentAudio() {
   setMediaMetadata(null);
   discardRecording();
   analysis = null;
+  transcript = null;
+  renderTranscript();
   showAnalysis();
   ++loadGeneration;
   clearTimeout(loadTimeout);
@@ -1050,7 +1066,13 @@ $("export-backup").addEventListener("click", () => {
     String(date.getDate()).padStart(2, "0"),
   ].join("-");
   const body = JSON.stringify(
-    { app: BACKUP_APP, version: 1, exportedAt: date.toISOString(), library },
+    {
+      app: BACKUP_APP,
+      version: 1,
+      exportedAt: date.toISOString(),
+      library,
+      transcripts: allTranscripts(),
+    },
     null,
     2,
   );
@@ -1125,10 +1147,23 @@ $("import-backup").addEventListener("change", async (event) => {
     renderSegments();
   }
   saveLibrary();
+  // Original texts are added only for audio that has none on this device.
+  let texts = 0;
+  const incomingTexts = data.transcripts;
+  if (incomingTexts && typeof incomingTexts === "object")
+    for (const [key, value] of Object.entries(incomingTexts))
+      if (validTranscript(value) && !loadTranscript(key)) {
+        saveTranscript(key, value);
+        texts++;
+      }
+  if (texts && ready && !transcript) openTranscript();
+  const parts = [];
+  if (added) parts.push(`練習区間を${added}件`);
+  if (texts) parts.push(`原文を${texts}件`);
   backupStatus(
-    added
-      ? `練習区間を${added}件読み込みました。対象の音声を開くと使えます。今ある練習区間はそのまま残っています。`
-      : "このバックアップの練習区間は、すべてこの端末に入っています。足すものはありません。",
+    parts.length
+      ? `${parts.join("、")}読み込みました。対象の音声を開くと使えます。今ある練習区間と原文はそのまま残っています。`
+      : "このバックアップの練習区間と原文は、すべてこの端末に入っています。足すものはありません。",
   );
 });
 
@@ -1360,4 +1395,248 @@ $("compare").addEventListener("click", async () => {
   voice.currentTime = 0;
   voice.onended = () => token === compareToken && recordStatus("録音あり");
   voice.play().catch(() => {});
+});
+
+// Original text: one line per sentence, the sentence being heard is highlighted.
+// Stored per audio file, apart from the settings, so playback saves stay small.
+const transcriptPrefix = "kotonoha.transcript.v1:";
+const prefsKey = "kotonoha.prefs.v1";
+let transcript = null;
+let editingTranscript = false;
+let currentSentence = -1;
+let selectedSentence = -1;
+function loadTranscript(key) {
+  try {
+    const value = JSON.parse(localStorage.getItem(transcriptPrefix + key));
+    return validTranscript(value) ? value : null;
+  } catch {
+    return null;
+  }
+}
+function saveTranscript(key, value) {
+  try {
+    if (value)
+      localStorage.setItem(transcriptPrefix + key, JSON.stringify(value));
+    else localStorage.removeItem(transcriptPrefix + key);
+  } catch {
+    notice(
+      "原文を保存できません。保存容量やプライベートブラウズの設定を確認してください。このページを開いている間は使えます。",
+    );
+  }
+}
+function allTranscripts() {
+  const all = {};
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const name = localStorage.key(i);
+      if (!name?.startsWith(transcriptPrefix)) continue;
+      const value = loadTranscript(name.slice(transcriptPrefix.length));
+      if (value) all[name.slice(transcriptPrefix.length)] = value;
+    }
+  } catch {
+    /* Without storage there is nothing saved to back up. */
+  }
+  return all;
+}
+function openTranscript() {
+  transcript = loadTranscript(fileKey);
+  editingTranscript = false;
+  realignTranscript();
+  renderTranscript();
+}
+function setTranscriptText(text) {
+  const sentences = splitSentences(text);
+  if (!sentences.length) {
+    notice("原文が空です。文を入力してください。");
+    return false;
+  }
+  transcript = {
+    text,
+    source: "manual",
+    // Without the waveform yet, times are shared out by length; pauses refine them later.
+    timing: analysis ? "pauses" : "estimate",
+    sentences: alignSentences(
+      sentences,
+      engine.audio.duration,
+      analysis?.phrases || [],
+    ),
+  };
+  saveTranscript(fileKey, transcript);
+  editingTranscript = false;
+  renderTranscript();
+  notice(
+    `原文を${sentences.length}文に分けて表示しました。色の位置がずれる文は、時刻を合わせ直せます。`,
+  );
+  return true;
+}
+function realignTranscript() {
+  if (
+    !transcript ||
+    !analysis ||
+    transcript.timing !== "estimate" ||
+    transcript.sentences.some((s) => s.edited)
+  )
+    return;
+  transcript.sentences = alignSentences(
+    transcript.sentences,
+    engine.audio.duration,
+    analysis.phrases,
+  );
+  transcript.timing = "pauses";
+  saveTranscript(fileKey, transcript);
+  renderTranscript();
+}
+function renderTranscript() {
+  const has = Boolean(ready && transcript);
+  $("transcript-status").textContent = !ready
+    ? "—"
+    : editingTranscript
+      ? "入力中"
+      : has
+        ? `${transcript.sentences.length}文`
+        : "原文なし";
+  $("transcript-empty").hidden = has || editingTranscript;
+  $("transcript-editor").hidden = !editingTranscript;
+  $("transcript-view").hidden = !has || editingTranscript;
+  const list = $("transcript-sentences");
+  list.replaceChildren();
+  currentSentence = -1;
+  if (!has) selectedSentence = -1;
+  if (has) {
+    // Chinese needs Chinese glyphs, not the Japanese forms the page defaults to.
+    list.lang = isCjk(transcript.text) ? "zh-CN" : "en";
+    transcript.sentences.forEach((sentence, index) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "sentence";
+      button.dataset.index = index;
+      button.textContent = sentence.text;
+      if (index === selectedSentence) button.classList.add("is-selected");
+      list.append(button);
+    });
+    highlightSentence(engine.audio.currentTime, false);
+  }
+  $("transcript-fit").disabled = selectedSentence < 0;
+}
+function highlightSentence(time, follow) {
+  if (!transcript || editingTranscript || $("transcript-body").hidden) return;
+  const index = sentenceAt(transcript.sentences, time);
+  if (index === currentSentence) return;
+  const list = $("transcript-sentences");
+  const previous = list.children[currentSentence];
+  previous?.classList.remove("is-current");
+  previous?.removeAttribute("aria-current");
+  currentSentence = index;
+  const current = list.children[index];
+  if (!current) return;
+  current.classList.add("is-current");
+  current.setAttribute("aria-current", "true");
+  // Keep the sentence being heard in view inside the box, without scrolling the page.
+  const top = current.offsetTop;
+  if (
+    follow &&
+    (top < list.scrollTop ||
+      top + current.offsetHeight > list.scrollTop + list.clientHeight)
+  )
+    list.scrollTo({
+      top: Math.max(0, top - list.clientHeight / 3),
+      behavior: matchMedia("(prefers-reduced-motion: reduce)").matches
+        ? "auto"
+        : "smooth",
+    });
+}
+$("transcript-sentences").addEventListener("click", (event) => {
+  const button = event.target.closest(".sentence");
+  if (!button || !ready || !transcript) return;
+  const index = Number(button.dataset.index);
+  const sentence = transcript.sentences[index];
+  const b = Math.min(sentence.end, engine.audio.duration);
+  if (!updateSettings({ a: sentence.start, b, mode: "ab" })) return;
+  if (zoomed()) fitView();
+  engine.seek(sentence.start);
+  selectedSentence = index;
+  for (const item of $("transcript-sentences").children)
+    item.classList.toggle("is-selected", item === button);
+  $("transcript-fit").disabled = false;
+  notice("選んだ文をA–B区間にしました。再生ボタンでくり返し練習できます。");
+});
+$("transcript-fit").addEventListener("click", () => {
+  const sentence = transcript?.sentences[selectedSentence];
+  if (!sentence) return;
+  sentence.start = engine.a;
+  sentence.end = engine.b;
+  sentence.edited = true;
+  saveTranscript(fileKey, transcript);
+  renderTranscript();
+  notice("選んだ文の時刻を、今のA–B区間に合わせました。");
+});
+function startEditing(text) {
+  editingTranscript = true;
+  renderTranscript();
+  $("transcript-input").value = text;
+  $("transcript-input").focus();
+}
+$("transcript-paste").addEventListener("click", () => startEditing(""));
+$("transcript-edit").addEventListener("click", () =>
+  startEditing(transcript?.text || ""),
+);
+$("transcript-cancel").addEventListener("click", () => {
+  editingTranscript = false;
+  renderTranscript();
+});
+$("transcript-editor").addEventListener("submit", (event) => {
+  event.preventDefault();
+  if (ready) setTranscriptText($("transcript-input").value);
+});
+$("transcript-file").addEventListener("change", async (event) => {
+  const file = event.target.files[0];
+  event.target.value = "";
+  if (!file || !ready) return;
+  // Opens the text for checking before it is saved.
+  startEditing(decodeText(await file.arrayBuffer()));
+});
+$("transcript-delete").addEventListener("click", () => {
+  if (!transcript) return;
+  const removed = transcript;
+  const key = fileKey;
+  transcript = null;
+  saveTranscript(key, null);
+  renderTranscript();
+  offerUndo("原文を消しました。", () => {
+    saveTranscript(key, removed);
+    if (key === fileKey) {
+      transcript = removed;
+      renderTranscript();
+    }
+  });
+});
+function readPrefs() {
+  try {
+    return JSON.parse(localStorage.getItem(prefsKey)) || {};
+  } catch {
+    return {};
+  }
+}
+function showTranscript(shown) {
+  $("show-transcript").checked = shown;
+  $("transcript-body").hidden = !shown;
+  if (shown) {
+    currentSentence = -1;
+    if (ready) highlightSentence(engine.audio.currentTime, false);
+  }
+}
+showTranscript(readPrefs().showTranscript !== false);
+$("show-transcript").addEventListener("change", () => {
+  showTranscript($("show-transcript").checked);
+  try {
+    localStorage.setItem(
+      prefsKey,
+      JSON.stringify({
+        ...readPrefs(),
+        showTranscript: $("show-transcript").checked,
+      }),
+    );
+  } catch {
+    /* The choice still applies on this page. */
+  }
 });

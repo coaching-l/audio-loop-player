@@ -15,20 +15,21 @@ JavaScriptモジュールとService Workerを使うため、HTMLをダブルク�
 
 ## 構成
 
-| ファイル | 役割 |
-| --- | --- |
-| `index.html` / `style.css` | 画面と見た目。CSPは `index.html` の `<meta>` にあります |
-| `app.js` | 画面の操作、保存・呼び出し、バックアップ、取り消し、ミニプレーヤー、Media Session、キー操作、録音の画面 |
-| `player.js` | 再生エンジン：A–B・回数・無音・速度の段階アップ、タイマーの破棄、時刻の変換 |
-| `audio-library.js` | IndexedDBへの音声保存（10件まで）、削除と取り消し、保存前の再生確認 |
-| `audio-import.js` | 選んだファイルを一度だけ読み取り、MIMEを補う（iOSのファイル提供元への対策） |
-| `waveform.js` | 低いサンプリングレートでの解析、波形の描画、無音での区切り |
-| `recorder.js` | マイク録音（メモリ上だけ、最長60秒） |
-| `offline.js` / `sw.js` | オフライン準備と更新、アプリ本体のキャッシュ |
-| `scripts/serve.mjs` | 開発用の静的サーバー |
-| `scripts/bump-shell.mjs` | キャッシュの版を上げるリリース用スクリプト |
+| ファイル                   | 役割                                                                                                    |
+| -------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `index.html` / `style.css` | 画面と見た目。CSPは `index.html` の `<meta>` にあります                                                 |
+| `app.js`                   | 画面の操作、保存・呼び出し、バックアップ、取り消し、ミニプレーヤー、Media Session、キー操作、録音の画面 |
+| `player.js`                | 再生エンジン：A–B・回数・無音・速度の段階アップ、タイマーの破棄、時刻の変換                             |
+| `audio-library.js`         | IndexedDBへの音声保存（10件まで）、削除と取り消し、保存前の再生確認                                     |
+| `audio-import.js`          | 選んだファイルを一度だけ読み取り、MIMEを補う（iOSのファイル提供元への対策）                             |
+| `transcript.js`            | 原文の文への区切り（英語・中国語）、波形の無音を使った時刻の対応づけ、文字コードの判別                  |
+| `waveform.js`              | 低いサンプリングレートでの解析、波形の描画、無音での区切り                                              |
+| `recorder.js`              | マイク録音（メモリ上だけ、最長60秒）                                                                    |
+| `offline.js` / `sw.js`     | オフライン準備と更新、アプリ本体のキャッシュ                                                            |
+| `scripts/serve.mjs`        | 開発用の静的サーバー                                                                                    |
+| `scripts/bump-shell.mjs`   | キャッシュの版を上げるリリース用スクリプト                                                              |
 
-保存先：音声はIndexedDB（`coaching-l-audio-library`）、設定・練習区間・再生位置はlocalStorage（`kotonoha.audio.v1`、以前の版との互換のため名前はそのまま）。
+保存先：音声はIndexedDB（`coaching-l-audio-library`）、設定・練習区間・再生位置はlocalStorage（`kotonoha.audio.v1`、以前の版との互換のため名前はそのまま）。原文は音声ごとに `kotonoha.transcript.v1:<音声のキー>`、表示のオン・オフは `kotonoha.prefs.v1` です。
 
 ## リリース（キャッシュの版の更新）
 

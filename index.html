@@ -42,8 +42,8 @@
       content="端末の音声で、繰り返し聴く・声に出す。アップロード不要の語学学習プレーヤー。"
     />
     <title>音声リピートプレーヤー | COACHING-L</title>
-    <link rel="stylesheet" href="./style.css?v=12" />
-    <script type="module" src="./app.js?v=12"></script>
+    <link rel="stylesheet" href="./style.css?v=14" />
+    <script type="module" src="./app.js?v=14"></script>
   </head>
   <body>
     <main>
@@ -307,10 +307,103 @@
             </p>
           </div>
         </section>
+        <section
+          class="card transcript-card"
+          aria-labelledby="transcript-heading"
+        >
+          <div class="section-heading">
+            <h2 id="transcript-heading"><span class="step">02</span> 原文</h2>
+            <span id="transcript-status" class="tag">—</span>
+          </div>
+          <label class="switch-row" for="show-transcript"
+            ><input id="show-transcript" type="checkbox" checked />
+            原文を表示する</label
+          >
+          <div id="transcript-body">
+            <fieldset id="transcript-controls" disabled>
+              <div id="transcript-empty">
+                <p class="small">
+                  教材の原文があれば、貼り付けるかテキストファイルを読み込んでください。再生している文に色が付き、音声を聞きながら目で追えます。
+                </p>
+                <div class="transcript-actions">
+                  <button
+                    id="transcript-paste"
+                    class="button secondary"
+                    type="button"
+                  >
+                    原文を貼り付ける</button
+                  ><label class="button secondary" for="transcript-file"
+                    >テキストファイルを読み込む</label
+                  ><input
+                    id="transcript-file"
+                    type="file"
+                    accept=".txt,text/plain"
+                    class="visually-hidden"
+                  />
+                </div>
+              </div>
+              <form id="transcript-editor" class="transcript-editor" hidden>
+                <label for="transcript-input"
+                  >原文（1文ずつ区切って表示します）</label
+                >
+                <textarea
+                  id="transcript-input"
+                  rows="8"
+                  spellcheck="false"
+                ></textarea>
+                <div class="transcript-actions">
+                  <button class="button primary" type="submit">保存する</button
+                  ><button
+                    id="transcript-cancel"
+                    class="button secondary"
+                    type="button"
+                  >
+                    やめる
+                  </button>
+                </div>
+              </form>
+              <div id="transcript-view" hidden>
+                <div
+                  id="transcript-sentences"
+                  class="transcript-sentences"
+                  aria-label="原文。文を押すと、その文をA–B区間にします"
+                ></div>
+                <p class="small">
+                  文を押すと、その文をA–B区間にします。色の位置がずれるときは、文を押してからゲージでA・Bを合わせ、「選んだ文の時刻を今のA–Bにする」を押してください。
+                </p>
+                <div class="transcript-actions">
+                  <button
+                    id="transcript-fit"
+                    class="button secondary"
+                    type="button"
+                    disabled
+                  >
+                    選んだ文の時刻を今のA–Bにする
+                  </button>
+                </div>
+                <div class="transcript-links">
+                  <button
+                    id="transcript-edit"
+                    class="text-button"
+                    type="button"
+                  >
+                    原文を直す</button
+                  ><button
+                    id="transcript-delete"
+                    class="text-button"
+                    type="button"
+                  >
+                    原文を消す
+                  </button>
+                </div>
+              </div>
+            </fieldset>
+          </div>
+        </section>
         <section class="card repeat-card" aria-labelledby="repeat-heading">
           <div class="section-heading">
             <h2 id="repeat-heading">
-              <span class="step">02</span> リピート設定
+              <span class="step">03</span> リピート設定
             </h2>
             <span id="repeat-progress" class="tag">—</span>
           </div>
@@ -419,7 +512,7 @@
         <section class="card record-card" aria-labelledby="record-heading">
           <div class="section-heading">
             <h2 id="record-heading">
-              <span class="step">03</span> 録音して聞き比べ
+              <span class="step">04</span> 録音して聞き比べ
             </h2>
             <span id="record-status" class="tag">録音なし</span>
           </div>
@@ -452,7 +545,7 @@
         <section class="card saved-card" aria-labelledby="saved-heading">
           <div class="section-heading">
             <h2 id="saved-heading">
-              <span class="step">04</span> 保存した練習区間
+              <span class="step">05</span> 保存した練習区間
             </h2>
             <span id="saved-count" class="tag">0件</span>
           </div>
@@ -520,6 +613,9 @@
             <h2>聴く・くり返す・保存する</h2>
             <p>
               再生・一時停止、5秒戻る／進む、速度の変更ができます。くり返したい範囲は、ゲージのA・Bを動かして決めます（A・Bを動かすと、区間リピートがONになります）。短い区間は「拡大」や「区間に合わせる」でゲージを広げると、細かく指定できます。時刻を数字で入力したり、音声全体をくり返したり、回数や無音の長さを変えたりもできます。
+            </p>
+            <p>
+              教材の原文は「原文」カードに貼り付けるか、テキストファイルを読み込みます。再生している文に色が付き、文を押すとその文をA–B区間にします。「原文を表示する」をオフにすると隠せます。
             </p>
             <p>
               覚えたい区間は、名前を付けて保存できます。練習区間・速度・再生位置は、音声ごとに記録されます。

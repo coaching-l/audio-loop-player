@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { createServer } from "node:http";
 import { readFile, mkdtemp, rm } from "node:fs/promises";
-import { shellVersion } from "../scripts/bump-shell.mjs";
+import { shellFiles, shellVersion } from "../scripts/bump-shell.mjs";
 import { tmpdir } from "node:os";
 import { resolve, join } from "node:path";
 
@@ -21,25 +21,8 @@ async function server() {
       ? path.slice("/audio-loop-player/".length)
       : path.slice(1);
     const file = asset || "index.html";
-    const allowed = [
-      "index.html",
-      "app.js",
-      "offline.js",
-      "sw.js",
-      "player.js",
-      "audio-library.js",
-      "audio-import.js",
-      "waveform.js",
-      "recorder.js",
-      "style.css",
-      "manifest.webmanifest",
-      "icons/logo-144.png",
-      "icons/favicon-32.png",
-      "icons/icon-192.png",
-      "icons/icon-512.png",
-      "icons/icon-maskable-512.png",
-      "icons/apple-touch-icon.png",
-    ];
+    // Everything the offline cache holds, plus the worker itself.
+    const allowed = [...shellFiles(), "sw.js"];
     if (
       !allowed.includes(file) ||
       (state.fail && file === "manifest.webmanifest")
