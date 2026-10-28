@@ -237,18 +237,31 @@ export function transcriptFromSegments(segments, duration, phrases = []) {
     firsts[0] = 0;
     for (let k = parts.length - 1; k > 0; k--)
       firsts[k] = Math.min(firsts[k], firsts[k + 1] ?? tokens.length);
-    const breaks = (i) =>
-      /^\s/u.test(tokens[i]) || /[,，、;；:：.。!！?？…]$/u.test(tokens[i - 1]);
+    // How well a pause fits before word i: after a sentence end best, then after a
+    // comma, then at a space (which in English is before every word).
+    const fit = (i) =>
+      /[.。!！?？…]["”’」』）)]*$/u.test(tokens[i - 1])
+        ? 3
+        : /[,，、;；:：]$/u.test(tokens[i - 1])
+          ? 2
+          : /^\s/u.test(tokens[i])
+            ? 1
+            : 0;
     for (let k = 1; k < parts.length; k++) {
       const low = firsts[k - 1] + 1;
-      const high = (firsts[k + 1] ?? tokens.length) - 1;
-      for (const step of [0, -1, 1, -2, 2]) {
+      const high = Math.min(tokens.length, firsts[k + 1] ?? tokens.length) - 1;
+      let best = firsts[k];
+      let bestScore = -Infinity;
+      for (let step = -3; step <= 3; step++) {
         const i = firsts[k] + step;
-        if (i >= low && i <= high && i < tokens.length && breaks(i)) {
-          firsts[k] = i;
-          break;
+        if (i < low || i > high) continue;
+        const score = fit(i) - Math.abs(step) * 0.4;
+        if (score > bestScore) {
+          best = i;
+          bestScore = score;
         }
       }
+      firsts[k] = best;
     }
     const groups = parts.map((_, k) =>
       tokens.map((_, i) => i).slice(firsts[k], firsts[k + 1] ?? tokens.length),

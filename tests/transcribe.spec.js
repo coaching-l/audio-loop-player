@@ -250,6 +250,34 @@ test("a phrase said again and again, and a long run, become separate sentences",
   ).toEqual(["今天我们去公园散步", "天气很好 我们看到很多花"]);
 });
 
+test("pauses inside an English segment fall between sentences, not before a last word", () => {
+  // Questions read with 1.5 s pauses, timed by Whisper as one segment.
+  const questions = transcriptFromSegments(
+    [
+      word(
+        " Who could support you? What options do you see? What might you do differently? What would be your first small step? What could get in the way?",
+        0,
+        15.2,
+      ),
+    ],
+    16,
+    [
+      [0, 1.6],
+      [3.1, 4.9],
+      [6.4, 8.4],
+      [9.9, 12],
+      [13.5, 15.2],
+    ].map(([start, end]) => ({ start, end })),
+  );
+  expect(questions.sentences.map((s) => [s.text, s.start, s.end])).toEqual([
+    ["Who could support you?", 0, 1.6],
+    ["What options do you see?", 3.1, 4.9],
+    ["What might you do differently?", 6.4, 8.4],
+    ["What would be your first small step?", 9.9, 12],
+    ["What could get in the way?", 13.5, 15.2],
+  ]);
+});
+
 test("editing keeps the times of unchanged sentences", () => {
   const phrases = [
     { start: 0, end: 0.6 },
