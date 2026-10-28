@@ -30,13 +30,13 @@ export const MODEL_FILES = [
   },
   {
     path: "models/whisper-base/config.json",
-    size: 2243,
-    sha256: "f4d0608f7d918166da7edb3e188de5ef1bfe70d9802e785d271fd88111e9cf4b",
+    size: 2248,
+    sha256: "d1d347fdb422e6347c2f843a90d375aa67ea3f4b3e20d2c3075f9a9f6243685b",
   },
   {
     path: "models/whisper-base/generation_config.json",
-    size: 3832,
-    sha256: "61070cf8de25b1e9256e8e102ded49d8d24a8369ed36ef84fdf21549e68125a0",
+    size: 3776,
+    sha256: "3bba359e33fdd6dc1c10f71846a477d339b0242f462f70ea1dd73274caa38d05",
   },
   {
     path: "models/whisper-base/preprocessor_config.json",
@@ -50,18 +50,18 @@ export const MODEL_FILES = [
   },
   {
     path: "models/whisper-base/tokenizer_config.json",
-    size: 282682,
-    sha256: "2e036e4dbacfdeb7242c7d4ec4149f4a16e86026048f94d1637e3a8ee9c6a573",
+    size: 282683,
+    sha256: "2a4c4281cf9f51ac6ccc406fdc711a087afe6530f671fa7b80953edc498275ce",
   },
   {
     path: "models/whisper-base/onnx/encoder_model_quantized.onnx",
-    size: 23159167,
-    sha256: "2714484ebe1bae7c1646e8eadb768bb9d415cf11763466d21f23039a29c62e6f",
+    size: 23200850,
+    sha256: "3e345e977b55620a37c0c2b2af0644e019afdfad562dcf71eb929bb7274285f9",
   },
   {
     path: "models/whisper-base/onnx/decoder_model_merged_quantized.onnx",
-    size: 53712708,
-    sha256: "cf9a8d5bcddc0917a0078135b484cedcaf44f28909cd91910abd29dced9171db",
+    size: 53707539,
+    sha256: "a6beb6baabb66f00b6a686d828c95ffca6146d51900cbad0266cad38f64cf861",
   },
 ];
 export const MODEL_BYTES = MODEL_FILES.reduce((sum, f) => sum + f.size, 0);
@@ -260,7 +260,7 @@ export function planWindows(samples, rate = RATE) {
   return windows;
 }
 
-// Returns the recognized words with times in seconds: [{text, start, end}].
+// Returns the recognized segments with times in seconds: [{text, start, end}].
 // onProgress gets {phase: "download", ratio}, {phase: "prepare"} or
 // {phase: "listen", done, total}.
 export async function transcribe(
@@ -292,7 +292,7 @@ export async function transcribe(
     worker.onmessage = ({ data }) => {
       if (data.type === "progress")
         onProgress({ phase: "listen", done: data.done, total: windows.length });
-      else if (data.type === "done") stop(resolve, data.words);
+      else if (data.type === "done") stop(resolve, data.segments);
       else if (data.type === "error")
         stop(reject, failure("TranscribeError", data.message));
     };

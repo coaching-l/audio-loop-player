@@ -168,11 +168,85 @@ export function retimeSentences(previous, sentences, duration, phrases = []) {
 // often leaves out; a sentence longer than MAX_SENTENCE seconds is cut at its longest pause.
 const LONG_PAUSE = 1;
 const MAX_SENTENCE = 12;
-const SNAP = 0.3;
+
+// Speech recognition times each segment (a phrase or a sentence or two). Inside a segment
+// the time is shared out by length among its words (Chinese: characters, with the
+// punctuation after them), counting only the time with sound in the waveform, so the
+// pauses inside a segment stay between words. Sentence edges inside a segment are
+// estimates, so they may move further to a pause.
+export function transcriptFromSegments(segments, duration, phrases = []) {
+  const words = [];
+  for (const segment of segments) {
+    const tokens =
+      segment.text.match(
+        /\s*(?:[㐀-鿿豈-﫿぀-ヿ][^\s㐀-鿿豈-﫿぀-ヿA-Za-z0-9]*|[^\s㐀-鿿豈-﫿぀-ヿ]+)/gu,
+      ) || [];
+    const weights = tokens.map(weight);
+    const total = weights.reduce((sum, w) => sum + w, 0);
+    let parts = phrases
+      .map((p) => [
+        Math.max(segment.start, p.start),
+        Math.min(segment.end, p.end),
+      ])
+      .filter(([from, to]) => to - from > 0.05);
+    if (!parts.length)
+      parts = [[segment.start, Math.max(segment.start, segment.end)]];
+    const speech = parts.reduce((sum, [from, to]) => sum + to - from, 0);
+    // Each word goes to the part of sound where its share falls, so words never span a
+    // pause. A space or punctuation a word or two away marks the pause better.
+    const firsts = parts.map(() => tokens.length); // first word of each part
+    let done = 0;
+    let part = 0;
+    let offset = 0;
+    tokens.forEach((text, i) => {
+      const length = (speech * weights[i]) / total;
+      while (
+        part < parts.length - 1 &&
+        done + length / 2 > offset + parts[part][1] - parts[part][0]
+      ) {
+        offset += parts[part][1] - parts[part][0];
+        part++;
+      }
+      firsts[part] = Math.min(firsts[part], i);
+      done += length;
+    });
+    firsts[0] = 0;
+    for (let k = parts.length - 1; k > 0; k--)
+      firsts[k] = Math.min(firsts[k], firsts[k + 1] ?? tokens.length);
+    const breaks = (i) =>
+      /^\s/u.test(tokens[i]) || /[,，、;；:：.。!！?？…]$/u.test(tokens[i - 1]);
+    for (let k = 1; k < parts.length; k++) {
+      const low = firsts[k - 1] + 1;
+      const high = (firsts[k + 1] ?? tokens.length) - 1;
+      for (const step of [0, -1, 1, -2, 2]) {
+        const i = firsts[k] + step;
+        if (i >= low && i <= high && i < tokens.length && breaks(i)) {
+          firsts[k] = i;
+          break;
+        }
+      }
+    }
+    const groups = parts.map((_, k) =>
+      tokens.map((_, i) => i).slice(firsts[k], firsts[k + 1] ?? tokens.length),
+    );
+    groups.forEach((group, part) => {
+      const [from, to] = parts[part];
+      const sum = group.reduce((s, i) => s + weights[i], 0);
+      let time = from;
+      for (const i of group) {
+        const end = time + ((to - from) * weights[i]) / sum;
+        words.push({ text: tokens[i], start: time, end });
+        time = end;
+      }
+    });
+  }
+  return transcriptFromWords(words, duration, phrases, 0.6);
+}
 
 // Builds the text and its timed sentences from recognized words ({text, start, end}, the
-// text with its leading space). Sentence edges move to the waveform's phrase edges nearby.
-export function transcriptFromWords(words, duration, phrases = []) {
+// text with its leading space). Sentence edges move to the waveform's phrase edges within
+// `snap` seconds.
+export function transcriptFromWords(words, duration, phrases = [], snap = 0.3) {
   words = words.filter(
     (w) => /\S/u.test(w.text) && Number.isFinite(w.start) && w.end >= w.start,
   );
@@ -210,23 +284,55 @@ export function transcriptFromWords(words, duration, phrases = []) {
     joined = pieces.map((p) => p.text).join("\n");
     lines = splitSentences(joined);
   }
-  const starts = phrases.map((p) => p.start);
-  const ends = phrases.map((p) => p.end);
-  const timed = pieces.map((piece, i) => {
-    const start = words[piece.first].start;
-    const end = words[piece.last].end;
-    return {
-      text: piece.text,
-      lineEnd: lines[i].lineEnd,
-      start: nearest(starts, start) ?? start,
-      end: nearest(ends, end) ?? end,
-    };
-  });
-  for (let i = 0; i < timed.length - 1; i++)
-    timed[i].end = Math.min(
-      timed[i].end,
-      Math.max(timed[i + 1].start, timed[i].start),
-    );
+  const timed = pieces.map((piece, i) => ({
+    text: piece.text,
+    lineEnd: lines[i].lineEnd,
+    start: words[piece.first].start,
+    end: words[piece.last].end,
+  }));
+  const first = timed[0];
+  const last = timed[timed.length - 1];
+  first.start =
+    nearest(
+      phrases.map((p) => p.start),
+      first.start,
+      snap,
+    ) ?? first.start;
+  last.end =
+    nearest(
+      phrases.map((p) => p.end),
+      last.end,
+      snap,
+    ) ?? last.end;
+  // Between two sentences, take the pause in the waveform that meets the gap between
+  // them: the first ends where the pause begins, the next starts where it ends.
+  const gaps = pausesBetween(phrases);
+  for (let i = 0; i < timed.length - 1; i++) {
+    const from = timed[i].end;
+    const to = timed[i + 1].start;
+    let best = null;
+    let bestDistance = Infinity;
+    for (const gap of gaps) {
+      const distance = Math.max(
+        0,
+        gap.end - Math.max(from, to),
+        Math.min(from, to) - gap.start,
+      );
+      if (
+        distance <= snap &&
+        (distance < bestDistance ||
+          (distance === bestDistance &&
+            gap.start - gap.end > best.start - best.end))
+      ) {
+        best = gap;
+        bestDistance = distance;
+      }
+    }
+    if (best) {
+      timed[i].end = best.end;
+      timed[i + 1].start = best.start;
+    } else timed[i].end = Math.min(from, Math.max(to, timed[i].start));
+  }
   return { text: joined, sentences: finish(timed, duration) };
 }
 
@@ -236,11 +342,11 @@ function nonSpace(text) {
   return count;
 }
 
-function nearest(list, time) {
+function nearest(list, time, snap) {
   let best = null;
   for (const value of list)
     if (
-      Math.abs(value - time) <= SNAP &&
+      Math.abs(value - time) <= snap &&
       (best === null || Math.abs(value - time) < Math.abs(best - time))
     )
       best = value;

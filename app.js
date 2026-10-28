@@ -22,7 +22,7 @@ import {
   splitSentences,
   alignSentences,
   retimeSentences,
-  transcriptFromWords,
+  transcriptFromSegments,
   sentenceAt,
   isCjk,
   decodeText,
@@ -1708,7 +1708,7 @@ async function startTranscription() {
   renderTranscript();
   notice("文字起こしを始めました。そのまま再生して練習できます。");
   try {
-    const words = await transcribe(await readableAudio(currentFile), {
+    const segments = await transcribe(await readableAudio(currentFile), {
       language,
       signal: controller.signal,
       onProgress: ({ phase, ratio, done, total }) => {
@@ -1727,8 +1727,8 @@ async function startTranscription() {
       },
     });
     if (generation !== loadGeneration) return;
-    const result = transcriptFromWords(
-      words,
+    const result = transcriptFromSegments(
+      segments,
       engine.audio.duration,
       analysis?.phrases || [],
     );

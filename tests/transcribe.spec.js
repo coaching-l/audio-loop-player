@@ -7,6 +7,7 @@ import {
   alignSentences,
   retimeSentences,
   transcriptFromWords,
+  transcriptFromSegments,
 } from "../transcript.js";
 import { MODEL_FILES, planWindows } from "../transcriber.js";
 
@@ -18,22 +19,15 @@ const phrasesAudio = () => ({
   buffer: makePhrasesWav(),
 });
 const word = (text, start, end) => ({ text, start, end });
-// What the recognizer would hear in the tones, with Whisper's leading spaces.
-const englishWords = [
-  word(" One", 0.02, 0.2),
-  word(" two.", 0.22, 0.45),
-  word(" Three", 1.12, 1.3),
-  word(" four.", 1.32, 1.55),
-  word(" Five", 2.25, 2.4),
-  word(" six.", 2.42, 2.65),
+// What the recognizer would hear in the tones: segments with Whisper's leading spaces.
+const englishSegments = [
+  word(" One two.", 0.02, 0.45),
+  word(" Three four.", 1.12, 1.55),
+  word(" Five six.", 2.25, 2.65),
 ];
-const chineseWords = [
-  word("你", 0.02, 0.2),
-  word("好。", 0.2, 0.45),
-  word("我", 1.12, 1.25),
-  word("是", 1.25, 1.35),
-  word("学", 1.35, 1.45),
-  word("生。", 1.45, 1.55),
+const chineseSegments = [
+  word("你好。", 0.02, 0.45),
+  word("我是学生。", 1.12, 1.55),
 ];
 const sentences = (page) => page.locator("#transcript-sentences .sentence");
 
@@ -43,10 +37,10 @@ async function load(page, file = phrasesAudio()) {
   await expect(page.locator("#library-status")).not.toContainText("保存中");
 }
 
-// Stands in for the Whisper worker: answers with fixed words after a delay per pass.
-async function fakeRecognizer(page, words, delay = 50) {
+// Stands in for the Whisper worker: answers with fixed segments after a delay per pass.
+async function fakeRecognizer(page, segments, delay = 50) {
   await page.addInitScript(
-    ({ words, delay }) => {
+    ({ segments, delay }) => {
       const Real = window.Worker;
       window.transcribeCalls = [];
       window.transcribeStopped = 0;
@@ -75,7 +69,7 @@ async function fakeRecognizer(page, words, delay = 50) {
           data.windows.forEach((_, done) =>
             send({ type: "progress", done }, delay * done),
           );
-          send({ type: "done", words }, delay * (data.windows.length + 1));
+          send({ type: "done", segments }, delay * (data.windows.length + 1));
         }
         terminate() {
           this.stopped = true;
@@ -83,7 +77,7 @@ async function fakeRecognizer(page, words, delay = 50) {
         }
       };
     },
-    { words, delay },
+    { segments, delay },
   );
 }
 
@@ -152,6 +146,48 @@ test("recognized words become sentences that split the same way when edited", ()
   expect(long.sentences).toHaveLength(2);
   expect(long.sentences[0].text.endsWith("w19,")).toBe(true);
   expect(transcriptFromWords([word(" ", 0, 1)], 2)).toBeNull();
+});
+
+test("a segment's time is shared by its sentences, cut at the pause between them", () => {
+  const phrases = [
+    { start: 0.4, end: 1.3 },
+    { start: 1.9, end: 4.6 },
+  ];
+  // Whisper times the segment as a whole; the pause sits after 你好。
+  const chinese = transcriptFromSegments(
+    [word("你好。我是学生，今天天气很好。", 0.5, 4.5)],
+    5,
+    phrases,
+  );
+  expect(chinese.sentences.map((s) => [s.text, s.start, s.end])).toEqual([
+    ["你好。", 0.4, 1.3],
+    ["我是学生，今天天气很好。", 1.9, 4.6],
+  ]);
+  // Without punctuation, a space at a long pause ends the sentence.
+  const spaced = transcriptFromSegments(
+    [word("我是学生 你呢 我很好", 0, 6)],
+    6,
+    [
+      { start: 0, end: 1.5 },
+      { start: 3, end: 4 },
+      { start: 4.2, end: 6 },
+    ],
+  );
+  expect(spaced.sentences.map((s) => [s.text, s.start, s.end])).toEqual([
+    ["我是学生", 0, 1.5],
+    ["你呢 我很好", 3, 6],
+  ]);
+  const english = transcriptFromSegments(
+    [
+      word(" Ask not what your country can do for you.", 0.2, 3),
+      word(" Ask what you can do.", 3.8, 5.5),
+    ],
+    6,
+  );
+  expect(english.sentences.map((s) => [s.text, s.start, s.end])).toEqual([
+    ["Ask not what your country can do for you.", 0.2, 3],
+    ["Ask what you can do.", 3.8, 5.5],
+  ]);
 });
 
 test("editing keeps the times of unchanged sentences", () => {
@@ -227,7 +263,7 @@ test("the model files on disk match their recorded sizes and hashes", async () =
 test("speech is transcribed into sentences timed to the waveform's pauses", async ({
   page,
 }) => {
-  await fakeRecognizer(page, englishWords);
+  await fakeRecognizer(page, englishSegments);
   await page.goto("/");
   await load(page);
   await expect(page.locator("#waveform")).toBeVisible();
@@ -271,7 +307,7 @@ test("speech is transcribed into sentences timed to the waveform's pauses", asyn
 test("Chinese is transcribed on opening when that is switched on", async ({
   page,
 }) => {
-  await fakeRecognizer(page, chineseWords);
+  await fakeRecognizer(page, chineseSegments);
   await page.goto("/");
   await load(page, "tests/fixtures/tone.wav");
   await pretendModelSaved(page);
@@ -298,7 +334,7 @@ test("Chinese is transcribed on opening when that is switched on", async ({
 test("a transcription can be stopped, and opening another file stops it", async ({
   page,
 }) => {
-  await fakeRecognizer(page, englishWords, 60000);
+  await fakeRecognizer(page, englishSegments, 60000);
   await page.goto("/");
   await load(page);
   await pretendModelSaved(page);
@@ -327,7 +363,7 @@ test("the model is saved once after checking each file, and can be deleted", asy
   page,
 }) => {
   test.setTimeout(120000);
-  await fakeRecognizer(page, englishWords);
+  await fakeRecognizer(page, englishSegments);
   await page.goto("/");
   await load(page);
   await page.getByRole("button", { name: "音声から文字起こし" }).click();
@@ -359,4 +395,32 @@ test("the model is saved once after checking each file, and can be deleted", asy
       (await caches.keys()).filter((key) => key.includes("model")),
     ),
   ).toEqual([]);
+});
+
+// tests/fixtures/jfk.wav: 11 seconds of President Kennedy's inaugural address (1961), a
+// work of the U.S. government in the public domain; the sample whisper.cpp ships with.
+test("Whisper itself transcribes real speech, also offline once saved", async ({
+  page,
+  context,
+  isMobile,
+}) => {
+  test.skip(
+    isMobile,
+    "Same engine as the desktop run; once per engine is enough.",
+  );
+  test.setTimeout(300000);
+  await page.goto("/");
+  await load(page, "tests/fixtures/jfk.wav");
+  await page.getByRole("button", { name: "音声から文字起こし" }).click();
+  await expect(sentences(page).first()).toBeVisible({ timeout: 240000 });
+  const heard = (await sentences(page).allTextContents()).join(" ");
+  expect(heard.toLowerCase().replace(/[^a-z ]/g, "")).toContain(
+    "ask not what your country can do for you",
+  );
+  // The saved model works without a connection.
+  await page.getByRole("button", { name: "原文を消す" }).click();
+  await context.setOffline(true);
+  await page.getByRole("button", { name: "音声から文字起こし" }).click();
+  await expect(sentences(page).first()).toBeVisible({ timeout: 240000 });
+  await context.setOffline(false);
 });

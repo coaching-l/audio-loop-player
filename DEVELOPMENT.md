@@ -23,8 +23,8 @@ JavaScriptモジュールとService Workerを使うため、HTMLをダブルク�
 | `audio-library.js`         | IndexedDBへの音声保存（10件まで）、削除と取り消し、保存前の再生確認                                     |
 | `audio-import.js`          | 選んだファイルを一度だけ読み取り、MIMEを補う（iOSのファイル提供元への対策）                             |
 | `transcript.js`            | 原文の文への区切り（英語・中国語）、波形の無音を使った時刻の対応づけ、文字コードの判別                  |
-| `transcriber.js`           | 文字起こしの準備：モデルの受け取りと確認・保存（Cache Storage）、16kHzへの変換、無音での分割           |
-| `transcribe-worker.js`     | Workerの中でWhisperを動かし、単語ごとの時刻を返す。中国語は簡体字に直す                                 |
+| `transcriber.js`           | 文字起こしの準備：モデルの受け取りと確認・保存（Cache Storage）、16kHzへの変換、無音での分割            |
+| `transcribe-worker.js`     | Workerの中でWhisperを動かし、区切り（セグメント）ごとの時刻を返す。中国語は簡体字に直す                 |
 | `vendor/` / `models/`      | Transformers.js・ONNX Runtime・OpenCCと、Whisper baseのモデル（出所とライセンスは各フォルダーのREADME） |
 | `waveform.js`              | 低いサンプリングレートでの解析、波形の描画、無音での区切り                                              |
 | `recorder.js`              | マイク録音（メモリ上だけ、最長60秒）                                                                    |
@@ -38,8 +38,8 @@ JavaScriptモジュールとService Workerを使うため、HTMLをダブルク�
 
 - `transcriber.js` が、`MODEL_FILES` のファイル（約95MB）を初回だけ受け取り、サイズとSHA-256を確かめてからCache Storageに保存します。`sw.js` は `vendor/` と `models/` への要求をその保存先から返すので、保存後は通信なしで動きます。アプリ本体のキャッシュ（`FILES`）には入れていないため、文字起こしを使わない人は受け取りません。
 - 音声は16kHzのモノラルにして、28秒以内のまとまりに分けます（区切りは最後の8秒のうちいちばん静かなところ）。音のないまとまりは飛ばします（Whisperは無音に文を作ってしまうため）。
-- `transcribe-worker.js` は、Transformers.jsの `automatic-speech-recognition` を `return_timestamps: "word"` で動かします。ONNX RuntimeはWASM・1スレッドです。WASMを動かすため、CSPの `script-src` に `'wasm-unsafe-eval'` を加えています（JavaScriptの `eval` は許可していません）。
-- `transcript.js` の `transcriptFromWords` が、句読点と長い無音（1秒以上）で文に分け、12秒を超える文はいちばん長い間で分けます。文の端は、近く（0.3秒以内）に波形の区切りがあればそこへ寄せます。原文を直したときは `retimeSentences` が、変わっていない文の時刻を残します。
+- `transcribe-worker.js` は、Transformers.jsの `automatic-speech-recognition` を `return_timestamps: true` で動かし、Whisperの区切り（セグメント）ごとの時刻を受け取ります。ONNX RuntimeはWASM・1スレッドです。WASMを動かすため、CSPの `script-src` に `'wasm-unsafe-eval'` を加えています（JavaScriptの `eval` は許可していません）。
+- `transcript.js` の `transcriptFromSegments` が、区切りの中の時間を、波形の音のある部分だけで単語（中国語は1字）の長さに応じて割り振り、`transcriptFromWords` が句読点と長い無音（1秒以上）で文に分けます。12秒を超える文はいちばん長い間で分けます。文と文の間は、近く（0.6秒以内）にある波形の無音へ寄せます。原文を直したときは `retimeSentences` が、変わっていない文の時刻を残します。
 - モデルやライブラリを入れ替える手順は `vendor/README.md` にあります。
 
 ## リリース（キャッシュの版の更新）

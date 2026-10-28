@@ -1412,6 +1412,9 @@ label {
   padding-top: 14px;
   border-top: 1px solid var(--line);
 }
+.transcribe-block .transcript-actions + .small {
+  margin-top: 10px;
+}
 .transcribe-title {
   margin: 0 0 8px;
   font-size: 1rem;
