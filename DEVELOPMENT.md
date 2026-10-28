@@ -23,13 +23,24 @@ JavaScriptモジュールとService Workerを使うため、HTMLをダブルク�
 | `audio-library.js`         | IndexedDBへの音声保存（10件まで）、削除と取り消し、保存前の再生確認                                     |
 | `audio-import.js`          | 選んだファイルを一度だけ読み取り、MIMEを補う（iOSのファイル提供元への対策）                             |
 | `transcript.js`            | 原文の文への区切り（英語・中国語）、波形の無音を使った時刻の対応づけ、文字コードの判別                  |
+| `transcriber.js`           | 文字起こしの準備：モデルの受け取りと確認・保存（Cache Storage）、16kHzへの変換、無音での分割           |
+| `transcribe-worker.js`     | Workerの中でWhisperを動かし、単語ごとの時刻を返す。中国語は簡体字に直す                                 |
+| `vendor/` / `models/`      | Transformers.js・ONNX Runtime・OpenCCと、Whisper baseのモデル（出所とライセンスは各フォルダーのREADME） |
 | `waveform.js`              | 低いサンプリングレートでの解析、波形の描画、無音での区切り                                              |
 | `recorder.js`              | マイク録音（メモリ上だけ、最長60秒）                                                                    |
 | `offline.js` / `sw.js`     | オフライン準備と更新、アプリ本体のキャッシュ                                                            |
 | `scripts/serve.mjs`        | 開発用の静的サーバー                                                                                    |
 | `scripts/bump-shell.mjs`   | キャッシュの版を上げるリリース用スクリプト                                                              |
 
-保存先：音声はIndexedDB（`coaching-l-audio-library`）、設定・練習区間・再生位置はlocalStorage（`kotonoha.audio.v1`、以前の版との互換のため名前はそのまま）。原文は音声ごとに `kotonoha.transcript.v1:<音声のキー>`、表示のオン・オフは `kotonoha.prefs.v1` です。
+保存先：音声はIndexedDB（`coaching-l-audio-library`）、設定・練習区間・再生位置はlocalStorage（`kotonoha.audio.v1`、以前の版との互換のため名前はそのまま）。原文は音声ごとに `kotonoha.transcript.v1:<音声のキー>`、表示のオン・オフと文字起こしの言語・自動の設定は `kotonoha.prefs.v1` です。文字起こし用のデータは、Cache Storageの `coaching-l-audio-model:<パス>:whisper-base-q8-1` に保存します。
+
+## 文字起こし
+
+- `transcriber.js` が、`MODEL_FILES` のファイル（約95MB）を初回だけ受け取り、サイズとSHA-256を確かめてからCache Storageに保存します。`sw.js` は `vendor/` と `models/` への要求をその保存先から返すので、保存後は通信なしで動きます。アプリ本体のキャッシュ（`FILES`）には入れていないため、文字起こしを使わない人は受け取りません。
+- 音声は16kHzのモノラルにして、28秒以内のまとまりに分けます（区切りは最後の8秒のうちいちばん静かなところ）。音のないまとまりは飛ばします（Whisperは無音に文を作ってしまうため）。
+- `transcribe-worker.js` は、Transformers.jsの `automatic-speech-recognition` を `return_timestamps: "word"` で動かします。ONNX RuntimeはWASM・1スレッドです。WASMを動かすため、CSPの `script-src` に `'wasm-unsafe-eval'` を加えています（JavaScriptの `eval` は許可していません）。
+- `transcript.js` の `transcriptFromWords` が、句読点と長い無音（1秒以上）で文に分け、12秒を超える文はいちばん長い間で分けます。文の端は、近く（0.3秒以内）に波形の区切りがあればそこへ寄せます。原文を直したときは `retimeSentences` が、変わっていない文の時刻を残します。
+- モデルやライブラリを入れ替える手順は `vendor/README.md` にあります。
 
 ## リリース（キャッシュの版の更新）
 
@@ -58,6 +69,7 @@ npm run test:all         # すべて
 
 - Linuxの `/usr/bin/chromium` があればそれを使います（CIではPlaywrightのChromium）。`CHROMIUM_PATH=/path/to/chromium npm test` で指定もできます。
 - 録音のテストはChromiumの偽のマイク（`--use-fake-device-for-media-stream`）を使うため、WebKitでは対象外にしています。
+- 文字起こしの画面のテスト（`tests/transcribe.spec.js`）は、Whisperの代わりに決まった単語を返す偽のWorkerを使います。モデルの受け取りと保存は本物で確かめ、`MODEL_FILES` とディスク上のファイルのサイズ・SHA-256も照合します。
 - モバイル設定は画面幅・タッチ・ユーザーエージェントの模擬で、実機の確認にはなりません。
 
 ### CI（GitHub Actions）
@@ -72,7 +84,7 @@ WebKitのジョブは失敗してもPRを止めない設定です。Linux版WebK
 
 ## 公開（GitHub Pages）
 
-すべて相対パスなので、`https://<owner>.github.io/audio-loop-player/` のようなプロジェクトサイトでもそのまま動きます。リポジトリの Settings → Pages で、公開するブランチ（例：`main`）とフォルダー `/ (root)` を選びます。配信に必要なのは、`sw.js` の `FILES` にあるファイルと `sw.js` です。
+すべて相対パスなので、`https://<owner>.github.io/audio-loop-player/` のようなプロジェクトサイトでもそのまま動きます。リポジトリの Settings → Pages で、公開するブランチ（例：`main`）とフォルダー `/ (root)` を選びます。配信に必要なのは、`sw.js` の `FILES` にあるファイルと `sw.js`、文字起こし用の `vendor/` と `models/` です。`.mjs` はJavaScript、`.wasm` は `application/wasm` として配信されるようにしてください（GitHub Pagesはそうなっています）。
 
 ## 実機で確かめること
 
@@ -82,4 +94,5 @@ WebKitのジョブは失敗してもPRを止めない設定です。Linux版WebK
 - 機内モードでページを開き直して再生できる
 - 画面ロック中のロック画面の操作（再生・一時停止・5秒移動）
 - マイクの許可と、録音・聞き比べ
+- 文字起こし：初回の受け取りと保存、機内モードでの文字起こし、英語・中国語の音声での精度と所要時間、長めの音声（10分ほど）でメモリが足りるか
 - ホーム画面に追加したときの起動と保存

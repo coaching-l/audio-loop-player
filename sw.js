@@ -1,19 +1,21 @@
 // Bump this version whenever a shell file changes. Each release is installed atomically.
-const VERSION = "v12";
+const VERSION = "v13";
 const BASE = new URL("./", self.location.href);
 const PREFIX = "coaching-l-audio-offline:" + BASE.pathname + ":";
 const CACHE = PREFIX + VERSION;
 const FILES = [
   "./",
   "./index.html",
-  "./style.css?v=14",
-  "./app.js?v=14",
+  "./style.css?v=15",
+  "./app.js?v=15",
   "./player.js",
   "./audio-library.js",
   "./audio-import.js",
   "./waveform.js",
   "./recorder.js",
   "./transcript.js",
+  "./transcriber.js",
+  "./transcribe-worker.js",
   "./offline.js",
   "./manifest.webmanifest",
   "./icons/logo-144.png",
@@ -24,6 +26,11 @@ const FILES = [
   "./icons/apple-touch-icon.png",
 ];
 const URLS = FILES.map((path) => new URL(path, BASE).href);
+// The speech-to-text model and its runtime are saved by transcriber.js in a cache of
+// their own, only when first used; serve them from there so they work offline.
+const MODEL_PATHS = ["vendor/", "models/"].map(
+  (path) => new URL(path, BASE).pathname,
+);
 self.addEventListener("install", (event) => {
   event.waitUntil(
     (async () => {
@@ -48,6 +55,12 @@ self.addEventListener("fetch", (event) => {
   if (request.method !== "GET") return;
   const url = new URL(request.url);
   if (url.origin !== BASE.origin) return;
+  if (MODEL_PATHS.some((path) => url.pathname.startsWith(path))) {
+    event.respondWith(
+      caches.match(request).then((saved) => saved || fetch(request)),
+    );
+    return;
+  }
   const navigation =
     request.mode === "navigate" &&
     [BASE.pathname, BASE.pathname + "index.html"].includes(url.pathname);

@@ -53,37 +53,239 @@ export function alignSentences(sentences, duration, phrases = []) {
   const speech = phrases.length
     ? { start: phrases[0].start, end: phrases[phrases.length - 1].end }
     : { start: 0, end: duration };
-  const span = Math.max(0.001, speech.end - speech.start);
+  return finish(
+    spread(sentences, speech.start, speech.end, pausesBetween(phrases)),
+    duration,
+  );
+}
+
+// The silences between phrases: `end` is where the earlier phrase ends, `start` where
+// the next one starts.
+function pausesBetween(phrases) {
+  return phrases
+    .slice(1)
+    .map((phrase, i) => ({ end: phrases[i].end, start: phrase.start }));
+}
+
+// Shares the time from `start` to `end` among sentences by length.
+function spread(sentences, start, end, gaps) {
+  const span = Math.max(0.001, end - start);
   const weights = sentences.map((s) => weight(s.text));
   const total = weights.reduce((sum, w) => sum + w, 0);
   const targets = [];
   let cumulative = 0;
   for (let i = 0; i < sentences.length - 1; i++) {
     cumulative += weights[i];
-    targets.push(speech.start + (cumulative / total) * span);
+    targets.push(start + (cumulative / total) * span);
   }
-  const gaps = phrases
-    .slice(1)
-    .map((phrase, i) => ({ end: phrases[i].end, start: phrase.start }));
   const matched = matchBoundaries(targets, gaps, span / sentences.length);
   const timed = sentences.map((sentence) => ({
     text: sentence.text,
     lineEnd: sentence.lineEnd,
-    start: 0,
-    end: 0,
+    start,
+    end,
   }));
-  timed[0].start = speech.start;
-  timed[timed.length - 1].end = speech.end;
   targets.forEach((target, i) => {
     const gap = matched[i];
     timed[i].end = gap ? gap.end : target;
     timed[i + 1].start = gap ? gap.start : target;
   });
+  return timed;
+}
+
+function finish(timed, duration) {
   return timed.map((s) => ({
     ...s,
     start: Math.max(0, round(s.start)),
     end: Math.min(duration, round(Math.max(s.end, s.start + 0.05))),
   }));
+}
+
+// After the text is edited, sentences that did not change keep their times, including
+// times fixed by hand. A changed run of sentences shares the time of the run it replaces.
+export function retimeSentences(previous, sentences, duration, phrases = []) {
+  const n = previous.length;
+  const m = sentences.length;
+  if (!n || !m || n * m > 4e6 || !(duration > 0))
+    return alignSentences(sentences, duration, phrases);
+  const key = (s) => s.text.replace(/\s+/g, "");
+  const before = previous.map(key);
+  const after = sentences.map(key);
+  // Longest common run of unchanged sentences, as in a line-by-line diff.
+  const common = Array.from({ length: n + 1 }, () => new Uint32Array(m + 1));
+  for (let i = n - 1; i >= 0; i--)
+    for (let j = m - 1; j >= 0; j--)
+      common[i][j] =
+        before[i] === after[j]
+          ? common[i + 1][j + 1] + 1
+          : Math.max(common[i + 1][j], common[i][j + 1]);
+  const gaps = pausesBetween(phrases);
+  const timed = [];
+  const replace = (i0, i1, j0, j1) => {
+    if (j0 === j1) return;
+    const added = sentences.slice(j0, j1);
+    if (i1 - i0 === j1 - j0) {
+      added.forEach((s, k) =>
+        timed.push({ ...previous[i0 + k], text: s.text, lineEnd: s.lineEnd }),
+      );
+      return;
+    }
+    const start =
+      i0 < i1 ? previous[i0].start : i0 > 0 ? previous[i0 - 1].end : 0;
+    const end =
+      i0 < i1 ? previous[i1 - 1].end : i1 < n ? previous[i1].start : duration;
+    timed.push(
+      ...spread(
+        added,
+        start,
+        Math.max(start, end),
+        gaps.filter((gap) => gap.end >= start && gap.start <= end),
+      ),
+    );
+  };
+  let i = 0;
+  let j = 0;
+  let i0 = 0;
+  let j0 = 0;
+  while (i < n && j < m) {
+    if (before[i] === after[j] && common[i][j] === common[i + 1][j + 1] + 1) {
+      replace(i0, i, j0, j);
+      timed.push({
+        ...previous[i],
+        text: sentences[j].text,
+        lineEnd: sentences[j].lineEnd,
+      });
+      i0 = ++i;
+      j0 = ++j;
+    } else if (common[i + 1][j] >= common[i][j + 1]) i++;
+    else j++;
+  }
+  replace(i0, n, j0, m);
+  return finish(timed, duration);
+}
+
+// A pause this long ends a sentence even without punctuation, which speech recognition
+// often leaves out; a sentence longer than MAX_SENTENCE seconds is cut at its longest pause.
+const LONG_PAUSE = 1;
+const MAX_SENTENCE = 12;
+const SNAP = 0.3;
+
+// Builds the text and its timed sentences from recognized words ({text, start, end}, the
+// text with its leading space). Sentence edges move to the waveform's phrase edges nearby.
+export function transcriptFromWords(words, duration, phrases = []) {
+  words = words.filter(
+    (w) => /\S/u.test(w.text) && Number.isFinite(w.start) && w.end >= w.start,
+  );
+  if (!words.length || !(duration > 0)) return null;
+  let text = "";
+  const owner = []; // the word of each non-space character
+  words.forEach((word, index) => {
+    const piece = text ? word.text : word.text.trimStart();
+    text += piece;
+    for (const char of piece) if (/\S/u.test(char)) owner.push(index);
+  });
+  const pieces = [];
+  let cursor = 0;
+  for (const sentence of splitSentences(text)) {
+    const count = nonSpace(sentence.text);
+    cut(sentence.text, cursor, cursor + count, owner, words, pieces);
+    pieces[pieces.length - 1].sentenceEnd = true;
+    cursor += count;
+  }
+  // Rejoin so that splitting the text again gives the same sentences, which keeps
+  // later edits in step with the times.
+  const cjk = isCjk(text);
+  let joined = pieces
+    .map(
+      (p, i) =>
+        (i ? (pieces[i - 1].sentenceEnd ? (cjk ? "" : " ") : "\n") : "") +
+        p.text,
+    )
+    .join("");
+  let lines = splitSentences(joined);
+  if (
+    lines.length !== pieces.length ||
+    lines.some((line, i) => line.text !== pieces[i].text)
+  ) {
+    joined = pieces.map((p) => p.text).join("\n");
+    lines = splitSentences(joined);
+  }
+  const starts = phrases.map((p) => p.start);
+  const ends = phrases.map((p) => p.end);
+  const timed = pieces.map((piece, i) => {
+    const start = words[piece.first].start;
+    const end = words[piece.last].end;
+    return {
+      text: piece.text,
+      lineEnd: lines[i].lineEnd,
+      start: nearest(starts, start) ?? start,
+      end: nearest(ends, end) ?? end,
+    };
+  });
+  for (let i = 0; i < timed.length - 1; i++)
+    timed[i].end = Math.min(
+      timed[i].end,
+      Math.max(timed[i + 1].start, timed[i].start),
+    );
+  return { text: joined, sentences: finish(timed, duration) };
+}
+
+function nonSpace(text) {
+  let count = 0;
+  for (const char of text) if (/\S/u.test(char)) count++;
+  return count;
+}
+
+function nearest(list, time) {
+  let best = null;
+  for (const value of list)
+    if (
+      Math.abs(value - time) <= SNAP &&
+      (best === null || Math.abs(value - time) < Math.abs(best - time))
+    )
+      best = value;
+  return best;
+}
+
+// Cuts a sentence (non-space characters from..to of the whole text) at long pauses, and
+// cuts one that runs too long at its longest pause, preferring a comma.
+function cut(text, from, to, owner, words, pieces) {
+  const first = owner[from];
+  const last = owner[to - 1];
+  const length = words[last].end - words[first].start;
+  let best = -1;
+  let bestScore = -Infinity;
+  for (let k = first; k < last; k++) {
+    const pause = words[k + 1].start - words[k].end;
+    const comma = /[,，、;；:：]\s*$/u.test(words[k].text);
+    const balanced =
+      words[k].end - words[first].start >= 2 &&
+      words[last].end - words[k + 1].start >= 2;
+    const score = pause + (comma ? 0.3 : 0);
+    if (
+      (pause >= LONG_PAUSE || (length > MAX_SENTENCE && balanced)) &&
+      score > bestScore
+    ) {
+      best = k;
+      bestScore = score;
+    }
+  }
+  const at = best < 0 ? -1 : owner.indexOf(best + 1, from);
+  if (at <= from || at >= to) {
+    pieces.push({ text, first, last });
+    return;
+  }
+  let seen = 0;
+  let index = 0;
+  for (const char of text) {
+    if (/\S/u.test(char)) {
+      if (seen === at - from) break;
+      seen++;
+    }
+    index += char.length;
+  }
+  cut(text.slice(0, index).trim(), from, at, owner, words, pieces);
+  cut(text.slice(index).trim(), at, to, owner, words, pieces);
 }
 
 // Order-keeping match of sentence boundaries to pauses, like aligning two sequences:
