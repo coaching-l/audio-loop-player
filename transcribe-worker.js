@@ -31,7 +31,7 @@ async function simplifier() {
 }
 
 self.onmessage = async ({ data }) => {
-  const { audio, windows, language, rate } = data;
+  const { audio, windows, base = 0, language, rate } = data;
   try {
     const recognize = await pipeline(
       "automatic-speech-recognition",
@@ -50,7 +50,7 @@ self.onmessage = async ({ data }) => {
         task: "transcribe",
         return_timestamps: true,
       });
-      const offset = pass.start / rate;
+      const offset = (base + pass.start) / rate;
       const length = (pass.end - pass.start) / rate;
       for (const chunk of output.chunks || []) {
         const [start, end] = chunk.timestamp || [];

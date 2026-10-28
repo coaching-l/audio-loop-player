@@ -58,7 +58,17 @@ async function fakeRecognizer(page, segments, delay = 50) {
             language: data.language,
             passes: data.windows.length,
             seconds: data.audio.length / data.rate,
+            base: data.base / data.rate,
           });
+          // "per-pass": one sentence for each pass, timed like the real worker does.
+          const answer =
+            segments === "per-pass"
+              ? data.windows.map((w) => ({
+                  text: ` Part at ${Math.round((data.base + w.start) / data.rate)}.`,
+                  start: (data.base + w.start) / data.rate,
+                  end: (data.base + w.end) / data.rate,
+                }))
+              : segments;
           const send = (message, wait) =>
             setTimeout(() => {
               if (!this.stopped)
@@ -69,7 +79,10 @@ async function fakeRecognizer(page, segments, delay = 50) {
           data.windows.forEach((_, done) =>
             send({ type: "progress", done }, delay * done),
           );
-          send({ type: "done", segments }, delay * (data.windows.length + 1));
+          send(
+            { type: "done", segments: answer },
+            delay * (data.windows.length + 1),
+          );
         }
         terminate() {
           this.stopped = true;
@@ -417,6 +430,45 @@ test("Chinese is transcribed on opening when that is switched on", async ({
     page.getByLabel("原文のない音声は、開いたときに自動で文字起こしする"),
   ).toBeChecked();
   await expect(page.getByLabel("話している言語")).toHaveValue("zh");
+});
+
+test("without much memory, each pass runs in a fresh worker and the times add up", async ({
+  page,
+}) => {
+  await page.addInitScript(() =>
+    Object.defineProperty(Navigator.prototype, "deviceMemory", {
+      get: () => 4,
+    }),
+  );
+  await fakeRecognizer(page, "per-pass");
+  await page.goto("/");
+  // About 70 seconds of short phrases with pauses: three passes.
+  await load(page, {
+    name: "long.wav",
+    mimeType: "audio/wav",
+    buffer: makePhrasesWav(Array.from({ length: 140 }, () => 0.5)),
+  });
+  await pretendModelSaved(page);
+  await page.getByRole("button", { name: "音声から文字起こし" }).click();
+  await expect(page.locator("#notice")).toContainText("書き起こしました");
+  const calls = await page.evaluate(() => window.transcribeCalls);
+  expect(calls.length).toBeGreaterThan(1);
+  expect(calls.every((call) => call.passes === 1)).toBe(true);
+  expect(calls[0].base).toBe(0);
+  // Each worker gets only its part of the audio, and its times are in the whole audio.
+  for (let i = 1; i < calls.length; i++)
+    expect(calls[i].base).toBeCloseTo(
+      calls[i - 1].base + calls[i - 1].seconds,
+      2,
+    );
+  expect(await page.evaluate(() => window.transcribeStopped)).toBe(
+    calls.length,
+  );
+  // (Each made-up pass is one long sentence, so it may be cut further at pauses.)
+  const heard = (await sentences(page).allTextContents()).join(" ");
+  expect(heard.replace(/\s+/g, " ")).toBe(
+    calls.map((call) => `Part at ${Math.round(call.base)}.`).join(" "),
+  );
 });
 
 test("a transcription can be stopped, and opening another file stops it", async ({
