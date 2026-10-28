@@ -39,7 +39,7 @@ JavaScriptモジュールとService Workerを使うため、HTMLをダブルク�
 - `transcriber.js` が、`MODEL_FILES` のファイル（約95MB）を初回だけ受け取り、サイズとSHA-256を確かめてからCache Storageに保存します。`sw.js` は `vendor/` と `models/` への要求をその保存先から返すので、保存後は通信なしで動きます。アプリ本体のキャッシュ（`FILES`）には入れていないため、文字起こしを使わない人は受け取りません。
 - 音声は16kHzのモノラルにして、28秒以内のまとまりに分けます（区切りは最後の8秒のうちいちばん静かなところ）。音のないまとまりは飛ばします（Whisperは無音に文を作ってしまうため）。
 - `transcribe-worker.js` は、Transformers.jsの `automatic-speech-recognition` を `return_timestamps: true` で動かし、Whisperの区切り（セグメント）ごとの時刻を受け取ります。ONNX RuntimeはWASM・1スレッドです。WASMを動かすため、CSPの `script-src` に `'wasm-unsafe-eval'` を加えています（JavaScriptの `eval` は許可していません）。
-- `transcript.js` の `transcriptFromSegments` が、区切りの中の時間を、波形の音のある部分だけで単語（中国語は1字）の長さに応じて割り振り、`transcriptFromWords` が句読点と長い無音（1秒以上）で文に分けます。12秒を超える文はいちばん長い間で分けます。文と文の間は、近く（0.6秒以内）にある波形の無音へ寄せます。原文を直したときは `retimeSentences` が、変わっていない文の時刻を残します。
+- `transcript.js` の `transcriptFromSegments` が、区切りの中の時間を、波形の音のある部分だけで単語（中国語は1字）の長さに応じて割り振り、`transcriptFromWords` が句読点と長い無音（1秒以上）で文に分けます。同じ句がすぐくり返されるとき（中国語4字以上、英語3語以上。大文字小文字と読点は問わない）は1回ずつの文にし、8秒を超える文は0.5秒以上の間でも、12秒を超える文はいちばん長い間で分けます（中国語は句点を省いて文がつながりやすいため）。文と文の間は、近く（0.6秒以内）にある波形の無音へ寄せます。原文を直したときは `retimeSentences` が、変わっていない文の時刻を残します。
 - モデルやライブラリを入れ替える手順は `vendor/README.md` にあります。
 
 ## リリース（キャッシュの版の更新）
