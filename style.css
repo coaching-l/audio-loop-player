@@ -1325,3 +1325,109 @@ label {
 .zoom-buttons .text-button {
   padding: 6px 8px;
 }
+
+/* 原文：1文ずつの行。再生中の文は金の背景、選んだ文は枠で示す */
+.switch-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  margin-bottom: 8px;
+  cursor: pointer;
+}
+.switch-row input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--accent);
+}
+.transcript-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+}
+.transcript-actions .button {
+  flex: 1 1 180px;
+  font-size: 0.9375rem;
+}
+.transcript-editor textarea {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-small);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 1rem;
+  line-height: 1.7;
+  resize: vertical;
+}
+.transcript-sentences {
+  position: relative;
+  max-height: min(50vh, 420px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  margin: 4px -8px 8px;
+  padding: 4px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.sentence {
+  display: block;
+  width: 100%;
+  padding: 8px;
+  border: 1.5px solid transparent;
+  border-radius: var(--radius-small);
+  background: none;
+  color: var(--text);
+  font-size: 1.0625rem;
+  line-height: 1.7;
+  text-align: left;
+  overflow-wrap: anywhere;
+  transition: background-color 0.15s ease;
+}
+/* タッチ端末ではタップ後もホバーが残るため、マウスのある端末だけに付ける */
+@media (hover: hover) {
+  .sentence:hover {
+    background: var(--accent-soft);
+  }
+}
+.sentence.is-current {
+  background: var(--gold-soft);
+  color: var(--heading);
+  box-shadow: inset 4px 0 0 var(--gold);
+}
+.sentence.is-selected {
+  border-color: var(--border);
+}
+.transcript-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+}
+.transcribe-block {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.transcribe-block .transcript-actions + .small {
+  margin-top: 10px;
+}
+.transcribe-title {
+  margin: 0 0 8px;
+  font-size: 1rem;
+  color: var(--heading);
+}
+.transcribe-auto {
+  margin: 8px 0 0;
+  font-size: 0.9375rem;
+}
+.transcribe-bar {
+  display: block;
+  width: 100%;
+  height: 10px;
+  margin-top: 8px;
+  accent-color: var(--accent);
+}

@@ -25,18 +25,23 @@ async function setRate(page, rate) {
     el.dispatchEvent(new Event("input", { bubbles: true }));
   }, String(rate));
 }
-async function traceStatus(page) {
-  await page.evaluate(() => {
-    window.statusTrace = [];
-    let previous = "";
-    new MutationObserver(() => {
-      const text = document.querySelector("#play-status").textContent;
-      if (text !== previous) {
-        window.statusTrace.push({ text, at: performance.now() });
-        previous = text;
-      }
-    }).observe(document.querySelector("#play-status"), { childList: true });
+// Times the real pause and restart of the media element around the first silence.
+// The screen shows at most one status per frame, too coarse for silence lengths.
+async function traceMedia(page) {
+  await page.locator("#audio").evaluate((audio) => {
+    window.mediaTrace = [];
+    for (const type of ["play", "pause"])
+      audio.addEventListener(type, () =>
+        window.mediaTrace.push({ type, at: performance.now() }),
+      );
   });
+}
+async function firstSilence(page) {
+  const trace = await page.evaluate(() => window.mediaTrace);
+  const pause = trace.findIndex((x) => x.type === "pause");
+  expect(pause).toBeGreaterThan(-1);
+  const resume = trace.slice(pause + 1).find((x) => x.type === "play");
+  return resume.at - trace[pause].at;
 }
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
@@ -123,17 +128,14 @@ for (const rate of [0.5, 2])
     await load(page);
     await configure(page, { gap: ".4" });
     await setRate(page, rate);
-    await traceStatus(page);
+    await traceMedia(page);
     await page.locator("#play").click();
     await expect(page.locator("#play-status")).toHaveText("再生完了", {
       timeout: 10000,
     });
-    const trace = await page.evaluate(() => window.statusTrace);
-    const waitIndex = trace.findIndex((x) => x.text === "無音中");
-    expect(waitIndex).toBeGreaterThan(-1);
-    const next = trace.slice(waitIndex + 1).find((x) => x.text === "再生中");
-    expect(next.at - trace[waitIndex].at).toBeGreaterThanOrEqual(380);
-    expect(next.at - trace[waitIndex].at).toBeLessThan(800);
+    const silence = await firstSilence(page);
+    expect(silence).toBeGreaterThanOrEqual(380);
+    expect(silence).toBeLessThan(800);
   });
 for (const [rate, expected] of [
   [1, 600],
@@ -147,16 +149,14 @@ for (const [rate, expected] of [
     await page.locator("#gap-mode").selectOption("1");
     await expect(page.locator("#gap")).toBeHidden();
     await setRate(page, rate);
-    await traceStatus(page);
+    await traceMedia(page);
     await page.locator("#play").click();
     await expect(page.locator("#play-status")).toHaveText("再生完了", {
       timeout: 10000,
     });
-    const trace = await page.evaluate(() => window.statusTrace);
-    const waitIndex = trace.findIndex((x) => x.text === "無音中");
-    const next = trace.slice(waitIndex + 1).find((x) => x.text === "再生中");
-    expect(next.at - trace[waitIndex].at).toBeGreaterThanOrEqual(expected - 20);
-    expect(next.at - trace[waitIndex].at).toBeLessThan(expected + 400);
+    const silence = await firstSilence(page);
+    expect(silence).toBeGreaterThanOrEqual(expected - 20);
+    expect(silence).toBeLessThan(expected + 400);
   });
 test("relative silence is saved with segments and restored after reload", async ({
   page,
@@ -461,16 +461,14 @@ test("changing speed during silence preserves the existing wall-clock deadline",
 }) => {
   await load(page);
   await configure(page, { gap: ".8" });
-  await traceStatus(page);
+  await traceMedia(page);
   await page.locator("#play").click();
   await expect(page.locator("#play-status")).toHaveText("無音中");
   await setRate(page, 2);
   await expect(page.locator("#play-status")).toHaveText("再生完了");
-  const trace = await page.evaluate(() => window.statusTrace);
-  const index = trace.findIndex((x) => x.text === "無音中");
-  const next = trace.slice(index + 1).find((x) => x.text === "再生中");
-  expect(next.at - trace[index].at).toBeGreaterThan(770);
-  expect(next.at - trace[index].at).toBeLessThan(1100);
+  const silence = await firstSilence(page);
+  expect(silence).toBeGreaterThan(770);
+  expect(silence).toBeLessThan(1100);
 });
 test("switching while playing stops and releases the previous media element", async ({
   page,

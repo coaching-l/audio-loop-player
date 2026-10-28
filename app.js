@@ -18,11 +18,30 @@ import {
 } from "./player.js";
 import { analyzeAudio, drawWaveform } from "./waveform.js";
 import { VoiceRecorder, recordingSupported } from "./recorder.js";
+import {
+  splitSentences,
+  alignSentences,
+  retimeSentences,
+  transcriptFromSegments,
+  sentenceAt,
+  isCjk,
+  decodeText,
+  validTranscript,
+} from "./transcript.js";
+import {
+  transcribe,
+  transcriptionSupported,
+  modelSaved,
+  deleteModel,
+  MODEL_BYTES,
+  MAX_SECONDS,
+} from "./transcriber.js";
 const $ = (id) => document.getElementById(id);
 const storageKey = "kotonoha.audio.v1";
 let library = {};
 let engine = null;
 let fileKey = null;
+let currentFile = null;
 let objectURL = null;
 let loadGeneration = 0;
 let ready = false;
@@ -171,6 +190,7 @@ function drawPlayer(player) {
     const span = view.end - view.start;
     setView(time + span * 0.4, span);
   }
+  highlightSentence(player.audio.currentTime, player.active);
   const active = player.active;
   $("play").dataset.state = active ? "playing" : "paused";
   $("play").setAttribute("aria-label", active ? "一時停止" : "再生");
@@ -208,6 +228,7 @@ function enable(value) {
   for (const id of ["player-controls", "repeat-controls", "save-controls"])
     $(id).disabled = !value;
   $("record-controls").disabled = !value || !recordingSupported();
+  $("transcript-controls").disabled = !value;
   syncMiniPlayer();
 }
 // A compact bar at the bottom keeps play/pause reachable once the main controls are scrolled past.
@@ -297,8 +318,12 @@ async function loadFile(file) {
   discardRecording();
   persist();
   const generation = ++loadGeneration;
+  currentFile = file;
+  stopTranscription();
   analysis = null;
   showAnalysis();
+  transcript = null;
+  renderTranscript();
   clearTimeout(loadTimeout);
   markerDrag = null;
   if (engine) engine.dispose();
@@ -386,12 +411,23 @@ async function loadFile(file) {
       render(currentEngine);
       persist();
       setMediaMetadata(file.name);
+      openTranscript();
+      if (
+        !transcript &&
+        $("transcribe-auto").checked &&
+        $("show-transcript").checked &&
+        !autoTranscribed.has(fileKey)
+      ) {
+        autoTranscribed.add(fileKey);
+        void startTranscription();
+      }
       // The waveform comes after playback is ready, so drawing it never delays practice.
       readableAudio(file)
         .then(analyzeAudio)
         .then((result) => {
           if (generation !== loadGeneration || !result) return;
           analysis = result;
+          realignTranscript();
           showAnalysis();
         })
         .catch(() => {
@@ -816,9 +852,13 @@ function closeCurrentAudio() {
   persist();
   setMediaMetadata(null);
   discardRecording();
+  stopTranscription();
   analysis = null;
+  transcript = null;
+  renderTranscript();
   showAnalysis();
   ++loadGeneration;
+  currentFile = null;
   clearTimeout(loadTimeout);
   markerDrag = null;
   seekDrag = null;
@@ -1050,7 +1090,13 @@ $("export-backup").addEventListener("click", () => {
     String(date.getDate()).padStart(2, "0"),
   ].join("-");
   const body = JSON.stringify(
-    { app: BACKUP_APP, version: 1, exportedAt: date.toISOString(), library },
+    {
+      app: BACKUP_APP,
+      version: 1,
+      exportedAt: date.toISOString(),
+      library,
+      transcripts: allTranscripts(),
+    },
     null,
     2,
   );
@@ -1125,10 +1171,23 @@ $("import-backup").addEventListener("change", async (event) => {
     renderSegments();
   }
   saveLibrary();
+  // Original texts are added only for audio that has none on this device.
+  let texts = 0;
+  const incomingTexts = data.transcripts;
+  if (incomingTexts && typeof incomingTexts === "object")
+    for (const [key, value] of Object.entries(incomingTexts))
+      if (validTranscript(value) && !loadTranscript(key)) {
+        saveTranscript(key, value);
+        texts++;
+      }
+  if (texts && ready && !transcript) openTranscript();
+  const parts = [];
+  if (added) parts.push(`練習区間を${added}件`);
+  if (texts) parts.push(`原文を${texts}件`);
   backupStatus(
-    added
-      ? `練習区間を${added}件読み込みました。対象の音声を開くと使えます。今ある練習区間はそのまま残っています。`
-      : "このバックアップの練習区間は、すべてこの端末に入っています。足すものはありません。",
+    parts.length
+      ? `${parts.join("、")}読み込みました。対象の音声を開くと使えます。今ある練習区間と原文はそのまま残っています。`
+      : "このバックアップの練習区間と原文は、すべてこの端末に入っています。足すものはありません。",
   );
 });
 
@@ -1361,3 +1420,402 @@ $("compare").addEventListener("click", async () => {
   voice.onended = () => token === compareToken && recordStatus("録音あり");
   voice.play().catch(() => {});
 });
+
+// Original text: one line per sentence, the sentence being heard is highlighted.
+// Stored per audio file, apart from the settings, so playback saves stay small.
+const transcriptPrefix = "kotonoha.transcript.v1:";
+const prefsKey = "kotonoha.prefs.v1";
+let transcript = null;
+let editingTranscript = false;
+const canTranscribe = transcriptionSupported();
+const autoTranscribed = new Set(); // files already tried automatically on this page
+let transcribing = null; // the AbortController of the running transcription
+let currentSentence = -1;
+let selectedSentence = -1;
+function loadTranscript(key) {
+  try {
+    const value = JSON.parse(localStorage.getItem(transcriptPrefix + key));
+    return validTranscript(value) ? value : null;
+  } catch {
+    return null;
+  }
+}
+function saveTranscript(key, value) {
+  try {
+    if (value)
+      localStorage.setItem(transcriptPrefix + key, JSON.stringify(value));
+    else localStorage.removeItem(transcriptPrefix + key);
+  } catch {
+    notice(
+      "原文を保存できません。保存容量やプライベートブラウズの設定を確認してください。このページを開いている間は使えます。",
+    );
+  }
+}
+function allTranscripts() {
+  const all = {};
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const name = localStorage.key(i);
+      if (!name?.startsWith(transcriptPrefix)) continue;
+      const value = loadTranscript(name.slice(transcriptPrefix.length));
+      if (value) all[name.slice(transcriptPrefix.length)] = value;
+    }
+  } catch {
+    /* Without storage there is nothing saved to back up. */
+  }
+  return all;
+}
+function openTranscript() {
+  transcript = loadTranscript(fileKey);
+  editingTranscript = false;
+  realignTranscript();
+  renderTranscript();
+}
+function setTranscriptText(text) {
+  const sentences = splitSentences(text);
+  if (!sentences.length) {
+    notice("原文が空です。文を入力してください。");
+    return false;
+  }
+  const previous = transcript;
+  const duration = engine.audio.duration;
+  const phrases = analysis?.phrases || [];
+  // Editing keeps the times of the sentences that did not change.
+  const keep = previous && previous.timing !== "estimate";
+  transcript = {
+    ...previous,
+    text,
+    source: previous?.source || "manual",
+    // Without the waveform yet, times are shared out by length; pauses refine them later.
+    timing: keep ? previous.timing : analysis ? "pauses" : "estimate",
+    sentences: keep
+      ? retimeSentences(previous.sentences, sentences, duration, phrases)
+      : alignSentences(sentences, duration, phrases),
+  };
+  saveTranscript(fileKey, transcript);
+  editingTranscript = false;
+  renderTranscript();
+  notice(
+    `原文を${sentences.length}文に分けて表示しました。色の位置がずれる文は、時刻を合わせ直せます。`,
+  );
+  return true;
+}
+function realignTranscript() {
+  if (
+    !transcript ||
+    !analysis ||
+    transcript.timing !== "estimate" ||
+    transcript.sentences.some((s) => s.edited)
+  )
+    return;
+  transcript.sentences = alignSentences(
+    transcript.sentences,
+    engine.audio.duration,
+    analysis.phrases,
+  );
+  transcript.timing = "pauses";
+  saveTranscript(fileKey, transcript);
+  renderTranscript();
+}
+function renderTranscript() {
+  const has = Boolean(ready && transcript);
+  $("transcript-status").textContent = !ready
+    ? "—"
+    : editingTranscript
+      ? "入力中"
+      : has
+        ? `${transcript.sentences.length}文`
+        : transcribing
+          ? "文字起こし中"
+          : "原文なし";
+  $("transcript-empty").hidden = has || editingTranscript;
+  $("transcribe-setup").hidden = Boolean(transcribing) || !canTranscribe;
+  $("transcribe-progress").hidden = !transcribing;
+  $("transcript-manual").hidden = Boolean(transcribing);
+  $("transcript-editor").hidden = !editingTranscript;
+  $("transcript-view").hidden = !has || editingTranscript;
+  const list = $("transcript-sentences");
+  list.replaceChildren();
+  currentSentence = -1;
+  if (!has) selectedSentence = -1;
+  if (has) {
+    // Chinese needs Chinese glyphs, not the Japanese forms the page defaults to.
+    list.lang = isCjk(transcript.text) ? "zh-CN" : "en";
+    transcript.sentences.forEach((sentence, index) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "sentence";
+      button.dataset.index = index;
+      button.textContent = sentence.text;
+      if (index === selectedSentence) button.classList.add("is-selected");
+      list.append(button);
+    });
+    highlightSentence(engine.audio.currentTime, false);
+  }
+  $("transcript-fit").disabled = selectedSentence < 0;
+}
+function highlightSentence(time, follow) {
+  if (!transcript || editingTranscript || $("transcript-body").hidden) return;
+  const index = sentenceAt(transcript.sentences, time);
+  if (index === currentSentence) return;
+  const list = $("transcript-sentences");
+  const previous = list.children[currentSentence];
+  previous?.classList.remove("is-current");
+  previous?.removeAttribute("aria-current");
+  currentSentence = index;
+  const current = list.children[index];
+  if (!current) return;
+  current.classList.add("is-current");
+  current.setAttribute("aria-current", "true");
+  // Keep the sentence being heard in view inside the box, without scrolling the page.
+  const top = current.offsetTop;
+  if (
+    follow &&
+    (top < list.scrollTop ||
+      top + current.offsetHeight > list.scrollTop + list.clientHeight)
+  )
+    list.scrollTo({
+      top: Math.max(0, top - list.clientHeight / 3),
+      behavior: matchMedia("(prefers-reduced-motion: reduce)").matches
+        ? "auto"
+        : "smooth",
+    });
+}
+$("transcript-sentences").addEventListener("click", (event) => {
+  const button = event.target.closest(".sentence");
+  if (!button || !ready || !transcript) return;
+  const index = Number(button.dataset.index);
+  const sentence = transcript.sentences[index];
+  const b = Math.min(sentence.end, engine.audio.duration);
+  if (!updateSettings({ a: sentence.start, b, mode: "ab" })) return;
+  if (zoomed()) fitView();
+  engine.seek(sentence.start);
+  selectedSentence = index;
+  for (const item of $("transcript-sentences").children)
+    item.classList.toggle("is-selected", item === button);
+  $("transcript-fit").disabled = false;
+  notice("選んだ文をA–B区間にしました。再生ボタンでくり返し練習できます。");
+});
+$("transcript-fit").addEventListener("click", () => {
+  const sentence = transcript?.sentences[selectedSentence];
+  if (!sentence) return;
+  sentence.start = engine.a;
+  sentence.end = engine.b;
+  sentence.edited = true;
+  saveTranscript(fileKey, transcript);
+  renderTranscript();
+  notice("選んだ文の時刻を、今のA–B区間に合わせました。");
+});
+function startEditing(text) {
+  editingTranscript = true;
+  renderTranscript();
+  $("transcript-input").value = text;
+  $("transcript-input").focus();
+}
+$("transcript-paste").addEventListener("click", () => startEditing(""));
+$("transcript-edit").addEventListener("click", () =>
+  startEditing(transcript?.text || ""),
+);
+$("transcript-cancel").addEventListener("click", () => {
+  editingTranscript = false;
+  renderTranscript();
+});
+$("transcript-editor").addEventListener("submit", (event) => {
+  event.preventDefault();
+  if (ready) setTranscriptText($("transcript-input").value);
+});
+$("transcript-file").addEventListener("change", async (event) => {
+  const file = event.target.files[0];
+  event.target.value = "";
+  if (!file || !ready) return;
+  // Opens the text for checking before it is saved.
+  startEditing(decodeText(await file.arrayBuffer()));
+});
+$("transcript-delete").addEventListener("click", () => {
+  if (!transcript) return;
+  const removed = transcript;
+  const key = fileKey;
+  transcript = null;
+  saveTranscript(key, null);
+  renderTranscript();
+  offerUndo("原文を消しました。", () => {
+    saveTranscript(key, removed);
+    if (key === fileKey) {
+      transcript = removed;
+      renderTranscript();
+    }
+  });
+});
+function readPrefs() {
+  try {
+    return JSON.parse(localStorage.getItem(prefsKey)) || {};
+  } catch {
+    return {};
+  }
+}
+function savePrefs(changes) {
+  try {
+    localStorage.setItem(
+      prefsKey,
+      JSON.stringify({ ...readPrefs(), ...changes }),
+    );
+  } catch {
+    /* The choice still applies on this page. */
+  }
+}
+function showTranscript(shown) {
+  $("show-transcript").checked = shown;
+  $("transcript-body").hidden = !shown;
+  if (shown) {
+    currentSentence = -1;
+    if (ready) highlightSentence(engine.audio.currentTime, false);
+  }
+}
+showTranscript(readPrefs().showTranscript !== false);
+$("show-transcript").addEventListener("change", () => {
+  showTranscript($("show-transcript").checked);
+  savePrefs({ showTranscript: $("show-transcript").checked });
+});
+
+// Speech to text with Whisper, on this device. One audio file at a time; opening
+// another file stops it.
+const modelSize = `約${Math.round(MODEL_BYTES / 1e6)}MB`;
+for (const item of document.querySelectorAll(".model-size"))
+  item.textContent = modelSize;
+function transcribeProgress(message, ratio) {
+  $("transcribe-status").textContent = message;
+  if (ratio === null) $("transcribe-bar").removeAttribute("value");
+  else $("transcribe-bar").value = ratio;
+}
+function stopTranscription() {
+  transcribing?.abort();
+  transcribing = null;
+}
+async function startTranscription() {
+  if (!ready || transcribing || !canTranscribe) return;
+  if (engine.audio.duration > MAX_SECONDS) {
+    notice(
+      `文字起こしできるのは${MAX_SECONDS / 60}分までの音声です。原文を貼り付けてください。`,
+    );
+    return;
+  }
+  const controller = new AbortController();
+  const generation = loadGeneration;
+  const key = fileKey;
+  const language = $("transcribe-language").value;
+  transcribing = controller;
+  transcribeProgress("文字起こしの準備をしています…", null);
+  renderTranscript();
+  notice("文字起こしを始めました。そのまま再生して練習できます。");
+  try {
+    const segments = await transcribe(await readableAudio(currentFile), {
+      language,
+      signal: controller.signal,
+      onProgress: ({ phase, ratio, done, total }) => {
+        if (phase === "download")
+          transcribeProgress(
+            `文字起こし用のデータを保存しています（初回のみ・${modelSize}）… ${Math.floor(ratio * 100)}%`,
+            ratio,
+          );
+        else if (phase === "prepare")
+          transcribeProgress("音声を準備しています…", null);
+        else
+          transcribeProgress(
+            `${language === "zh" ? "中国語" : "英語"}の文字を起こしています… ${done} / ${total}`,
+            total ? done / total : null,
+          );
+      },
+    });
+    if (generation !== loadGeneration) return;
+    const result = transcriptFromSegments(
+      segments,
+      engine.audio.duration,
+      analysis?.phrases || [],
+    );
+    if (!result) {
+      notice(
+        "音声から文を聞き取れませんでした。話している言語の選択が合っているか確かめてください。",
+      );
+      return;
+    }
+    transcript = {
+      text: result.text,
+      source: "auto",
+      language,
+      timing: "words",
+      sentences: result.sentences,
+    };
+    editingTranscript = false;
+    saveTranscript(key, transcript);
+    notice(
+      `音声から${result.sentences.length}文を書き起こしました。聞き取りの誤りは「原文を直す」で直せます。`,
+    );
+  } catch (e) {
+    // A stop (button or another file) has already updated the screen.
+    if (generation !== loadGeneration || e.name === "AbortError") return;
+    if (
+      ["ModelDownloadError", "ModelStorageError", "AudioDecodeError"].includes(
+        e.name,
+      )
+    )
+      notice(e.message);
+    else {
+      // The details stay in the console, for checking with the browser's tools.
+      console.error("Transcription failed:", e);
+      notice(
+        "文字起こしの途中で問題が起きました。ページを開き直して、もう一度お試しください。",
+      );
+    }
+  } finally {
+    if (transcribing === controller) transcribing = null;
+    if (generation === loadGeneration) renderTranscript();
+    void showModelStatus();
+  }
+}
+async function showModelStatus() {
+  if (!canTranscribe) {
+    $("model-status").textContent =
+      "このブラウザでは、音声からの文字起こしを使えません。";
+    $("model-delete").hidden = true;
+    return;
+  }
+  const saved = await modelSaved();
+  $("model-status").textContent = saved
+    ? `文字起こし用のデータ（${modelSize}）を保存しています。通信がなくても文字起こしできます。`
+    : "文字起こし用のデータは、まだ保存していません。";
+  $("model-delete").hidden = !saved;
+}
+$("transcribe-start").addEventListener("click", () => {
+  autoTranscribed.add(fileKey);
+  void startTranscription();
+});
+$("transcribe-cancel").addEventListener("click", () => {
+  stopTranscription();
+  renderTranscript();
+  notice("文字起こしを中止しました。");
+});
+$("model-delete").addEventListener("click", async () => {
+  if (transcribing) {
+    notice("文字起こしが終わってから削除してください。");
+    return;
+  }
+  await deleteModel();
+  await showModelStatus();
+  notice(
+    "文字起こし用のデータを削除しました。次に文字起こしするときに、もう一度受け取ります。",
+  );
+});
+$("transcribe-auto-row").hidden = !canTranscribe;
+{
+  const prefs = readPrefs();
+  if (["en", "zh"].includes(prefs.transcribeLanguage))
+    $("transcribe-language").value = prefs.transcribeLanguage;
+  $("transcribe-auto").checked = prefs.autoTranscribe === true;
+}
+$("transcribe-language").addEventListener("change", () =>
+  savePrefs({ transcribeLanguage: $("transcribe-language").value }),
+);
+$("transcribe-auto").addEventListener("change", () =>
+  savePrefs({ autoTranscribe: $("transcribe-auto").checked }),
+);
+void showModelStatus();
