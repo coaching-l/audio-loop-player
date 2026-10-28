@@ -424,10 +424,15 @@ test("Whisper itself transcribes real speech, also offline once saved", async ({
   await page.getByRole("button", { name: "原文を消す" }).click();
   await context.setOffline(true);
   await page.getByRole("button", { name: "音声から文字起こし" }).click();
-  await expect(page.locator("#notice"), problems.join("\n")).toContainText(
-    "書き起こしました",
-    { timeout: 240000 },
-  );
+  try {
+    await expect(page.locator("#notice")).toContainText("書き起こしました", {
+      timeout: 240000,
+    });
+  } catch (error) {
+    // Name what went wrong inside the page, not only the message it showed.
+    error.message += "\nConsole errors:\n" + problems.join("\n");
+    throw error;
+  }
   await expect(sentences(page).first()).toBeVisible();
   await context.setOffline(false);
 });
