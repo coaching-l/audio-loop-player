@@ -409,6 +409,9 @@ test("Whisper itself transcribes real speech, also offline once saved", async ({
     "Same engine as the desktop run; once per engine is enough.",
   );
   test.setTimeout(300000);
+  const problems = [];
+  page.on("console", (m) => m.type() === "error" && problems.push(m.text()));
+  page.on("pageerror", (e) => problems.push(e.message));
   await page.goto("/");
   await load(page, "tests/fixtures/jfk.wav");
   await page.getByRole("button", { name: "音声から文字起こし" }).click();
@@ -421,6 +424,10 @@ test("Whisper itself transcribes real speech, also offline once saved", async ({
   await page.getByRole("button", { name: "原文を消す" }).click();
   await context.setOffline(true);
   await page.getByRole("button", { name: "音声から文字起こし" }).click();
-  await expect(sentences(page).first()).toBeVisible({ timeout: 240000 });
+  await expect(page.locator("#notice"), problems.join("\n")).toContainText(
+    "書き起こしました",
+    { timeout: 240000 },
+  );
+  await expect(sentences(page).first()).toBeVisible();
   await context.setOffline(false);
 });

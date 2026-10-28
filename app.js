@@ -1759,10 +1759,13 @@ async function startTranscription() {
       )
     )
       notice(e.message);
-    else
+    else {
+      // The details stay in the console, for checking with the browser's tools.
+      console.error("Transcription failed:", e);
       notice(
         "文字起こしの途中で問題が起きました。ページを開き直して、もう一度お試しください。",
       );
+    }
   } finally {
     if (transcribing === controller) transcribing = null;
     if (generation === loadGeneration) renderTranscript();
