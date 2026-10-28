@@ -76,7 +76,10 @@ npm run test:all         # すべて
 
 `.github/workflows/test.yml` が、PRと `main` への変更ごとにChromium（デスクトップ・Android想定）とWebKit（デスクトップ・iPhone想定）を実行します。
 
-WebKitのジョブは失敗してもPRを止めない設定です。Linux版WebKitでは、通信を切ったあとの読み込みでブラウザが内部エラーになるため、`offline.spec.js` の5種類（×2）が失敗します。iPhone実機ではオフラインで使えることを確認済みです。それ以外のWebKitの失敗は調べてください。
+WebKitのジョブは失敗してもPRを止めない設定です。Linux版WebKitでは、通信を切ったあとの読み込みでブラウザが内部エラー（`WebKit encountered an internal error`）になるため、次の11件が失敗します。iPhone実機ではオフラインで使えることを確認済みです。それ以外のWebKitの失敗は調べてください。
+
+- `offline.spec.js` の5種類（デスクトップとiPhone設定で×2）
+- `transcribe.spec.js` の本物のWhisperのテストの後半（デスクトップのみ）。通信ありの文字起こしは成功し、通信を切ったあとの2回目で、すでに読み込んだ音声ファイル（Blob）の読み直しが `NotReadableError` になります。
 
 ### クラウド環境でWebKitを入れるとき
 
