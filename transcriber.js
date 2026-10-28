@@ -277,7 +277,32 @@ export async function transcribe(
   const samples = await decodeSpeech(file);
   signal?.throwIfAborted();
   const windows = planWindows(samples);
-  if (!windows.length) return [];
+  // The model's working memory grows to about 700 MB in the first pass and stays; on a
+  // phone the second pass can then go over the browser's limit and the page reloads.
+  // Without plenty of memory, each pass gets a fresh worker so memory is freed between.
+  const perWorker = navigator.deviceMemory >= 8 ? windows.length : 1;
+  const segments = [];
+  for (let first = 0; first < windows.length; first += perWorker) {
+    const group = windows.slice(first, first + perWorker);
+    segments.push(
+      ...(await recognize(samples, group, language, signal, (done) =>
+        onProgress({
+          phase: "listen",
+          done: first + done,
+          total: windows.length,
+        }),
+      )),
+    );
+  }
+  return segments;
+}
+
+// Runs one worker over some passes. It gets only their part of the audio, with `base`
+// (the first sample) so that the times it returns are times in the whole audio.
+function recognize(samples, windows, language, signal, onDone) {
+  signal?.throwIfAborted();
+  const base = windows[0].start;
+  const audio = samples.slice(base, windows[windows.length - 1].end);
   return new Promise((resolve, reject) => {
     const worker = new Worker(new URL("./transcribe-worker.js", BASE), {
       type: "module",
@@ -290,8 +315,7 @@ export async function transcribe(
     const abort = () => stop(reject, signal.reason);
     signal?.addEventListener("abort", abort, { once: true });
     worker.onmessage = ({ data }) => {
-      if (data.type === "progress")
-        onProgress({ phase: "listen", done: data.done, total: windows.length });
+      if (data.type === "progress") onDone(data.done);
       else if (data.type === "done") stop(resolve, data.segments);
       else if (data.type === "error")
         stop(reject, failure("TranscribeError", data.message));
@@ -300,8 +324,18 @@ export async function transcribe(
       event.preventDefault?.();
       stop(reject, failure("TranscribeError", event.message || "worker"));
     };
-    worker.postMessage({ audio: samples, windows, language, rate: RATE }, [
-      samples.buffer,
-    ]);
+    worker.postMessage(
+      {
+        audio,
+        windows: windows.map((w) => ({
+          start: w.start - base,
+          end: w.end - base,
+        })),
+        base,
+        language,
+        rate: RATE,
+      },
+      [audio.buffer],
+    );
   });
 }
