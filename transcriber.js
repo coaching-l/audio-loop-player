@@ -5,8 +5,9 @@
 
 const BASE = new URL("./", import.meta.url);
 const CACHE_PREFIX = "coaching-l-audio-model:" + BASE.pathname + ":";
-// Change the name whenever a file below changes, so browsers fetch the new set.
-export const MODEL_CACHE = CACHE_PREFIX + "whisper-base-q8-1";
+// Change the name whenever a file below changes, so browsers fetch the changed files
+// (unchanged ones are copied from the older cache).
+export const MODEL_CACHE = CACHE_PREFIX + "whisper-base-q8-2";
 export const MODEL_FILES = [
   {
     path: "vendor/transformers/transformers.min.js",
@@ -55,8 +56,8 @@ export const MODEL_FILES = [
   },
   {
     path: "models/whisper-base/onnx/encoder_model_quantized.onnx",
-    size: 23200850,
-    sha256: "3e345e977b55620a37c0c2b2af0644e019afdfad562dcf71eb929bb7274285f9",
+    size: 23200490,
+    sha256: "c3ad6777f650b3b2a873518070ac366e9865589d74d3e164c86f02b16da3028e",
   },
   {
     path: "models/whisper-base/onnx/decoder_model_merged_quantized.onnx",
@@ -118,45 +119,37 @@ async function sha256(buffer) {
   ).join("");
 }
 
-// Fetches the files not saved yet, checks each one and keeps it in the cache.
+async function verified(blob, file) {
+  return (
+    blob.size === file.size &&
+    (await sha256(await blob.arrayBuffer())) === file.sha256
+  );
+}
+
+// Fetches the files not saved yet, checks each one and keeps it in the cache. A file
+// that did not change since the version saved before is copied from there instead,
+// and that older version is removed at the end.
 async function saveModel(onProgress, signal) {
-  for (const key of await caches.keys())
-    if (key.startsWith(CACHE_PREFIX) && key !== MODEL_CACHE)
-      await caches.delete(key);
+  const older = (await caches.keys()).filter(
+    (key) => key.startsWith(CACHE_PREFIX) && key !== MODEL_CACHE,
+  );
   const cache = await caches.open(MODEL_CACHE);
   let done = 0;
   for (const file of MODEL_FILES) {
     const url = new URL(file.path, BASE);
     if (!(await cache.match(url))) {
-      let response;
-      try {
-        response = await fetch(url, { cache: "no-store", signal });
-        if (!response.ok) throw new Error(String(response.status));
-      } catch (error) {
-        if (error.name === "AbortError") throw error;
-        throw failure(
-          "ModelDownloadError",
-          "文字起こし用のデータを受け取れませんでした。インターネットにつながっているか確かめて、もう一度お試しください。",
-        );
+      let blob = null;
+      for (const key of older) {
+        const saved = await (await caches.open(key)).match(url);
+        const copy = saved && (await saved.blob());
+        if (copy && (await verified(copy, file))) {
+          blob = copy;
+          break;
+        }
       }
-      const chunks = [];
-      let loaded = 0;
-      const reader = response.body.getReader();
-      for (;;) {
-        const { done: end, value } = await reader.read();
-        if (end) break;
-        chunks.push(value);
-        loaded += value.length;
-        onProgress((done + Math.min(loaded, file.size)) / MODEL_BYTES);
-      }
-      const blob = new Blob(chunks);
-      if (
-        blob.size !== file.size ||
-        (await sha256(await blob.arrayBuffer())) !== file.sha256
-      )
-        throw failure(
-          "ModelDownloadError",
-          "文字起こし用のデータが途中で途切れました。もう一度お試しください。",
+      if (!blob)
+        blob = await download(url, file, signal, (loaded) =>
+          onProgress((done + Math.min(loaded, file.size)) / MODEL_BYTES),
         );
       try {
         await cache.put(
@@ -178,6 +171,38 @@ async function saveModel(onProgress, signal) {
     done += file.size;
     onProgress(done / MODEL_BYTES);
   }
+  for (const key of older) await caches.delete(key);
+}
+
+async function download(url, file, signal, onLoaded) {
+  let response;
+  try {
+    response = await fetch(url, { cache: "no-store", signal });
+    if (!response.ok) throw new Error(String(response.status));
+  } catch (error) {
+    if (error.name === "AbortError") throw error;
+    throw failure(
+      "ModelDownloadError",
+      "文字起こし用のデータを受け取れませんでした。インターネットにつながっているか確かめて、もう一度お試しください。",
+    );
+  }
+  const chunks = [];
+  let loaded = 0;
+  const reader = response.body.getReader();
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    loaded += value.length;
+    onLoaded(loaded);
+  }
+  const blob = new Blob(chunks);
+  if (!(await verified(blob, file)))
+    throw failure(
+      "ModelDownloadError",
+      "文字起こし用のデータが途中で途切れました。もう一度お試しください。",
+    );
+  return blob;
 }
 
 // Mono samples at 16 kHz. Engines that refuse that rate decode at a common one, and the

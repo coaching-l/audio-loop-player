@@ -32,13 +32,13 @@ JavaScriptモジュールとService Workerを使うため、HTMLをダブルク�
 | `scripts/serve.mjs`        | 開発用の静的サーバー                                                                                    |
 | `scripts/bump-shell.mjs`   | キャッシュの版を上げるリリース用スクリプト                                                              |
 
-保存先：音声はIndexedDB（`coaching-l-audio-library`）、設定・練習区間・再生位置はlocalStorage（`kotonoha.audio.v1`、以前の版との互換のため名前はそのまま）。原文は音声ごとに `kotonoha.transcript.v1:<音声のキー>`、表示のオン・オフと文字起こしの言語・自動の設定は `kotonoha.prefs.v1` です。文字起こし用のデータは、Cache Storageの `coaching-l-audio-model:<パス>:whisper-base-q8-1` に保存します。
+保存先：音声はIndexedDB（`coaching-l-audio-library`）、設定・練習区間・再生位置はlocalStorage（`kotonoha.audio.v1`、以前の版との互換のため名前はそのまま）。原文は音声ごとに `kotonoha.transcript.v1:<音声のキー>`、表示のオン・オフと文字起こしの言語・自動の設定は `kotonoha.prefs.v1` です。文字起こし用のデータは、Cache Storageの `coaching-l-audio-model:<パス>:whisper-base-q8-2` に保存します。
 
 ## 文字起こし
 
 - `transcriber.js` が、`MODEL_FILES` のファイル（約95MB）を初回だけ受け取り、サイズとSHA-256を確かめてからCache Storageに保存します。`sw.js` は `vendor/` と `models/` への要求をその保存先から返すので、保存後は通信なしで動きます。アプリ本体のキャッシュ（`FILES`）には入れていないため、文字起こしを使わない人は受け取りません。
 - 音声は16kHzのモノラルにして、28秒以内のまとまりに分けます（区切りは最後の8秒のうちいちばん静かなところ）。音のないまとまりは飛ばします（Whisperは無音に文を作ってしまうため）。
-- メモリ：モデルの作業用メモリ（WASM）は、読み込み直後の約230MBから、1つ目のまとまりの処理中に約730MBまで増えて、そのまま戻りません（デスクトップChromiumで計測。ページ全体では約1.7GB）。iPhoneでは2つ目で上限を超えてページが再読み込みされたため、`navigator.deviceMemory` が8未満か不明なとき（Safariは不明）は、まとまりごとにWorkerを作り直してメモリを手放します。モデルを毎回読み直すぶん、時間は3〜4割増えます。
+- メモリ：変換元のエンコーダーは、使わない注意の重み（`encoder_attentions.0`〜`5`、計約430MB）も出力していました。ONNX Runtimeは出力を最後まで持ち続けるため、作業用メモリ（WASM）が約730MBになり、iPhoneでページが再読み込みされました。そこで `scripts/strip-encoder-attentions.py` で出力の一覧から外しています（ノードと重みはそのまま）。さらに、`navigator.deviceMemory` が8未満か不明なとき（Safariは不明）は、まとまりごとにWorkerを作り直してメモリを手放します。
 - `transcribe-worker.js` は、Transformers.jsの `automatic-speech-recognition` を `return_timestamps: true` で動かし、Whisperの区切り（セグメント）ごとの時刻を受け取ります。ONNX RuntimeはWASM・1スレッドです。WASMを動かすため、CSPの `script-src` に `'wasm-unsafe-eval'` を加えています（JavaScriptの `eval` は許可していません）。
 - `transcript.js` の `transcriptFromSegments` が、区切りの中の時間を、波形の音のある部分だけで単語（中国語は1字）の長さに応じて割り振り、`transcriptFromWords` が句読点と長い無音（1秒以上）で文に分けます。同じ句がすぐくり返されるとき（中国語4字以上、英語3語以上。大文字小文字と読点は問わない）は1回ずつの文にし、8秒を超える文は0.5秒以上の間でも、12秒を超える文はいちばん長い間で分けます（中国語は句点を省いて文がつながりやすいため）。文と文の間は、近く（0.6秒以内）にある波形の無音へ寄せます。原文を直したときは `retimeSentences` が、変わっていない文の時刻を残します。
 - モデルやライブラリを入れ替える手順は `vendor/README.md` にあります。

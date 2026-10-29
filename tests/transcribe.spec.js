@@ -499,6 +499,44 @@ test("a transcription can be stopped, and opening another file stops it", async 
   expect(await page.evaluate(() => window.transcribeStopped)).toBe(2);
 });
 
+test("a new model version fetches only the files that changed", async ({
+  page,
+}) => {
+  test.setTimeout(120000);
+  await fakeRecognizer(page, englishSegments);
+  await page.goto("/");
+  await load(page);
+  // The version saved before: everything but the encoder, which changed since.
+  await page.evaluate(async () => {
+    const { MODEL_FILES, MODEL_CACHE } = await import("./transcriber.js");
+    const older = await caches.open(MODEL_CACHE.replace(/\d+$/, "1"));
+    for (const file of MODEL_FILES) {
+      if (file.path.includes("encoder")) continue;
+      const url = new URL(file.path, location.href);
+      await older.put(url, await fetch(url));
+    }
+  });
+  const fetched = new Set();
+  page.on("request", (request) => {
+    const path = new URL(request.url()).pathname;
+    if (/^\/(models|vendor)\//.test(path)) fetched.add(path);
+  });
+  await page.getByRole("button", { name: "音声から文字起こし" }).click();
+  await expect(sentences(page)).toHaveCount(3, { timeout: 90000 });
+  expect([...fetched]).toEqual([
+    "/models/whisper-base/onnx/encoder_model_quantized.onnx",
+  ]);
+  expect(
+    await page.evaluate(async () =>
+      (await caches.keys()).filter((key) => key.includes("model")),
+    ),
+  ).toEqual([
+    await page.evaluate(
+      async () => (await import("./transcriber.js")).MODEL_CACHE,
+    ),
+  ]);
+});
+
 test("the model is saved once after checking each file, and can be deleted", async ({
   page,
 }) => {
