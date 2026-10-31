@@ -1045,6 +1045,16 @@ label {
 .advanced-group .small + .small {
   margin-top: 6px;
 }
+.record-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.record-actions .button {
+  flex: 1 1 180px;
+  font-size: 0.9375rem;
+}
 .transcribe-warning {
   font-weight: 600;
   color: var(--gold-label);

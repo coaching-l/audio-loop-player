@@ -42,8 +42,8 @@
       content="端末の音声で、繰り返し聴く・声に出す。アップロード不要の語学学習プレーヤー。"
     />
     <title>音声リピートプレーヤー | COACHING-L</title>
-    <link rel="stylesheet" href="./style.css?v=22" />
-    <script type="module" src="./app.js?v=22"></script>
+    <link rel="stylesheet" href="./style.css?v=23" />
+    <script type="module" src="./app.js?v=23"></script>
   </head>
   <body>
     <main>
@@ -481,6 +481,30 @@
               <p id="range-error" class="error" role="alert" hidden></p>
             </section>
           </fieldset>
+          <section class="advanced-group" aria-labelledby="record-heading">
+            <h3 id="record-heading" class="advanced-title">
+              録音して聞き比べ
+            </h3>
+            <fieldset id="record-controls" disabled>
+              <div class="record-actions">
+                <button id="record" class="button secondary" type="button">
+                  録音する</button
+                ><button
+                  id="compare"
+                  class="button secondary"
+                  type="button"
+                  disabled
+                >
+                  お手本→自分の声
+                </button>
+              </div>
+            </fieldset>
+            <p id="record-status" class="small" role="status">録音なし</p>
+            <p id="record-error" class="error" role="alert" hidden></p>
+            <p class="small">
+              お手本の区間を聞いたら「録音する」で声に出し、「お手本→自分の声」で続けて聞き比べます。録音は最長60秒で、保存も送信もせず、別の音声を開くと消えます。
+            </p>
+          </section>
           <section class="advanced-group" aria-labelledby="fit-heading">
             <h3 id="fit-heading" class="advanced-title">スクリプトの時刻を直す</h3>
             <p class="small">
@@ -570,7 +594,7 @@
               「スクリプト」には、教材のスクリプトを貼り付けるか、テキストファイルを読み込みます。再生している文に色が付き、文を押すとその文をA–B区間にします。「前の文へ」「次の文へ」で、文ごとに区間を移れます（スクリプトがないときは、波形の無音で区切ります）。
             </p>
             <p>
-              くり返す回数と間の無音、ゲージの拡大、A・Bの時刻の入力、音声からの文字起こしは「詳しい設定」にあります。区間・速度・再生位置は、音声ごとに自動で記録されます。
+              くり返す回数と間の無音、ゲージの拡大、A・Bの時刻の入力、録音して聞き比べ、音声からの文字起こしは「詳しい設定」にあります。区間・速度・再生位置は、音声ごとに自動で記録されます。
             </p>
           </section>
           <section>

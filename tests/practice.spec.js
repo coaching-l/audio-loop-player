@@ -183,6 +183,65 @@ test("with a script, the previous and next buttons step through its sentences", 
   expect(a).toBeLessThan(1.15);
 });
 
+test("a recording can be compared with the model, from the detailed settings", async ({
+  page,
+  browserName,
+}) => {
+  test.skip(
+    browserName !== "chromium",
+    "Only Chromium has a fake microphone in these tests.",
+  );
+  await page.goto("/");
+  await load(page);
+  // Not on the main screen: only inside the folded settings.
+  await expect(page.getByRole("button", { name: "録音する" })).toBeHidden();
+  await setPoints(page, "0.2", "0.6");
+  await page.getByRole("button", { name: "録音する", exact: true }).click();
+  await expect(page.locator("#record-status")).toContainText("録音中");
+  await page.waitForTimeout(1200);
+  await page.getByRole("button", { name: "録音を止める", exact: true }).click();
+  await expect(page.locator("#record-status")).toHaveText("録音あり");
+  await page.locator("#compare").click();
+  await expect(page.locator("#record-status")).toHaveText("お手本を再生中");
+  await expect(page.locator("#record-status")).toHaveText("自分の声を再生中", {
+    timeout: 5000,
+  });
+  // The model stopped at B before the recording started.
+  expect(await currentTime(page)).toBeGreaterThanOrEqual(0.55);
+  expect(await playing(page)).toBe(false);
+  await expect(page.locator("#record-status")).toHaveText("録音あり", {
+    timeout: 5000,
+  });
+  // Opening other audio discards the recording; it was never stored.
+  await load(page, "tests/fixtures/tone.mp3");
+  await expect(page.locator("#record-status")).toHaveText("録音なし");
+  await expect(page.locator("#compare")).toBeDisabled();
+});
+
+test("recording pauses the model, and playing ends the recording first", async ({
+  page,
+  browserName,
+}) => {
+  test.skip(
+    browserName !== "chromium",
+    "Only Chromium has a fake microphone in these tests.",
+  );
+  await page.goto("/");
+  await load(page);
+  await openAdvanced(page);
+  await page.locator("#play").click();
+  await expect.poll(() => playing(page)).toBe(true);
+  await page.getByRole("button", { name: "録音する", exact: true }).click();
+  await expect(page.locator("#record-status")).toContainText("録音中");
+  expect(await playing(page)).toBe(false);
+  await page.waitForTimeout(500);
+  expect(await playing(page)).toBe(false);
+  await page.locator("#play").click();
+  await expect(page.locator("#record-status")).toHaveText("録音あり");
+  await expect.poll(() => playing(page)).toBe(true);
+  await expect(page.locator("#notice")).toContainText("録音を止めて");
+});
+
 test("zooming the gauge spreads a short interval out for finer A and B", async ({
   page,
 }) => {

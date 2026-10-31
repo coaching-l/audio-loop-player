@@ -19,7 +19,7 @@ JavaScriptモジュールとService Workerを使うため、HTMLをダブルク�
 | -------------------------- | ------------------------------------------------------------------------------------------------------- |
 | `index.html` / `style.css` | 画面と見た目。CSPは `index.html` の `<meta>` にあります                                                 |
 | `app.js`                   | 入口「音源から始める」：登録音声の一覧・追加・ドラッグ＆ドロップ・削除と取り消し、保存容量の表示       |
-| `practice.js`              | 練習画面（どの入口からも共通）：再生・A–B・速度・スクリプト・詳しい設定・文字起こし・ミニプレーヤー・Media Session・キー操作 |
+| `practice.js`              | 練習画面（どの入口からも共通）：再生・A–B・速度・スクリプト・詳しい設定（録音して聞き比べ・文字起こしを含む）・ミニプレーヤー・Media Session・キー操作 |
 | `ui.js`                    | 入口と練習画面で共通のお知らせ・エラー表示と「元に戻す」                                                |
 | `player.js`                | 再生エンジン：A–B・回数・無音、タイマーの破棄、時刻の変換                                               |
 | `audio-library.js`         | IndexedDBへの音声保存（10件まで）、削除と取り消し、保存前の再生確認                                     |
@@ -29,6 +29,7 @@ JavaScriptモジュールとService Workerを使うため、HTMLをダブルク�
 | `transcribe-worker.js`     | Workerの中でWhisperを動かし、区切り（セグメント）ごとの時刻を返す。中国語は簡体字に直す                 |
 | `vendor/` / `models/`      | Transformers.js・ONNX Runtime・OpenCCと、Whisper baseのモデル（出所とライセンスは各フォルダーのREADME） |
 | `waveform.js`              | 低いサンプリングレートでの解析、波形の描画、無音での区切り                                              |
+| `recorder.js`              | マイク録音（メモリ上だけ、最長60秒）                                                                    |
 | `offline.js` / `sw.js`     | オフライン準備と更新、アプリ本体のキャッシュ                                                            |
 | `scripts/serve.mjs`        | 開発用の静的サーバー                                                                                    |
 | `scripts/bump-shell.mjs`   | キャッシュの版を上げるリリース用スクリプト                                                              |
@@ -89,6 +90,7 @@ npm run test:all         # すべて
 ```
 
 - Linuxの `/usr/bin/chromium` があればそれを使います（CIではPlaywrightのChromium）。`CHROMIUM_PATH=/path/to/chromium npm test` で指定もできます。
+- 録音のテストはChromiumの偽のマイク（`--use-fake-device-for-media-stream`）を使うため、WebKitでは対象外にしています。
 - 文字起こしの画面のテスト（`tests/transcribe.spec.js`）は、Whisperの代わりに決まった単語を返す偽のWorkerを使います。モデルの受け取りと保存は本物で確かめ、`MODEL_FILES` とディスク上のファイルのサイズ・SHA-256も照合します。
 - モバイル設定は画面幅・タッチ・ユーザーエージェントの模擬で、実機の確認にはなりません。
 
@@ -116,5 +118,6 @@ WebKitのジョブは失敗してもPRを止めない設定です。Linux版WebK
 - iPhone Safari・Android Chromeで、端末内のMP3・M4A・WAVを選んで再生できる
 - 機内モードでページを開き直して再生できる
 - 画面ロック中のロック画面の操作（再生・一時停止・5秒移動）
+- マイクの許可と、録音・聞き比べ（「詳しい設定」の中）
 - 文字起こし：初回の受け取りと保存、機内モードでの文字起こし、英語・中国語の音声での精度と所要時間、長めの音声（10分ほど）でメモリが足りるか
 - ホーム画面に追加したときの起動と保存

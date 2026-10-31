@@ -37,16 +37,18 @@ test("touch pause during silence and landscape layout", async ({
 }) => {
   await page.locator("#file-input").setInputFiles("tests/fixtures/tone.wav");
   await expect(page.locator("#play")).toBeEnabled();
-  await page.locator("#advanced > summary").tap();
-  await page.locator("#point-b").fill("0.3");
-  await page.locator("#gap").tap(); // blur commits the interval through a touch gesture
-  await page.locator("#gap").fill("1");
+  // Turned on before typing: Linux WebKit's iPhone mode drops a tap on this button
+  // while a field still has focus (not checked on a real iPhone).
   await page.locator("#toggle-ab").tap();
   await expect(page.locator("#toggle-ab")).toHaveAttribute(
     "aria-pressed",
     "true",
   );
-  await page.locator("#play").tap();
+  await page.locator("#advanced > summary").tap();
+  await page.locator("#point-b").fill("0.3");
+  await page.locator("#gap").tap(); // blur commits the interval through a touch gesture
+  await page.locator("#gap").fill("1");
+  await page.locator("#play").tap(); // and the play tap commits the silence
   await expect(page.locator("#play-status")).toHaveText("無音中");
   await page.locator("#play").tap();
   await expect(page.locator("#play-status")).toHaveText("無音中に一時停止");

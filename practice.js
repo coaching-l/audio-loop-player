@@ -5,6 +5,7 @@ import { readableAudio } from "./audio-import.js";
 import { audioKey } from "./audio-library.js";
 import { LoopPlayer, GAP_RATIOS, parseTime, formatTime } from "./player.js";
 import { analyzeAudio, drawWaveform } from "./waveform.js";
+import { VoiceRecorder, recordingSupported } from "./recorder.js";
 import {
   splitSentences,
   alignSentences,
@@ -197,6 +198,7 @@ function drawPlayer(player) {
 function enable(value) {
   for (const id of ["player-controls", "repeat-controls", "transcript-controls"])
     $(id).disabled = !value;
+  $("record-controls").disabled = !value || !recordingSupported();
   syncMiniPlayer();
 }
 // A compact bar at the bottom keeps play/pause reachable once the main controls are scrolled past.
@@ -243,6 +245,7 @@ export async function openPractice({ file, key, name, script } = {}) {
   if (!file) return;
   name ||= file.name || "";
   settleUndo();
+  discardRecording();
   persist();
   const generation = ++loadGeneration;
   currentFile = file;
@@ -365,6 +368,7 @@ export async function openPractice({ file, key, name, script } = {}) {
 export function closePractice() {
   persist();
   setMediaMetadata(null);
+  discardRecording();
   stopTranscription();
   analysis = null;
   transcript = null;
@@ -396,15 +400,22 @@ export function closePractice() {
 
 function togglePlay() {
   if (!ready) return;
+  stopCompare();
   error("");
   if (engine.active) {
     engine.pause();
     persist();
     return;
   }
+  // The model must not play into the microphone: finish the recording first.
+  if (recorder.recording) {
+    recorder.stop();
+    notice("録音を止めて、再生します。");
+  }
   void engine.play();
 }
 function skip(seconds) {
+  stopCompare();
   if (ready) engine.seek(engine.audio.currentTime + seconds);
 }
 $("play").addEventListener("click", togglePlay);
@@ -846,6 +857,122 @@ document.addEventListener("keydown", (event) => {
   if (!action) return;
   event.preventDefault();
   action();
+});
+
+// Record the learner, then play the model interval and the recording back to back.
+// Kept in memory only: never saved or sent, and dropped when other material opens.
+const voice = new Audio();
+let recordingURL = null;
+let recordTick = null;
+let compareToken = 0;
+// A recording still running when its material is closed belongs to that material; drop it.
+let dropNextRecording = false;
+function recordStatus(text) {
+  $("record-status").textContent = text;
+}
+function recordError(message) {
+  $("record-error").textContent = message;
+  $("record-error").hidden = !message;
+}
+const recorder = new VoiceRecorder((blob) => {
+  clearInterval(recordTick);
+  $("record").textContent = "録音する";
+  if (dropNextRecording) {
+    dropNextRecording = false;
+    return;
+  }
+  if (!blob) {
+    recordStatus(recordingURL ? "録音あり" : "録音なし");
+    recordError("録音できませんでした。もう一度お試しください。");
+    return;
+  }
+  discardRecording();
+  recordingURL = URL.createObjectURL(blob);
+  voice.src = recordingURL;
+  $("compare").disabled = false;
+  recordStatus("録音あり");
+});
+function discardRecording() {
+  if (recorder.recording) {
+    dropNextRecording = true;
+    recorder.stop();
+  }
+  stopCompare();
+  voice.removeAttribute("src");
+  voice.load();
+  if (recordingURL) URL.revokeObjectURL(recordingURL);
+  recordingURL = null;
+  $("compare").disabled = true;
+  recordStatus("録音なし");
+}
+function stopCompare() {
+  compareToken++;
+  if (!voice.paused) voice.pause();
+  if (recordingURL && !recorder.recording) recordStatus("録音あり");
+}
+if (!recordingSupported()) recordError("このブラウザでは録音できません。");
+$("record").addEventListener("click", async () => {
+  recordError("");
+  if (recorder.recording) {
+    recorder.stop();
+    return;
+  }
+  stopCompare();
+  // Pause the model so it is not recorded along with the voice.
+  if (engine?.active) {
+    engine.pause();
+    persist();
+  }
+  try {
+    await recorder.start();
+  } catch (e) {
+    recorder.release();
+    recordError(
+      e.name === "NotAllowedError"
+        ? "マイクの使用が許可されていません。ブラウザの設定で、このページにマイクの使用を許可してください。"
+        : "マイクを使えません。ほかのアプリがマイクを使っていないか確認してください。",
+    );
+    return;
+  }
+  $("record").textContent = "録音を止める";
+  recordStatus("録音中 0:00");
+  recordTick = setInterval(
+    () => recordStatus("録音中 " + formatTime(recorder.elapsed, 0)),
+    250,
+  );
+});
+$("compare").addEventListener("click", async () => {
+  if (!ready || !recordingURL) return;
+  stopCompare();
+  const token = compareToken;
+  // The model is the A–B interval.
+  const { a, b } = engine;
+  const audio = engine.audio;
+  engine.pause();
+  engine.seek(a);
+  recordStatus("お手本を再生中");
+  try {
+    await audio.play();
+  } catch {
+    if (token === compareToken) recordStatus("録音あり");
+    return;
+  }
+  // Any other control (play, seek, switching audio) stops the comparison.
+  const reached = await new Promise((resolve) => {
+    const check = setInterval(() => {
+      const done = audio.ended || audio.currentTime >= b;
+      if (done || audio.paused || token !== compareToken) {
+        clearInterval(check);
+        resolve(done && token === compareToken);
+      }
+    }, 20);
+  });
+  if (!reached) return;
+  audio.pause();
+  recordStatus("自分の声を再生中");
+  voice.currentTime = 0;
+  voice.onended = () => token === compareToken && recordStatus("録音あり");
+  voice.play().catch(() => {});
 });
 
 // The script: one line per sentence, the sentence being heard is highlighted.

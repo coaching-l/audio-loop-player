@@ -1,16 +1,17 @@
 // Bump this version whenever a shell file changes. Each release is installed atomically.
-const VERSION = "v20";
+const VERSION = "v21";
 const BASE = new URL("./", self.location.href);
 const PREFIX = "coaching-l-audio-offline:" + BASE.pathname + ":";
 const CACHE = PREFIX + VERSION;
 const FILES = [
   "./",
   "./index.html",
-  "./style.css?v=22",
-  "./app.js?v=22",
+  "./style.css?v=23",
+  "./app.js?v=23",
   "./player.js",
   "./audio-library.js",
   "./audio-import.js",
+  "./recorder.js",
   "./ui.js",
   "./practice.js",
   "./waveform.js",
