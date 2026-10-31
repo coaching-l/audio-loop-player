@@ -18,21 +18,41 @@ JavaScriptモジュールとService Workerを使うため、HTMLをダブルク�
 | ファイル                   | 役割                                                                                                    |
 | -------------------------- | ------------------------------------------------------------------------------------------------------- |
 | `index.html` / `style.css` | 画面と見た目。CSPは `index.html` の `<meta>` にあります                                                 |
-| `app.js`                   | 画面の操作、保存・呼び出し、バックアップ、取り消し、ミニプレーヤー、Media Session、キー操作、録音の画面 |
-| `player.js`                | 再生エンジン：A–B・回数・無音・速度の段階アップ、タイマーの破棄、時刻の変換                             |
+| `app.js`                   | 入口「音源から始める」：登録音声の一覧・追加・ドラッグ＆ドロップ・削除と取り消し、保存容量の表示       |
+| `practice.js`              | 練習画面（どの入口からも共通）：再生・A–B・速度・スクリプト・詳しい設定・文字起こし・ミニプレーヤー・Media Session・キー操作 |
+| `ui.js`                    | 入口と練習画面で共通のお知らせ・エラー表示と「元に戻す」                                                |
+| `player.js`                | 再生エンジン：A–B・回数・無音、タイマーの破棄、時刻の変換                                               |
 | `audio-library.js`         | IndexedDBへの音声保存（10件まで）、削除と取り消し、保存前の再生確認                                     |
 | `audio-import.js`          | 選んだファイルを一度だけ読み取り、MIMEを補う（iOSのファイル提供元への対策）                             |
-| `transcript.js`            | 原文の文への区切り（英語・中国語）、波形の無音を使った時刻の対応づけ、文字コードの判別                  |
+| `transcript.js`            | スクリプトの文への区切り（英語・中国語）、波形の無音を使った時刻の対応づけ、文字コードの判別                  |
 | `transcriber.js`           | 文字起こしの準備：モデルの受け取りと確認・保存（Cache Storage）、16kHzへの変換、無音での分割            |
 | `transcribe-worker.js`     | Workerの中でWhisperを動かし、区切り（セグメント）ごとの時刻を返す。中国語は簡体字に直す                 |
 | `vendor/` / `models/`      | Transformers.js・ONNX Runtime・OpenCCと、Whisper baseのモデル（出所とライセンスは各フォルダーのREADME） |
 | `waveform.js`              | 低いサンプリングレートでの解析、波形の描画、無音での区切り                                              |
-| `recorder.js`              | マイク録音（メモリ上だけ、最長60秒）                                                                    |
 | `offline.js` / `sw.js`     | オフライン準備と更新、アプリ本体のキャッシュ                                                            |
 | `scripts/serve.mjs`        | 開発用の静的サーバー                                                                                    |
 | `scripts/bump-shell.mjs`   | キャッシュの版を上げるリリース用スクリプト                                                              |
 
-保存先：音声はIndexedDB（`coaching-l-audio-library`）、設定・練習区間・再生位置はlocalStorage（`kotonoha.audio.v1`、以前の版との互換のため名前はそのまま）。原文は音声ごとに `kotonoha.transcript.v1:<音声のキー>`、表示のオン・オフと文字起こしの言語・自動の設定は `kotonoha.prefs.v1` です。文字起こし用のデータは、Cache Storageの `coaching-l-audio-model:<パス>:whisper-base-q8-2` に保存します。
+保存先：音声はIndexedDB（`coaching-l-audio-library`）、設定と再生位置はlocalStorage（`kotonoha.audio.v1`、以前の版との互換のため名前はそのまま）。スクリプトは素材ごとに `kotonoha.transcript.v1:<素材のキー>`、文字起こしの言語は `kotonoha.prefs.v1` です。以前の版が保存した練習区間（`segments`）は、画面では使いませんが、保存したまま残します。「音声全体」のくり返しと速度の段階アップの設定は、区間リピートOFF・元の速度として開きます。
+
+## 練習画面と入口
+
+練習画面（`practice.js`）は、素材の出どころを知りません。入口は素材を用意して、次を呼ぶだけです。
+
+```js
+import { openPractice } from "./practice.js";
+openPractice({
+  file,             // 音声（File、またはBlob）。必須
+  key,              // 設定とスクリプトの保存先。省略すると音声のファイル名・サイズ・更新日時
+  name,             // プレーヤーに出す名前。省略するとファイル名
+  script: {         // 素材についているスクリプト（省略可）
+    text,           // 全文
+    sentences,      // [{ text, start, end }]（秒）。省略すると貼り付けと同じく波形の無音から推し量る
+  },
+});
+```
+
+`script` は、その `key` にスクリプトがまだ保存されていないときだけ使います。利用者が直したスクリプトは上書きしません。いまの入口は「音源から始める」（`app.js`）だけです。「テキストから始める」は、テキストから作った音声と、文ごとの時刻つきのスクリプトを、同じように渡す想定です（`tests/transcript.spec.js` の「material can bring its own script…」で確かめています）。文字起こし用のデータは、Cache Storageの `coaching-l-audio-model:<パス>:whisper-base-q8-2` に保存します。
 
 ## 文字起こし
 
@@ -40,7 +60,7 @@ JavaScriptモジュールとService Workerを使うため、HTMLをダブルク�
 - 音声は16kHzのモノラルにして、28秒以内のまとまりに分けます（区切りは最後の8秒のうちいちばん静かなところ）。音のないまとまりは飛ばします（Whisperは無音に文を作ってしまうため）。
 - メモリ：変換元のエンコーダーは、使わない注意の重み（`encoder_attentions.0`〜`5`、計約430MB）も出力していました。ONNX Runtimeは出力を最後まで持ち続けるため、作業用メモリ（WASM）が約730MBになり、iPhoneでページが再読み込みされました。そこで `scripts/strip-encoder-attentions.py` で出力の一覧から外しています（ノードと重みはそのまま）。さらに、`navigator.deviceMemory` が8未満か不明なとき（Safariは不明）は、まとまりごとにWorkerを作り直してメモリを手放します。
 - `transcribe-worker.js` は、Transformers.jsの `automatic-speech-recognition` を `return_timestamps: true` で動かし、Whisperの区切り（セグメント）ごとの時刻を受け取ります。ONNX RuntimeはWASM・1スレッドです。WASMを動かすため、CSPの `script-src` に `'wasm-unsafe-eval'` を加えています（JavaScriptの `eval` は許可していません）。
-- `transcript.js` の `transcriptFromSegments` が、区切りの中の時間を、波形の音のある部分だけで単語（中国語は1字）の長さに応じて割り振り、`transcriptFromWords` が句読点と長い無音（1秒以上）で文に分けます。同じ句がすぐくり返されるとき（中国語4字以上、英語3語以上。大文字小文字と読点は問わない）は1回ずつの文にし、8秒を超える文は0.5秒以上の間でも、12秒を超える文はいちばん長い間で分けます（中国語は句点を省いて文がつながりやすいため）。文と文の間は、近く（0.6秒以内）にある波形の無音へ寄せます。原文を直したときは `retimeSentences` が、変わっていない文の時刻を残します。
+- `transcript.js` の `transcriptFromSegments` が、区切りの中の時間を、波形の音のある部分だけで単語（中国語は1字）の長さに応じて割り振り、`transcriptFromWords` が句読点と長い無音（1秒以上）で文に分けます。同じ句がすぐくり返されるとき（中国語4字以上、英語3語以上。大文字小文字と読点は問わない）は1回ずつの文にし、8秒を超える文は0.5秒以上の間でも、12秒を超える文はいちばん長い間で分けます（中国語は句点を省いて文がつながりやすいため）。文と文の間は、近く（0.6秒以内）にある波形の無音へ寄せます。スクリプトを直したときは `retimeSentences` が、変わっていない文の時刻を残します。
 - モデルやライブラリを入れ替える手順は `vendor/README.md` にあります。
 
 ## リリース（キャッシュの版の更新）
@@ -69,7 +89,6 @@ npm run test:all         # すべて
 ```
 
 - Linuxの `/usr/bin/chromium` があればそれを使います（CIではPlaywrightのChromium）。`CHROMIUM_PATH=/path/to/chromium npm test` で指定もできます。
-- 録音のテストはChromiumの偽のマイク（`--use-fake-device-for-media-stream`）を使うため、WebKitでは対象外にしています。
 - 文字起こしの画面のテスト（`tests/transcribe.spec.js`）は、Whisperの代わりに決まった単語を返す偽のWorkerを使います。モデルの受け取りと保存は本物で確かめ、`MODEL_FILES` とディスク上のファイルのサイズ・SHA-256も照合します。
 - モバイル設定は画面幅・タッチ・ユーザーエージェントの模擬で、実機の確認にはなりません。
 
@@ -97,6 +116,5 @@ WebKitのジョブは失敗してもPRを止めない設定です。Linux版WebK
 - iPhone Safari・Android Chromeで、端末内のMP3・M4A・WAVを選んで再生できる
 - 機内モードでページを開き直して再生できる
 - 画面ロック中のロック画面の操作（再生・一時停止・5秒移動）
-- マイクの許可と、録音・聞き比べ
 - 文字起こし：初回の受け取りと保存、機内モードでの文字起こし、英語・中国語の音声での精度と所要時間、長めの音声（10分ほど）でメモリが足りるか
 - ホーム画面に追加したときの起動と保存

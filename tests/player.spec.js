@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { makeWav } from "./fixtures/make-audio.mjs";
+import { openAdvanced, setRepeat } from "./helpers.mjs";
 const fixture = "tests/fixtures/tone.wav";
 async function load(page, file = fixture) {
   await page.locator("#file-input").setInputFiles(file);
@@ -7,8 +8,9 @@ async function load(page, file = fixture) {
 }
 async function configure(
   page,
-  { a = "0.2", b = "0.5", mode = "ab", count = "2", gap = "0" } = {},
+  { a = "0.2", b = "0.5", repeat = true, count = "2", gap = "0" } = {},
 ) {
+  await openAdvanced(page);
   await page.locator("#point-a").fill(a);
   await page.locator("#point-a").press("Tab");
   await page.locator("#point-b").fill(b);
@@ -16,7 +18,7 @@ async function configure(
   await page.locator("#repeat-count").selectOption(count);
   await page.locator("#gap").fill(gap);
   await page.locator("#gap").press("Tab");
-  await page.locator("#repeat-mode").selectOption(mode);
+  await setRepeat(page, repeat);
   await expect(page.locator("#range-error")).toBeHidden();
 }
 async function setRate(page, rate) {
@@ -158,27 +160,19 @@ for (const [rate, expected] of [
     expect(silence).toBeGreaterThanOrEqual(expected - 20);
     expect(silence).toBeLessThan(expected + 400);
   });
-test("relative silence is saved with segments and restored after reload", async ({
+test("relative silence is kept per audio and restored after reload", async ({
   page,
 }) => {
   await load(page);
   await configure(page, { a: "0.2", b: "0.8" });
   await page.locator("#gap-mode").selectOption("1.5");
-  await page.locator("#segment-name").fill("相対");
-  await page.getByRole("button", { name: "区間を保存", exact: true }).click();
-  await expect(page.locator(".segment .small")).toContainText(
-    "無音 区間の1.5倍",
-  );
   await page.reload();
   await load(page);
+  await openAdvanced(page);
   await expect(page.locator("#gap-mode")).toHaveValue("1.5");
   await expect(page.locator("#gap")).toBeHidden();
   await page.locator("#gap-mode").selectOption("0");
   await expect(page.locator("#gap")).toBeVisible();
-  await page
-    .getByRole("button", { name: "相対を呼び出す", exact: true })
-    .click();
-  await expect(page.locator("#gap-mode")).toHaveValue("1.5");
 });
 test("pause during silence retains the remaining silence and never auto-resumes", async ({
   page,
@@ -232,23 +226,19 @@ test("switching files cancels old repeat timers and revokes old object URLs", as
     }, oldURL),
   ).toBe(true);
 });
-test("whole-file finite repeat and unlimited repeat", async ({ page }) => {
+test("new audio repeats the interval until paused", async ({ page }) => {
   await load(page, {
     name: "short.wav",
     mimeType: "audio/wav",
     buffer: makeWav(0.35),
   });
-  await configure(page, {
-    a: "0",
-    b: ".3",
-    mode: "all",
-    count: "3",
-    gap: ".1",
-  });
-  await page.locator("#play").click();
-  await expect(page.locator("#play-status")).toHaveText("再生完了");
-  await expect(page.locator("#repeat-progress")).toHaveText("完了 3 / 3 回");
-  await page.locator("#repeat-count").selectOption("0");
+  await openAdvanced(page);
+  await expect(page.locator("#repeat-count")).toHaveValue("0");
+  await expect(page.locator("#toggle-ab")).toHaveAttribute(
+    "aria-pressed",
+    "false",
+  );
+  await configure(page, { a: "0", b: ".3", count: "0", gap: ".1" });
   await page.locator("#play").click();
   await expect
     .poll(async () =>
@@ -259,6 +249,7 @@ test("whole-file finite repeat and unlimited repeat", async ({ page }) => {
       ),
     )
     .toBeGreaterThanOrEqual(4);
+  await expect(page.locator("#repeat-progress")).toContainText("∞");
   await page.locator("#play").click();
   expect(await page.locator("#audio").evaluate((a) => a.paused)).toBe(true);
 });
@@ -285,43 +276,24 @@ test("invalid A–B and gap inputs are rejected without changing valid configura
     await expect(page.locator("#range-error")).toContainText("0〜10");
   }
 });
-test("multiple named segments persist per file, load and delete safely", async ({
-  page,
-}) => {
+test("settings are kept for each audio file", async ({ page }) => {
   await load(page);
   await configure(page, { gap: ".3", count: "5" });
   await setRate(page, 0.75);
-  await page.locator("#segment-name").fill("<b>フレーズ1</b>");
-  await page.getByRole("button", { name: "区間を保存", exact: true }).click();
-  await page.locator("#point-b").fill("1.5");
-  await page.locator("#point-b").press("Tab");
-  await page.locator("#segment-name").fill("フレーズ2");
-  await page.getByRole("button", { name: "区間を保存", exact: true }).click();
-  await expect(page.locator(".segment")).toHaveCount(2);
-  await expect(page.locator(".segment-name b")).toHaveCount(0);
-  await page.reload();
-  await load(page);
-  await expect(page.locator(".segment")).toHaveCount(2);
-  await page
-    .getByRole("button", { name: "<b>フレーズ1</b>を呼び出す", exact: true })
-    .click();
-  await expect(page.locator("#point-b")).toHaveValue("0:00.500");
-  await expect(page.locator("#speed-value")).toHaveText("0.75×");
-  await expect(page.locator("#gap")).toHaveValue("0.3");
   await load(page, {
     name: "different.wav",
     mimeType: "audio/wav",
     buffer: makeWav(),
   });
-  await expect(page.locator(".segment")).toHaveCount(0);
-  await load(page);
-  await expect(page.locator(".segment")).toHaveCount(2);
-  await page
-    .getByRole("button", { name: "フレーズ2を削除", exact: true })
-    .click();
+  await expect(page.locator("#repeat-count")).toHaveValue("0");
+  await expect(page.locator("#gap")).toHaveValue("0");
+  await expect(page.locator("#speed-value")).toHaveText("1.00×");
   await page.reload();
   await load(page);
-  await expect(page.locator(".segment")).toHaveCount(1);
+  await expect(page.locator("#point-b")).toHaveValue("0:00.500");
+  await expect(page.locator("#repeat-count")).toHaveValue("5");
+  await expect(page.locator("#speed-value")).toHaveText("0.75×");
+  await expect(page.locator("#gap")).toHaveValue("0.3");
 });
 for (const extension of ["mp3", "m4a"])
   test(`real ${extension.toUpperCase()} decoding and playback`, async ({
@@ -404,7 +376,7 @@ test("iPhone-sized viewport has no horizontal overflow and usable controls", asy
     fullPage: true,
   });
 });
-test("storage unavailable still allows local playback and segment use", async ({
+test("storage unavailable still allows local playback", async ({
   page,
 }) => {
   await page.addInitScript(() => {
@@ -415,9 +387,6 @@ test("storage unavailable still allows local playback and segment use", async ({
   await page.reload();
   await load(page);
   await configure(page);
-  await page.locator("#segment-name").fill("一時的な区間");
-  await page.getByRole("button", { name: "区間を保存", exact: true }).click();
-  await expect(page.locator(".segment")).toHaveCount(1);
   await expect(page.locator("#notice")).toContainText("保存できません");
   await page.locator("#play").click();
   await expect(page.locator("#play-status")).toHaveText("再生完了");
@@ -439,10 +408,13 @@ test("capture A and B during playback, disable repeat, and restore settings", as
   await page.locator("#gauge-set-b").click();
   const b = await page.locator("#point-b").inputValue();
   expect(Number(b.split(":")[1])).toBeGreaterThan(Number(a.split(":")[1]));
-  await page.locator("#repeat-mode").selectOption("ab");
+  await expect(page.locator("#toggle-ab")).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
   await expect(page.locator("#range-error")).toBeHidden();
   await page.locator("#play").click();
-  await page.locator("#repeat-mode").selectOption("off");
+  await setRepeat(page, false);
   await page.locator("#seek").evaluate((el) => {
     el.value = "2.5";
     el.dispatchEvent(new Event("input", { bubbles: true }));
@@ -454,7 +426,10 @@ test("capture A and B during playback, disable repeat, and restore settings", as
   await load(page);
   await expect(page.locator("#point-a")).toHaveValue(a);
   await expect(page.locator("#point-b")).toHaveValue(b);
-  await expect(page.locator("#repeat-mode")).toHaveValue("off");
+  await expect(page.locator("#toggle-ab")).toHaveAttribute(
+    "aria-pressed",
+    "false",
+  );
 });
 test("changing speed during silence preserves the existing wall-clock deadline", async ({
   page,

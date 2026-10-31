@@ -299,13 +299,6 @@ h1 {
   gap: 8px;
   margin-bottom: 22px;
 }
-.step {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--gold-label);
-  letter-spacing: 0.08em;
-  margin-right: 8px;
-}
 .tag {
   background: var(--surface-muted);
   padding: 2px 10px;
@@ -444,20 +437,7 @@ label {
   font-size: 0.875rem;
   color: var(--text-muted);
 }
-.repeat-card .small + .small {
-  margin-top: 6px;
-}
-.tip {
-  display: flex;
-  gap: 9px;
-  margin-top: 20px;
-  border-radius: 8px;
-  background: var(--surface-muted);
-  padding: 14px 16px;
-  color: var(--text-muted);
-  font-size: 0.9375rem;
-}
-.repeat-card label {
+.advanced label {
   display: block;
 }
 select,
@@ -535,54 +515,6 @@ select {
 .gap-seconds {
   margin-bottom: 12px;
 }
-.saved-card {
-  grid-column: 1/-1;
-}
-.save-form {
-  display: flex;
-  gap: 10px;
-}
-.save-form input {
-  flex: 1;
-  min-width: 0;
-}
-.empty {
-  text-align: center;
-  padding: 28px 10px;
-  color: var(--text-muted);
-  font-size: 0.9375rem;
-}
-.storage-note {
-  border-top: 1px solid var(--line);
-  padding-top: 13px;
-  margin-top: 6px;
-}
-.segments {
-  list-style: none;
-  padding: 0;
-  margin: 12px 0;
-}
-.segment {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 0;
-  border-bottom: 1px solid var(--line);
-}
-.segment-info {
-  flex: 1;
-  min-width: 0;
-}
-.segment-name {
-  font-size: 1rem;
-  font-weight: 700;
-  color: var(--heading);
-  overflow-wrap: anywhere;
-}
-.segment .button {
-  min-height: 42px;
-  padding: 8px 12px;
-}
 .delete-button {
   background: none;
   color: var(--text-muted);
@@ -650,14 +582,8 @@ footer p:last-child {
   .card {
     padding: 21px 18px;
   }
-  .saved-card {
-    grid-column: auto;
-  }
   .section-heading {
     margin-bottom: 18px;
-  }
-  .save-form {
-    flex-direction: column;
   }
   .point-heading {
     align-items: flex-start;
@@ -672,13 +598,6 @@ footer p:last-child {
   }
   .point input {
     font-size: 17px;
-  }
-  .segment {
-    gap: 7px;
-  }
-  .segment .button {
-    font-size: 0.9375rem;
-    padding: 8px 12px;
   }
   footer {
     display: block;
@@ -744,9 +663,6 @@ input[type="number"] {
 }
 .secondary:hover {
   border-color: var(--heading);
-}
-.save-form {
-  flex-direction: column;
 }
 footer {
   display: block;
@@ -1080,66 +996,61 @@ label {
   outline-offset: 3px;
 }
 
-/* 長い説明は折りたたむ（「ご利用にあたって」と同じ矢印） */
-.hint-details {
-  margin-top: 4px;
+/* 詳しい設定：細かい設定は折りたたむ（「ご利用にあたって」と同じ矢印） */
+.advanced {
+  padding: 0;
 }
-.hint-details > summary {
+.advanced > summary {
   display: flex;
   align-items: center;
   gap: 8px;
-  min-height: 44px;
+  padding: 0 20px;
+  min-height: 52px;
   cursor: pointer;
   list-style: none;
-  font-size: 0.9375rem;
-  font-weight: 600;
-  color: var(--text-muted);
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--heading);
 }
-.hint-details > summary::-webkit-details-marker {
+.advanced > summary::-webkit-details-marker {
   display: none;
 }
-.hint-details > summary::after {
+.advanced > summary::after {
   content: "";
-  width: 7px;
-  height: 7px;
+  width: 8px;
+  height: 8px;
+  margin-left: auto;
   border-right: 2px solid currentColor;
   border-bottom: 2px solid currentColor;
   transform: rotate(45deg) translateY(-2px);
   transition: transform 0.15s ease;
 }
-.hint-details[open] > summary::after {
+.advanced[open] > summary::after {
   transform: rotate(-135deg) translateY(-2px);
 }
-.hint-details > summary:focus-visible {
+.advanced > summary:focus-visible {
   outline: 3px solid var(--focus-ring);
   outline-offset: 3px;
 }
-
-/* バックアップ */
-.backup {
+.advanced-group {
+  margin: 0 20px;
+  padding: 16px 0 20px;
   border-top: 1px solid var(--line);
-  margin-top: 16px;
-  padding-top: 16px;
 }
-.backup-title {
-  margin: 0 0 6px;
+.advanced-title {
+  margin: 0 0 8px;
   font-size: 1rem;
   color: var(--heading);
 }
-.backup-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 12px;
+.advanced-group .small + .small {
+  margin-top: 6px;
 }
-.backup-actions .button {
-  flex: 1 1 180px;
-  font-size: 0.9375rem;
+.transcribe-warning {
+  font-weight: 600;
+  color: var(--gold-label);
+  margin-bottom: 10px;
 }
-#backup-status {
-  margin-top: 10px;
-  overflow-wrap: anywhere;
-}
+
 
 /* 削除の取り消しと、画面下のミニプレーヤー（画面幅は本体と同じ 480px まで） */
 .undo-bar,
@@ -1278,21 +1189,8 @@ label {
 .phrase-actions {
   margin-top: 10px;
 }
-.phrase-help {
-  margin-top: 6px;
-}
 
-.ramp-row {
-  margin-bottom: 8px;
-}
 
-/* 録音して聞き比べ */
-.record-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-bottom: 12px;
-}
 
 /* キーボード操作の一覧 */
 .shortcut-list {
@@ -1336,20 +1234,7 @@ label {
   padding: 6px 8px;
 }
 
-/* 原文：1文ずつの行。再生中の文は金の背景、選んだ文は枠で示す */
-.switch-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 44px;
-  margin-bottom: 8px;
-  cursor: pointer;
-}
-.switch-row input {
-  width: 20px;
-  height: 20px;
-  accent-color: var(--accent);
-}
+/* スクリプト：1文ずつの行。再生中の文は金の背景、選んだ文は枠で示す */
 .transcript-actions {
   display: flex;
   flex-wrap: wrap;
@@ -1424,15 +1309,6 @@ label {
 }
 .transcribe-block .transcript-actions + .small {
   margin-top: 10px;
-}
-.transcribe-title {
-  margin: 0 0 8px;
-  font-size: 1rem;
-  color: var(--heading);
-}
-.transcribe-auto {
-  margin: 8px 0 0;
-  font-size: 0.9375rem;
 }
 .transcribe-bar {
   display: block;

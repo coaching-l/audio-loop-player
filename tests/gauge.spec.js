@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { openAdvanced, setRepeat } from "./helpers.mjs";
 async function open(page) {
   await page.goto("/");
   await page.locator("#file-input").setInputFiles("tests/fixtures/tone.wav");
@@ -26,7 +27,12 @@ test("drag A and B on the audio gauge, persist, and replay the selected interval
   await open(page);
   await drag(page, "b", 0.6);
   await drag(page, "a", 0.2);
-  await expect(page.locator("#repeat-mode")).toHaveValue("ab");
+  await expect(page.locator("#toggle-ab")).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await openAdvanced(page);
+  await page.locator("#repeat-count").selectOption("2");
   expect(
     Number(await page.locator("#marker-a").getAttribute("aria-valuenow")),
   ).toBeCloseTo(0.6, 1);
@@ -44,8 +50,7 @@ test("drag A and B on the audio gauge, persist, and replay the selected interval
     timeout: 10000,
   });
   await expect(page.locator("#repeat-progress")).toHaveText("完了 2 / 2 回");
-  await page.locator("#toggle-ab").click();
-  await expect(page.locator("#repeat-mode")).toHaveValue("off");
+  await setRepeat(page, false);
 });
 test("gauge handles cannot cross, support keyboard, and follow direct time input", async ({
   page,
@@ -64,6 +69,7 @@ test("gauge handles cannot cross, support keyboard, and follow direct time input
   await expect(page.locator("#point-a")).toHaveValue("0:00.000");
   await page.locator("#marker-a").press("ArrowRight");
   await expect(page.locator("#point-a")).toHaveValue("0:00.100");
+  await openAdvanced(page);
   await page.locator("#point-b").fill("2");
   await page.locator("#point-b").press("Tab");
   await expect(page.locator("#marker-b")).toHaveAttribute("aria-valuenow", "2");

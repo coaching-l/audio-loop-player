@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { makePhrasesWav } from "./fixtures/make-audio.mjs";
+import { openAdvanced, setRepeat } from "./helpers.mjs";
 const fixture = "tests/fixtures/tone.wav";
 async function load(page, file = fixture) {
   await page.locator("#file-input").setInputFiles(file);
@@ -7,11 +8,12 @@ async function load(page, file = fixture) {
   await expect(page.locator("#library-status")).not.toContainText("保存中");
 }
 async function setPoints(page, a, b) {
+  await openAdvanced(page);
   await page.locator("#point-a").fill(a);
   await page.locator("#point-a").press("Tab");
   await page.locator("#point-b").fill(b);
   await page.locator("#point-b").press("Tab");
-  await page.locator("#repeat-mode").selectOption("ab");
+  await setRepeat(page, true);
 }
 const playing = (page) =>
   page.locator("#audio").evaluate((audio) => !audio.paused);
@@ -88,52 +90,24 @@ test("keyboard shortcuts work, except while typing", async ({
   await page.locator("body").click({ position: { x: 5, y: 5 } });
   await page.keyboard.press("a");
   await expect(page.locator("#point-a")).toHaveValue("0:01.000");
-  await expect(page.locator("#repeat-mode")).toHaveValue("ab");
+  await expect(page.locator("#toggle-ab")).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
   await page.keyboard.press("r");
-  await expect(page.locator("#repeat-mode")).toHaveValue("off");
+  await expect(page.locator("#toggle-ab")).toHaveAttribute(
+    "aria-pressed",
+    "false",
+  );
   await page.keyboard.press("]");
   await expect(page.locator("#speed-value")).toHaveText("1.05×");
   await page.keyboard.press("ArrowLeft");
   await expect.poll(() => currentTime(page)).toBeCloseTo(0, 1);
-  await page.locator("#segment-name").fill("");
-  await page.locator("#segment-name").pressSequentially("ab");
-  await expect(page.locator("#segment-name")).toHaveValue("ab");
+  await page.getByRole("button", { name: "スクリプトを貼り付ける" }).click();
+  await page.locator("#transcript-input").pressSequentially("ab");
+  await expect(page.locator("#transcript-input")).toHaveValue("ab");
   await expect(page.locator("#point-a")).toHaveValue("0:01.000");
   await expect(page.locator("#speed-value")).toHaveText("1.05×");
-});
-
-test("the speed ramp raises the rate each repeat up to 1.0x and keeps the base rate", async ({
-  page,
-}) => {
-  await page.goto("/");
-  await load(page);
-  await setPoints(page, "0.2", "0.5");
-  await page.locator("#repeat-count").selectOption("3");
-  await page.locator("#speed").evaluate((el) => {
-    el.value = "0.9";
-    el.dispatchEvent(new Event("input", { bubbles: true }));
-  });
-  await page.locator("#ramp-step").selectOption("0.05");
-  await page.locator("#audio").evaluate((audio) => {
-    window.rates = [];
-    audio.addEventListener("play", () => window.rates.push(audio.playbackRate));
-  });
-  await page.locator("#play").click();
-  await expect(page.locator("#play-status")).toHaveText("再生完了", {
-    timeout: 10000,
-  });
-  expect(await page.evaluate(() => window.rates)).toEqual([0.9, 0.95, 1]);
-  await expect(page.locator("#speed-value")).toHaveText("0.90×");
-  await page.locator("#segment-name").fill("加速");
-  await page.getByRole("button", { name: "区間を保存", exact: true }).click();
-  await expect(page.locator(".segment .small")).toContainText("0.05倍ずつ速く");
-  await page.reload();
-  await page
-    .getByRole("button", { name: "tone.wavを開く", exact: true })
-    .click();
-  await expect(page.locator("#play")).toBeEnabled();
-  await expect(page.locator("#ramp-step")).toHaveValue("0.05");
-  await expect(page.locator("#speed-value")).toHaveText("0.90×");
 });
 
 test("the waveform finds phrases and steps through them as A–B intervals", async ({
@@ -163,7 +137,10 @@ test("the waveform finds phrases and steps through them as A–B intervals", asy
   expect(seconds(a)).toBeLessThan(1.15);
   expect(seconds(b)).toBeGreaterThan(1.55);
   expect(seconds(b)).toBeLessThan(1.8);
-  await expect(page.locator("#repeat-mode")).toHaveValue("ab");
+  await expect(page.locator("#toggle-ab")).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
   await page.locator("#next-phrase").click();
   [a] = await interval();
   expect(seconds(a)).toBeGreaterThan(2.05);
@@ -178,63 +155,32 @@ test("the waveform finds phrases and steps through them as A–B intervals", asy
   expect(seconds(a)).toBeLessThan(0.05);
 });
 
-test("a recording can be played back and compared with the model", async ({
+test("with a script, the previous and next buttons step through its sentences", async ({
   page,
-  browserName,
 }) => {
-  test.skip(
-    browserName !== "chromium",
-    "Only Chromium has a fake microphone in these tests.",
-  );
   await page.goto("/");
-  await load(page);
-  await setPoints(page, "0.2", "0.6");
-  await page.getByRole("button", { name: "録音する", exact: true }).click();
-  await expect(page.locator("#record-status")).toContainText("録音中");
-  await page.waitForTimeout(1200);
-  await page.getByRole("button", { name: "録音を止める", exact: true }).click();
-  await expect(page.locator("#record-status")).toHaveText("録音あり");
-  await expect(page.locator("#play-recording")).toBeEnabled();
-  await page.locator("#compare").click();
-  await expect(page.locator("#record-status")).toHaveText("お手本を再生中");
-  await expect(page.locator("#record-status")).toHaveText("自分の声を再生中", {
-    timeout: 5000,
+  await load(page, {
+    name: "phrases.wav",
+    mimeType: "audio/wav",
+    buffer: makePhrasesWav(),
   });
-  // The model stopped at B before the recording started.
-  expect(await currentTime(page)).toBeGreaterThanOrEqual(0.55);
-  expect(await playing(page)).toBe(false);
-  await expect(page.locator("#record-status")).toHaveText("録音あり", {
-    timeout: 5000,
-  });
-  // Opening other audio discards the recording; it was never stored.
-  await load(page, "tests/fixtures/tone.mp3");
-  await expect(page.locator("#record-status")).toHaveText("録音なし");
-  await expect(page.locator("#compare")).toBeDisabled();
-});
-
-test("recording pauses the model, and playing ends the recording first", async ({
-  page,
-  browserName,
-}) => {
-  test.skip(
-    browserName !== "chromium",
-    "Only Chromium has a fake microphone in these tests.",
-  );
-  await page.goto("/");
-  await load(page);
-  await page.locator("#repeat-count").selectOption("0");
-  await page.locator("#repeat-mode").selectOption("all");
-  await page.locator("#play").click();
-  await expect.poll(() => playing(page)).toBe(true);
-  await page.getByRole("button", { name: "録音する", exact: true }).click();
-  await expect(page.locator("#record-status")).toContainText("録音中");
-  expect(await playing(page)).toBe(false);
-  await page.waitForTimeout(500);
-  expect(await playing(page)).toBe(false);
-  await page.locator("#play").click();
-  await expect(page.locator("#record-status")).toHaveText("録音あり");
-  await expect.poll(() => playing(page)).toBe(true);
-  await expect(page.locator("#notice")).toContainText("録音を止めて");
+  await expect(page.locator("#waveform")).toBeVisible();
+  await page.getByRole("button", { name: "スクリプトを貼り付ける" }).click();
+  await page.locator("#transcript-input").fill("First. Second. Third.");
+  await page.getByRole("button", { name: "保存する", exact: true }).click();
+  await expect(page.locator(".sentence")).toHaveCount(3);
+  // The same sentences as in the script: the buttons select them there too.
+  await page.locator("#next-phrase").click();
+  await expect(page.locator(".sentence.is-selected")).toHaveText("Second.");
+  await page.locator("#next-phrase").click();
+  await expect(page.locator(".sentence.is-selected")).toHaveText("Third.");
+  await page.locator("#next-phrase").click();
+  await expect(page.locator("#notice")).toContainText("最後の文");
+  await page.locator("#prev-phrase").click();
+  await expect(page.locator(".sentence.is-selected")).toHaveText("Second.");
+  const a = Number(await page.locator("#marker-a").getAttribute("aria-valuenow"));
+  expect(a).toBeGreaterThan(0.95);
+  expect(a).toBeLessThan(1.15);
 });
 
 test("zooming the gauge spreads a short interval out for finer A and B", async ({
@@ -294,6 +240,7 @@ test("a zoomed gauge follows playback past its edge", async ({ page }) => {
     mimeType: "audio/wav",
     buffer: makePhrasesWav(),
   });
+  await openAdvanced(page);
   await page.locator("#zoom-in").click();
   await page.locator("#zoom-in").click();
   expect(Number(await page.locator("#seek").getAttribute("min"))).toBe(0);

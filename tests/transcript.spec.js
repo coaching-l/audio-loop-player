@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
-import { readFile } from "node:fs/promises";
-import { makePhrasesWav } from "./fixtures/make-audio.mjs";
+import { makePhrasesWav, makeWav } from "./fixtures/make-audio.mjs";
+import { openAdvanced, setRepeat } from "./helpers.mjs";
 import {
   splitSentences,
   alignSentences,
@@ -21,7 +21,7 @@ async function load(page, file = phrasesAudio()) {
   await expect(page.locator("#library-status")).not.toContainText("保存中");
 }
 async function paste(page, text) {
-  await page.getByRole("button", { name: "原文を貼り付ける" }).click();
+  await page.getByRole("button", { name: "スクリプトを貼り付ける" }).click();
   await page.locator("#transcript-input").fill(text);
   await page.getByRole("button", { name: "保存する", exact: true }).click();
 }
@@ -73,7 +73,7 @@ test("pasted text follows playback and a sentence becomes the A–B interval", a
 }) => {
   await page.goto("/");
   await load(page);
-  await expect(page.locator("#transcript-status")).toHaveText("原文なし");
+  await expect(page.locator("#transcript-status")).toHaveText("スクリプトなし");
   await paste(page, english);
   await expect(sentences(page)).toHaveText([
     "One two three.",
@@ -94,9 +94,12 @@ test("pasted text follows playback and a sentence becomes the A–B interval", a
   expect(a).toBeLessThan(1.15);
   expect(b).toBeGreaterThan(1.55);
   expect(b).toBeLessThan(1.8);
-  await expect(page.locator("#repeat-mode")).toHaveValue("ab");
+  await expect(page.locator("#toggle-ab")).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
   await expect(sentences(page).nth(1)).toHaveClass(/is-selected/);
-  await page.locator("#repeat-mode").selectOption("off");
+  await setRepeat(page, false);
   await page.locator("#seek").evaluate((el) => {
     el.value = "0";
     el.dispatchEvent(new Event("input", { bubbles: true }));
@@ -126,6 +129,7 @@ test("a sentence's timing can be corrected from the A–B interval", async ({
   await expect(page.locator("#waveform")).toBeVisible();
   await paste(page, english);
   await sentences(page).nth(2).click();
+  await openAdvanced(page);
   await page.locator("#point-b").fill("2.6");
   await page.locator("#point-b").press("Tab");
   await page
@@ -136,7 +140,7 @@ test("a sentence's timing can be corrected from the A–B interval", async ({
     .getByRole("button", { name: "phrases.wavを開く", exact: true })
     .click();
   await expect(page.locator("#play")).toBeEnabled();
-  await page.locator("#repeat-mode").selectOption("off");
+  await setRepeat(page, false);
   await sentences(page).nth(2).click();
   await expect(page.locator("#point-b")).toHaveValue("0:02.600");
 });
@@ -166,60 +170,75 @@ test("a Chinese text file is checked, saved and shown with Chinese glyphs", asyn
   );
 });
 
-test("the text can be hidden, edited and deleted with undo", async ({
-  page,
-}) => {
+test("the script can be edited and deleted with undo", async ({ page }) => {
   await page.goto("/");
   await load(page);
   await paste(page, english);
-  await page.getByLabel("原文を表示する").uncheck();
-  await expect(page.locator("#transcript-body")).toBeHidden();
   await page.reload();
-  await expect(page.getByLabel("原文を表示する")).not.toBeChecked();
-  await expect(page.locator("#transcript-body")).toBeHidden();
-  await page.getByLabel("原文を表示する").check();
   await page
     .getByRole("button", { name: "phrases.wavを開く", exact: true })
     .click();
   await expect(sentences(page)).toHaveCount(3);
-  await page.getByRole("button", { name: "原文を直す" }).click();
+  await page.getByRole("button", { name: "スクリプトを直す" }).click();
   await expect(page.locator("#transcript-input")).toHaveValue(english);
   await page.locator("#transcript-input").fill("Only one sentence");
   await page.getByRole("button", { name: "保存する", exact: true }).click();
   await expect(sentences(page)).toHaveText(["Only one sentence"]);
-  await page.getByRole("button", { name: "原文を消す" }).click();
-  await expect(page.locator("#transcript-status")).toHaveText("原文なし");
+  await page.getByRole("button", { name: "スクリプトを消す" }).click();
+  await expect(page.locator("#transcript-status")).toHaveText("スクリプトなし");
   await page.getByRole("button", { name: "元に戻す", exact: true }).click();
   await expect(sentences(page)).toHaveText(["Only one sentence"]);
 });
 
-test("the backup carries the original text to another browser", async ({
+// The way in from text will hand over audio together with its script and times.
+test("material can bring its own script, which the learner's edits then replace", async ({
   page,
-  browser,
 }) => {
   await page.goto("/");
-  // A file on disk keeps its date, so the other browser sees the same audio.
-  await load(page, "tests/fixtures/tone.wav");
-  await paste(page, english);
-  const [download] = await Promise.all([
-    page.waitForEvent("download"),
-    page
-      .getByRole("button", { name: "バックアップを保存", exact: true })
-      .click(),
-  ]);
-  const backup = JSON.parse(await readFile(await download.path(), "utf8"));
-  expect(Object.values(backup.transcripts)[0].text).toBe(english);
-  const other = await browser.newContext();
-  const fresh = await other.newPage();
-  await fresh.goto("/");
-  await fresh.locator("#import-backup").setInputFiles({
-    name: "backup.json",
-    mimeType: "application/json",
-    buffer: Buffer.from(JSON.stringify(backup)),
-  });
-  await expect(fresh.locator("#backup-status")).toContainText("原文を1件");
-  // The same audio file (name, size and date) picks the text up.
-  await load(fresh, "tests/fixtures/tone.wav");
-  await expect(fresh.locator("#transcript-sentences .sentence")).toHaveCount(3);
-  await other.close();
+  const open = (script) =>
+    page.evaluate(
+      async ({ bytes, script }) => {
+        const { openPractice } = await import("/practice.js");
+        const file = new File([new Uint8Array(bytes)], "made.wav", {
+          type: "audio/wav",
+        });
+        await openPractice({ file, key: "text:lesson-1", name: "教材1", script });
+      },
+      { bytes: [...makePhrasesWav()], script },
+    );
+  const given = {
+    text: "First. Second. Third.",
+    sentences: [
+      { text: "First.", start: 0, end: 0.5 },
+      { text: "Second.", start: 1.1, end: 1.6 },
+      { text: "Third.", start: 2.2, end: 2.7 },
+    ],
+  };
+  await open(given);
+  await expect(page.locator("#play")).toBeEnabled();
+  await expect(page.locator("#file-name")).toHaveText("教材1");
+  await expect(sentences(page)).toHaveText(["First.", "Second.", "Third."]);
+  await sentences(page).nth(1).click();
+  await expect(page.locator("#point-a")).toHaveValue("0:01.100");
+  await expect(page.locator("#point-b")).toHaveValue("0:01.600");
+  // Saved under the material's own key, so the learner's edit is what comes back.
+  await page.getByRole("button", { name: "スクリプトを直す" }).click();
+  await page.locator("#transcript-input").fill("First. Second, changed. Third.");
+  await page.getByRole("button", { name: "保存する", exact: true }).click();
+  await open(given);
+  await expect(page.locator("#play")).toBeEnabled();
+  await expect(sentences(page).nth(1)).toHaveText("Second, changed.");
+  // A script without times is timed like a pasted one.
+  await page.evaluate(
+    async ({ bytes }) => {
+      const { openPractice } = await import("/practice.js");
+      const file = new File([new Uint8Array(bytes)], "plain.wav", {
+        type: "audio/wav",
+      });
+      await openPractice({ file, script: { text: "Just one line." } });
+    },
+    { bytes: [...makeWav(1)] },
+  );
+  await expect(page.locator("#file-name")).toHaveText("plain.wav");
+  await expect(sentences(page)).toHaveText(["Just one line."]);
 });

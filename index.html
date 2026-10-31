@@ -42,8 +42,8 @@
       content="端末の音声で、繰り返し聴く・声に出す。アップロード不要の語学学習プレーヤー。"
     />
     <title>音声リピートプレーヤー | COACHING-L</title>
-    <link rel="stylesheet" href="./style.css?v=21" />
-    <script type="module" src="./app.js?v=21"></script>
+    <link rel="stylesheet" href="./style.css?v=22" />
+    <script type="module" src="./app.js?v=22"></script>
   </head>
   <body>
     <main>
@@ -68,7 +68,7 @@
       </header>
       <div class="intro">
         <h2 class="lead">聴く。くり返す。<br />自分の言葉にする。</h2>
-        <p>いつもの音声から、あなただけの練習区間を。</p>
+        <p>素材を用意して、そのまま練習を始めましょう。</p>
       </div>
       <section
         id="drop-zone"
@@ -76,7 +76,7 @@
         aria-labelledby="library-heading"
       >
         <div class="section-heading">
-          <h2 id="library-heading">練習する音声</h2>
+          <h2 id="library-heading">音源から始める</h2>
           <span id="audio-count" class="tag">0 / 10件</span>
         </div>
         <p id="library-status" class="small" role="status">
@@ -105,10 +105,16 @@
       </div>
       <p id="error" class="error" role="alert" hidden></p>
       <p id="notice" class="notice" role="status"></p>
-      <div class="workspace">
+      <!-- The practice screen: the same for every way in (practice.js). -->
+      <section
+        id="practice"
+        class="workspace"
+        aria-labelledby="practice-heading"
+      >
+        <h2 id="practice-heading" class="visually-hidden">練習</h2>
         <section class="card player-card" aria-labelledby="player-heading">
           <div class="section-heading">
-            <h2 id="player-heading"><span class="step">01</span> プレーヤー</h2>
+            <h2 id="player-heading">プレーヤー</h2>
             <span id="play-status" class="tag" role="status"
               >音声を選んでください</span
             >
@@ -180,34 +186,13 @@
                 </div>
               </div>
               <div class="ab-legend">
-                <span id="a-legend">A —</span><span id="b-legend">B —</span>
-              </div>
-              <div class="zoom-tools">
-                <span id="zoom-range" class="zoom-range">全体を表示中</span>
-                <div class="zoom-buttons">
-                  <button
-                    id="zoom-out"
-                    class="text-button"
-                    type="button"
-                    aria-label="ゲージを縮小"
-                    disabled
-                  >
-                    縮小</button
-                  ><button
-                    id="zoom-in"
-                    class="text-button"
-                    type="button"
-                    aria-label="ゲージを拡大"
-                  >
-                    拡大</button
-                  ><button id="zoom-fit" class="text-button" type="button">
-                    区間に合わせる
-                  </button>
-                </div>
+                <span id="a-legend">A —</span
+                ><span id="repeat-progress">—</span
+                ><span id="b-legend">B —</span>
               </div>
             </div>
             <p id="gauge-help" class="small">
-              AとBを左右に動かして、くり返す範囲を決めます。上の丸いつまみは再生位置です。短い区間は「拡大」や「区間に合わせる」でゲージを広げると、細かく指定できます。
+              AとBを左右に動かして、くり返す範囲を決めます。上の丸いつまみは再生位置です。
             </p>
             <div class="gauge-actions">
               <button id="gauge-set-a" class="button secondary" type="button">
@@ -237,9 +222,6 @@
                 次の文へ
               </button>
             </div>
-            <p id="phrase-help" class="small phrase-help" hidden>
-              波形の無音で区切った「文」を、そのままA–B区間にします。区切りは目安なので、ずれたらA・Bを動かしてください。
-            </p>
             <div class="transport">
               <button id="back" class="skip" aria-label="5秒戻る">
                 <svg
@@ -296,355 +278,274 @@
                   1.0×に戻す</button
                 ><span>2.0×（速い）</span>
               </div>
-              <p class="small">
-                速度を変えても、声の高さはなるべく変わらないようにしています（ブラウザによって異なります）。
-              </p>
             </div>
           </fieldset>
-          <div class="tip">
-            <p>
-              短い区間をくり返し聴いたら、声に出してまねしてみましょう。くり返しの間に無音を入れると、その時間に声に出す練習ができます。
-            </p>
-          </div>
         </section>
-        <section
-          class="card transcript-card"
-          aria-labelledby="transcript-heading"
-        >
+        <section class="card transcript-card" aria-labelledby="transcript-heading">
           <div class="section-heading">
-            <h2 id="transcript-heading"><span class="step">02</span> 原文</h2>
+            <h2 id="transcript-heading">スクリプト</h2>
             <span id="transcript-status" class="tag">—</span>
           </div>
-          <label class="switch-row" for="show-transcript"
-            ><input id="show-transcript" type="checkbox" checked />
-            原文を表示する</label
-          >
-          <div id="transcript-body">
-            <fieldset id="transcript-controls" disabled>
-              <div id="transcript-empty">
-                <p class="small">
-                  音声から文字を起こすか、教材の原文を貼り付けてください。再生している文に色が付き、音声を聞きながら目で追えます。
-                </p>
-                <div id="transcribe-setup" class="transcribe-block">
-                  <h3 class="transcribe-title">音声から文字起こし</h3>
-                  <label for="transcribe-language">話している言語</label>
-                  <select id="transcribe-language">
-                    <option value="en">英語</option>
-                    <option value="zh">中国語（簡体字で表示）</option>
+          <fieldset id="transcript-controls" disabled>
+            <div id="transcript-empty">
+              <p class="small">
+                教材のスクリプトを貼り付けるか、テキストファイルを読み込んでください。再生している文に色が付き、文を押すとその文をくり返せます。
+              </p>
+              <div class="transcript-actions">
+                <button
+                  id="transcript-paste"
+                  class="button primary"
+                  type="button"
+                >
+                  スクリプトを貼り付ける</button
+                ><label class="button secondary" for="transcript-file"
+                  >テキストファイルを読み込む</label
+                ><input
+                  id="transcript-file"
+                  type="file"
+                  accept=".txt,text/plain"
+                  class="visually-hidden"
+                />
+              </div>
+              <p id="transcribe-hint" class="small">
+                スクリプトがないときは、「詳しい設定」の「音声から文字起こし」も使えます（精度はそこそこです）。
+              </p>
+            </div>
+            <div id="transcribe-progress" class="transcribe-block" hidden>
+              <p id="transcribe-status" class="small" role="status"></p>
+              <progress
+                id="transcribe-bar"
+                class="transcribe-bar"
+                max="1"
+                aria-labelledby="transcribe-status"
+              ></progress>
+              <div class="transcript-actions">
+                <button
+                  id="transcribe-cancel"
+                  class="button secondary"
+                  type="button"
+                >
+                  文字起こしを中止
+                </button>
+              </div>
+            </div>
+            <form id="transcript-editor" class="transcript-editor" hidden>
+              <label for="transcript-input"
+                >スクリプト（1文ずつ区切って表示します）</label
+              >
+              <textarea
+                id="transcript-input"
+                rows="8"
+                spellcheck="false"
+              ></textarea>
+              <div class="transcript-actions">
+                <button class="button primary" type="submit">保存する</button
+                ><button
+                  id="transcript-cancel"
+                  class="button secondary"
+                  type="button"
+                >
+                  やめる
+                </button>
+              </div>
+            </form>
+            <div id="transcript-view" hidden>
+              <div
+                id="transcript-sentences"
+                class="transcript-sentences"
+                aria-label="スクリプト。文を押すと、その文をA–B区間にします"
+              ></div>
+              <p class="small">文を押すと、その文をA–B区間にします。</p>
+              <div class="transcript-links">
+                <button id="transcript-edit" class="text-button" type="button">
+                  スクリプトを直す</button
+                ><button
+                  id="transcript-delete"
+                  class="text-button"
+                  type="button"
+                >
+                  スクリプトを消す
+                </button>
+              </div>
+            </div>
+          </fieldset>
+        </section>
+        <details id="advanced" class="card advanced">
+          <summary>詳しい設定</summary>
+          <fieldset id="repeat-controls" disabled>
+            <section class="advanced-group" aria-labelledby="repeat-heading">
+              <h3 id="repeat-heading" class="advanced-title">くり返し</h3>
+              <div class="repeat-options">
+                <div>
+                  <label for="repeat-count">再生する回数</label
+                  ><select id="repeat-count">
+                    <option value="0">無制限</option>
+                    <option value="2">2回</option>
+                    <option value="3">3回</option>
+                    <option value="5">5回</option>
+                    <option value="10">10回</option>
                   </select>
-                  <div class="transcript-actions">
-                    <button
-                      id="transcribe-start"
-                      class="button primary"
-                      type="button"
-                    >
-                      音声から文字起こし
-                    </button>
-                  </div>
-                  <p id="transcribe-note" class="small">
-                    この端末の中で文字にし、音声はどこにも送りません。初めてのときだけ、文字起こし用のデータ（<span
-                      class="model-size"
-                      >約95MB</span
-                    >）をこのサイトから受け取って保存します。Wi-Fiにつながっているときにお使いください。聞き取りの誤りは、あとから直せます。
-                  </p>
                 </div>
-                <div id="transcribe-progress" class="transcribe-block" hidden>
-                  <p id="transcribe-status" class="small" role="status"></p>
-                  <progress
-                    id="transcribe-bar"
-                    class="transcribe-bar"
-                    max="1"
-                    aria-labelledby="transcribe-status"
-                  ></progress>
-                  <div class="transcript-actions">
-                    <button
-                      id="transcribe-cancel"
-                      class="button secondary"
-                      type="button"
-                    >
-                      文字起こしを中止
-                    </button>
-                  </div>
-                </div>
-                <div id="transcript-manual" class="transcribe-block">
-                  <h3 class="transcribe-title">原文があるとき</h3>
-                  <div class="transcript-actions">
-                    <button
-                      id="transcript-paste"
-                      class="button secondary"
-                      type="button"
-                    >
-                      原文を貼り付ける</button
-                    ><label class="button secondary" for="transcript-file"
-                      >テキストファイルを読み込む</label
-                    ><input
-                      id="transcript-file"
-                      type="file"
-                      accept=".txt,text/plain"
-                      class="visually-hidden"
-                    />
-                  </div>
+                <div>
+                  <label for="gap-mode">くり返しの間の無音</label
+                  ><select id="gap-mode">
+                    <option value="0">秒数で決める</option>
+                    <option value="1">区間と同じ</option>
+                    <option value="1.5">区間の1.5倍</option>
+                    <option value="2">区間の2倍</option>
+                  </select>
                 </div>
               </div>
-              <form id="transcript-editor" class="transcript-editor" hidden>
-                <label for="transcript-input"
-                  >原文（1文ずつ区切って表示します）</label
-                >
-                <textarea
-                  id="transcript-input"
-                  rows="8"
-                  spellcheck="false"
-                ></textarea>
-                <div class="transcript-actions">
-                  <button class="button primary" type="submit">保存する</button
-                  ><button
-                    id="transcript-cancel"
-                    class="button secondary"
-                    type="button"
-                  >
-                    やめる
-                  </button>
+              <div id="gap-seconds" class="gap-seconds">
+                <label for="gap">無音の秒数（0〜10秒）</label>
+                <div class="gap-input">
+                  <input
+                    id="gap"
+                    type="number"
+                    min="0"
+                    max="10"
+                    step="0.1"
+                    value="0"
+                  /><span>秒</span>
                 </div>
-              </form>
-              <div id="transcript-view" hidden>
-                <div
-                  id="transcript-sentences"
-                  class="transcript-sentences"
-                  aria-label="原文。文を押すと、その文をA–B区間にします"
-                ></div>
-                <p class="small">
-                  文を押すと、その文をA–B区間にします。色の位置がずれるときは、文を押してからゲージでA・Bを合わせ、「選んだ文の時刻を今のA–Bにする」を押してください。
-                </p>
-                <div class="transcript-actions">
+              </div>
+              <p class="small">
+                回数には最初の1回も含みます。無音を入れると、その間に声に出して練習できます。「区間と同じ」は、区間を聴いたのと同じ時間だけ無音にします。
+              </p>
+            </section>
+            <section class="advanced-group" aria-labelledby="range-heading">
+              <h3 id="range-heading" class="advanced-title">
+                区間を細かく合わせる
+              </h3>
+              <div class="zoom-tools">
+                <span id="zoom-range" class="zoom-range">全体を表示中</span>
+                <div class="zoom-buttons">
                   <button
-                    id="transcript-fit"
-                    class="button secondary"
+                    id="zoom-out"
+                    class="text-button"
                     type="button"
+                    aria-label="ゲージを縮小"
                     disabled
                   >
-                    選んだ文の時刻を今のA–Bにする
-                  </button>
-                </div>
-                <div class="transcript-links">
-                  <button
-                    id="transcript-edit"
-                    class="text-button"
-                    type="button"
-                  >
-                    原文を直す</button
+                    縮小</button
                   ><button
-                    id="transcript-delete"
+                    id="zoom-in"
                     class="text-button"
                     type="button"
+                    aria-label="ゲージを拡大"
                   >
-                    原文を消す
+                    拡大</button
+                  ><button id="zoom-fit" class="text-button" type="button">
+                    区間に合わせる
                   </button>
                 </div>
+              </div>
+              <p class="small">
+                短い区間は「拡大」や「区間に合わせる」でゲージを広げると、A・Bを細かく動かせます。
+              </p>
+              <div class="points">
+                <div class="point">
+                  <div class="point-heading">
+                    <label for="point-a"
+                      ><span class="point-letter">A</span> 開始点</label
+                    >
+                  </div>
+                  <input
+                    id="point-a"
+                    type="text"
+                    inputmode="decimal"
+                    value="0:00.000"
+                    aria-describedby="time-help"
+                    autocomplete="off"
+                  />
+                </div>
+                <div class="point">
+                  <div class="point-heading">
+                    <label for="point-b"
+                      ><span class="point-letter b">B</span> 終了点</label
+                    >
+                  </div>
+                  <input
+                    id="point-b"
+                    type="text"
+                    inputmode="decimal"
+                    value="0:00.000"
+                    aria-describedby="time-help"
+                    autocomplete="off"
+                  />
+                </div>
+              </div>
+              <p id="time-help" class="small">
+                「分:秒」（例：1:23.5）か秒数（例：83.5）で入力します。Enterキーを押すか、入力欄の外をタップすると反映されます。
+              </p>
+              <p id="range-error" class="error" role="alert" hidden></p>
+            </section>
+          </fieldset>
+          <section class="advanced-group" aria-labelledby="fit-heading">
+            <h3 id="fit-heading" class="advanced-title">スクリプトの時刻を直す</h3>
+            <p class="small">
+              色の位置がずれる文は、その文を押してからゲージでA・Bを合わせ、このボタンを押してください。
+            </p>
+            <div class="transcript-actions">
+              <button
+                id="transcript-fit"
+                class="button secondary"
+                type="button"
+                disabled
+              >
+                選んだ文の時刻を今のA–Bにする
+              </button>
+            </div>
+          </section>
+          <section
+            id="transcribe-setup"
+            class="advanced-group"
+            aria-labelledby="transcribe-heading"
+          >
+            <h3 id="transcribe-heading" class="advanced-title">
+              音声から文字起こし
+            </h3>
+            <p class="small transcribe-warning">
+              精度はそこそこです。必要に応じて手直ししてください。
+            </p>
+            <fieldset id="transcribe-controls" disabled>
+              <label for="transcribe-language">話している言語</label>
+              <select id="transcribe-language">
+                <option value="en">英語</option>
+                <option value="zh">中国語（簡体字で表示）</option>
+              </select>
+              <div class="transcript-actions">
+                <button
+                  id="transcribe-start"
+                  class="button secondary"
+                  type="button"
+                >
+                  音声から文字起こし
+                </button>
               </div>
             </fieldset>
-            <label
-              id="transcribe-auto-row"
-              class="switch-row transcribe-auto"
-              for="transcribe-auto"
-              ><input id="transcribe-auto" type="checkbox" />
-              原文のない音声は、開いたときに自動で文字起こしする</label
-            >
-          </div>
-        </section>
-        <section class="card repeat-card" aria-labelledby="repeat-heading">
-          <div class="section-heading">
-            <h2 id="repeat-heading">
-              <span class="step">03</span> リピート設定
-            </h2>
-            <span id="repeat-progress" class="tag">—</span>
-          </div>
-          <fieldset id="repeat-controls" disabled>
-            <label for="repeat-mode">くり返す範囲</label
-            ><select id="repeat-mode">
-              <option value="off">くり返さない</option>
-              <option value="ab">AからBまで（区間）</option>
-              <option value="all">音声全体</option>
-            </select>
-            <div class="points">
-              <div class="point">
-                <div class="point-heading">
-                  <label for="point-a"
-                    ><span class="point-letter">A</span> 開始点</label
-                  >
-                </div>
-                <input
-                  id="point-a"
-                  type="text"
-                  inputmode="decimal"
-                  value="0:00.000"
-                  aria-describedby="time-help"
-                  autocomplete="off"
-                />
-              </div>
-              <div class="point">
-                <div class="point-heading">
-                  <label for="point-b"
-                    ><span class="point-letter b">B</span> 終了点</label
-                  >
-                </div>
-                <input
-                  id="point-b"
-                  type="text"
-                  inputmode="decimal"
-                  value="0:00.000"
-                  aria-describedby="time-help"
-                  autocomplete="off"
-                />
-              </div>
-            </div>
-            <p id="time-help" class="small">
-              「分:秒」（例：1:23.5）か秒数（例：83.5）で入力します。Enterキーを押すか、入力欄の外をタップすると反映されます。
+            <p id="transcribe-note" class="small">
+              この端末の中で文字にし、音声はどこにも送りません。初めてのときだけ、文字起こし用のデータ（<span
+                class="model-size"
+                >約95MB</span
+              >）をこのサイトから受け取って保存します。Wi-Fiにつながっているときにお使いください。
             </p>
-            <p id="range-error" class="error" role="alert" hidden></p>
-            <div class="repeat-options">
-              <div>
-                <label for="repeat-count">再生する回数</label
-                ><select id="repeat-count">
-                  <option value="2">2回</option>
-                  <option value="3">3回</option>
-                  <option value="5">5回</option>
-                  <option value="10">10回</option>
-                  <option value="0">無制限</option>
-                </select>
-              </div>
-              <div>
-                <label for="gap-mode">くり返しの間の無音</label
-                ><select id="gap-mode">
-                  <option value="0">秒数で決める</option>
-                  <option value="1">区間と同じ</option>
-                  <option value="1.5">区間の1.5倍</option>
-                  <option value="2">区間の2倍</option>
-                </select>
-              </div>
-            </div>
-            <div id="gap-seconds" class="gap-seconds">
-              <label for="gap">無音の秒数（0〜10秒）</label>
-              <div class="gap-input">
-                <input
-                  id="gap"
-                  type="number"
-                  min="0"
-                  max="10"
-                  step="0.1"
-                  value="0"
-                /><span>秒</span>
-              </div>
-            </div>
-            <div class="ramp-row">
-              <label for="ramp-step">くり返すたびに速くする</label
-              ><select id="ramp-step">
-                <option value="0">しない</option>
-                <option value="0.05">0.05倍ずつ</option>
-                <option value="0.1">0.1倍ずつ</option>
-              </select>
-            </div>
-            <details class="hint-details">
-              <summary>くり返しのしくみ</summary>
-              <p class="small">
-                回数には最初の1回も含みます（2回なら「聴く→無音→もう一度聴く」で止まります）。
-              </p>
-              <p class="small">
-                「区間と同じ」にすると、区間を聴いたのと同じ時間だけ無音になり、その間に声に出して練習できます（ゆっくり再生なら、無音もそのぶん長くなります）。
-              </p>
-              <p class="small">
-                秒数で決めた無音は、再生速度を変えても同じ長さです。設定を変えると、回数は0から数え直します。
-              </p>
-              <p class="small">
-                「くり返すたびに速くする」は、ゆっくりの速度から始めて1回ごとに速くし、1.0倍で止めます（例：0.8倍・0.1倍ずつなら、0.8→0.9→1.0）。再生速度が1.0倍以上のときは変わりません。
-              </p>
-            </details>
-          </fieldset>
-        </section>
-        <section class="card record-card" aria-labelledby="record-heading">
-          <div class="section-heading">
-            <h2 id="record-heading">
-              <span class="step">04</span> 録音して聞き比べ
-            </h2>
-            <span id="record-status" class="tag">録音なし</span>
-          </div>
-          <fieldset id="record-controls" disabled>
-            <div class="record-actions">
-              <button id="record" class="button primary" type="button">
-                録音する</button
-              ><button
-                id="play-recording"
-                class="button secondary"
-                type="button"
-                disabled
-              >
-                自分の声を聞く</button
-              ><button
-                id="compare"
-                class="button secondary"
-                type="button"
-                disabled
-              >
-                お手本→自分の声
-              </button>
-            </div>
-          </fieldset>
-          <p id="record-error" class="error" role="alert" hidden></p>
-          <p class="small">
-            お手本の区間を聞いたら「録音する」で声に出し、「お手本→自分の声」で続けて聞き比べます。録音を始めるとお手本は止まり、録音中に再生ボタンを押すと録音を終えてから再生します。録音は最長60秒で、このページの中にだけ置きます。保存も送信もせず、別の音声を開くと消えます。
-          </p>
-        </section>
-        <section class="card saved-card" aria-labelledby="saved-heading">
-          <div class="section-heading">
-            <h2 id="saved-heading">
-              <span class="step">05</span> 保存した練習区間
-            </h2>
-            <span id="saved-count" class="tag">0件</span>
-          </div>
-          <fieldset id="save-controls" disabled>
-            <form id="save-form" class="save-form">
-              <label for="segment-name" class="visually-hidden"
-                >練習区間の名前</label
-              ><input
-                id="segment-name"
-                type="text"
-                maxlength="60"
-                placeholder="区間の名前（例：冒頭のフレーズ）"
-                required
-              /><button class="button secondary" type="submit">
-                区間を保存
-              </button>
-            </form>
-          </fieldset>
-          <ul id="segments" class="segments"></ul>
-          <p id="empty-segments" class="empty">
-            覚えたいフレーズを、ここに残しておこう。<br /><span class="small"
-              >A–B区間・速度・回数・無音時間をまとめて保存します。</span
-            >
-          </p>
-          <p class="small storage-note">
-            練習区間・速度・再生位置は音声ごとに保存します。登録済みの音声は上の一覧から開けます。
-          </p>
-          <div class="backup">
-            <h3 class="backup-title">バックアップ</h3>
             <p class="small">
-              練習区間と設定をファイルに保存して、別のブラウザやスマホに移せます。音声ファイルそのものは入りません。読み込んでも、今ある練習区間は消えません。
+              <span id="model-status"
+                >文字起こし用のデータは保存していません。</span
+              >
+              <button
+                id="model-delete"
+                class="text-button"
+                type="button"
+                hidden
+              >
+                文字起こし用のデータを削除
+              </button>
             </p>
-            <div class="backup-actions">
-              <button id="export-backup" class="button secondary" type="button">
-                バックアップを保存</button
-              ><label class="button secondary" for="import-backup"
-                >バックアップを読み込む</label
-              ><input
-                id="import-backup"
-                type="file"
-                accept=".json,application/json"
-                class="visually-hidden"
-              />
-            </div>
-            <p id="backup-status" class="small" role="status" hidden></p>
-          </div>
-        </section>
-      </div>
+          </section>
+        </details>
+      </section>
       <details id="usage-guide" class="usage-guide">
         <summary>
           ご利用にあたって
@@ -652,7 +553,7 @@
         </summary>
         <div class="usage-body">
           <section>
-            <h2>音声を追加して練習する</h2>
+            <h2>音源から始める</h2>
             <p>
               「ファイルを選択」から音声を追加します。10件まで登録でき、複数のファイルをまとめて選ぶこともできます。練習する音声は、一覧の音声名を押して切り替えます。「音声の読み込みを始める」ボタンが出たときは、押してください。
             </p>
@@ -661,15 +562,15 @@
             </p>
           </section>
           <section>
-            <h2>聴く・くり返す・保存する</h2>
+            <h2>練習する</h2>
             <p>
-              再生・一時停止、5秒戻る／進む、速度の変更ができます。くり返したい範囲は、ゲージのA・Bを動かして決めます（A・Bを動かすと、区間リピートがONになります）。短い区間は「拡大」や「区間に合わせる」でゲージを広げると、細かく指定できます。時刻を数字で入力したり、音声全体をくり返したり、回数や無音の長さを変えたりもできます。
+              再生・一時停止、5秒戻る／進む、速度の変更ができます。くり返したい範囲は、ゲージのA・Bを動かして決めます（A・Bを動かすと、区間リピートがONになります）。
             </p>
             <p>
-              「原文」カードでは、音声から自動で文字を起こすか（英語・中国語）、教材の原文を貼り付けるかテキストファイルを読み込みます。再生している文に色が付き、文を押すとその文をA–B区間にします。「原文を表示する」をオフにすると隠せます。
+              「スクリプト」には、教材のスクリプトを貼り付けるか、テキストファイルを読み込みます。再生している文に色が付き、文を押すとその文をA–B区間にします。「前の文へ」「次の文へ」で、文ごとに区間を移れます（スクリプトがないときは、波形の無音で区切ります）。
             </p>
             <p>
-              覚えたい区間は、名前を付けて保存できます。練習区間・速度・再生位置は、音声ごとに記録されます。
+              くり返す回数と間の無音、ゲージの拡大、A・Bの時刻の入力、音声からの文字起こしは「詳しい設定」にあります。区間・速度・再生位置は、音声ごとに自動で記録されます。
             </p>
           </section>
           <section>
@@ -705,11 +606,8 @@
             <h2>保存先とデータの扱い</h2>
             <p class="privacy-note">
               <strong
-                >個人情報（氏名・住所・電話番号・メールアドレスなど）や、人に知られたくない内容を含む音声・原文は、登録しないでください。</strong
-              >このアプリは音声や原文を外部へ送りませんが、同じ端末やブラウザを使う人には見えます。また、バックアップのファイルには原文も入るので、人に渡すときは中身に気をつけてください。
-            </p>
-            <p>
-              練習区間と設定は、「保存した練習区間」の「バックアップを保存」でファイルにでき、別のブラウザやスマホで「バックアップを読み込む」と移せます。音声ファイルは入らないので、移した先でも同じファイルを追加してください。
+                >個人情報（氏名・住所・電話番号・メールアドレスなど）や、人に知られたくない内容を含む音声・スクリプトは、登録しないでください。</strong
+              >このアプリは音声やスクリプトを外部へ送りませんが、同じ端末やブラウザを使う人には見えます。
             </p>
             <p>
               音声と設定は、いま使っている端末・ブラウザ内に保存します。ほかの端末やブラウザには引き継がれません。音声をサーバーへ送ることもありません。
@@ -718,20 +616,7 @@
               文字起こしは、この端末の中で行います（OpenAIのWhisperというモデルを使います）。初めてのときだけ、文字起こし用のデータ（<span
                 class="model-size"
                 >約95MB</span
-              >）をこのサイトから受け取り、ブラウザに保存します。
-            </p>
-            <p>
-              <span id="model-status"
-                >文字起こし用のデータは保存していません。</span
-              >
-              <button
-                id="model-delete"
-                class="text-button"
-                type="button"
-                hidden
-              >
-                文字起こし用のデータを削除
-              </button>
+              >）をこのサイトから受け取り、ブラウザに保存します。削除は「詳しい設定」からできます。
             </p>
             <p>
               音声を保存すると、ブラウザが自動で消さないように設定を求めます。それでも、ブラウザの履歴・サイトデータを削除すると消えます。元のファイルは残しておいてください。「音声を削除」で消えるのはこのアプリ内のコピーだけで、端末の元ファイルはそのまま残ります。削除した直後は、画面下の「元に戻す」で戻せます。
