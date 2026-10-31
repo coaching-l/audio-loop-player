@@ -4,6 +4,12 @@ test("usage guide is collapsed at the bottom and explains storage and practice",
 }) => {
   await page.goto("/");
   await expect(page.locator("#usage-guide")).not.toHaveAttribute("open", "");
+  // Detailed settings start folded; transcription is among them, marked as a helper.
+  await expect(page.locator("#advanced")).not.toHaveAttribute("open", "");
+  await expect(page.locator("#transcribe-start")).toBeHidden();
+  await expect(page.locator("#advanced")).toContainText(
+    "精度はそこそこです。必要に応じて手直ししてください。",
+  );
   expect(
     await page.evaluate(
       () =>

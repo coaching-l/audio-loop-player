@@ -1,8 +1,8 @@
 // All repeat delays use wall-clock milliseconds, independently of playbackRate.
 // A relative gap (gapRatio) lasts as long as the interval took to play at the current speed.
 export const GAP_RATIOS = [0, 1, 1.5, 2];
-// A speed ramp raises the rate after each completed play, up to 1.0x, from the chosen base rate.
-export const RAMP_STEPS = [0, 0.05, 0.1];
+// "off" plays through once; "ab" repeats the interval from A to B.
+export const MODES = ["off", "ab"];
 export class LoopPlayer {
   constructor(audio, onChange = () => {}, onError = () => {}) {
     this.audio = audio;
@@ -14,7 +14,6 @@ export class LoopPlayer {
     this.limit = 2;
     this.gap = 0;
     this.gapRatio = 0;
-    this.rampStep = 0;
     this.baseRate = 1;
     this.completed = 0;
     this.phase = "paused";
@@ -53,15 +52,9 @@ export class LoopPlayer {
       ((this.end - this.start) / this.audio.playbackRate) * this.gapRatio * 1000
     );
   }
-  // The rate for the next play: the base rate, raised by the ramp for each completed play.
-  get rampedRate() {
-    if (!this.rampStep || this.baseRate >= 1) return this.baseRate;
-    const rate = this.baseRate + this.rampStep * this.completed;
-    return Math.min(1, Math.round(rate * 100) / 100);
-  }
-  configure({ mode, a, b, limit, gap, gapRatio = 0, rampStep = 0 }) {
+  configure({ mode, a, b, limit, gap, gapRatio = 0 }) {
     if (
-      !["off", "ab", "all"].includes(mode) ||
+      !MODES.includes(mode) ||
       !Number.isFinite(a) ||
       !Number.isFinite(b) ||
       a < 0 ||
@@ -71,8 +64,7 @@ export class LoopPlayer {
       !Number.isFinite(gap) ||
       gap < 0 ||
       gap > 10 ||
-      !GAP_RATIOS.includes(gapRatio) ||
-      !RAMP_STEPS.includes(rampStep)
+      !GAP_RATIOS.includes(gapRatio)
     ) {
       throw new Error(
         "開始点Aは終了点Bより前に、Bは音声の長さ以内にしてください。",
@@ -84,15 +76,13 @@ export class LoopPlayer {
       this.b === b &&
       this.limit === limit &&
       this.gap === gap &&
-      this.gapRatio === gapRatio &&
-      this.rampStep === rampStep
+      this.gapRatio === gapRatio
     )
       return;
     const wasActive = this.active;
     this.pause();
-    Object.assign(this, { mode, a, b, limit, gap, gapRatio, rampStep });
+    Object.assign(this, { mode, a, b, limit, gap, gapRatio });
     this.completed = 0;
-    this.applyRate(this.baseRate);
     this.remaining = 0;
     this.phase = "paused";
     if (
@@ -105,7 +95,7 @@ export class LoopPlayer {
   }
   setRate(rate) {
     this.baseRate = rate;
-    this.applyRate(this.rampedRate);
+    this.applyRate(rate);
   }
   applyRate(rate) {
     this.audio.preservesPitch = true;
@@ -127,7 +117,6 @@ export class LoopPlayer {
     ) {
       this.completed = 0;
       this.audio.currentTime = this.start;
-      this.applyRate(this.baseRate);
     }
     if (this.mode === "ab" && this.audio.currentTime < this.a)
       this.audio.currentTime = this.a;
@@ -158,7 +147,7 @@ export class LoopPlayer {
   checkBoundary() {
     if (
       this.phase === "playing" &&
-      this.mode !== "off" &&
+      this.mode === "ab" &&
       !this.audio.seeking &&
       this.audio.currentTime >= this.end
     )
@@ -174,10 +163,7 @@ export class LoopPlayer {
       this.finish();
       return;
     }
-    // The silence matches what was just heard, so measure it before speeding up.
-    const gap = this.gapMilliseconds;
-    this.applyRate(this.rampedRate);
-    this.wait(gap);
+    this.wait(this.gapMilliseconds);
   }
   wait(milliseconds) {
     this.clearTimer();

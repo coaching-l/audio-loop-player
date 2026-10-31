@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { openAdvanced, setRepeat } from "./helpers.mjs";
 import { makeWav } from "./fixtures/make-audio.mjs";
 const files = (count) =>
   Array.from({ length: count }, (_, i) => ({
@@ -23,10 +24,9 @@ test("ten real audio files persist and reopen without selecting local files agai
     .getByRole("button", { name: "lesson-4.wavを開く", exact: true })
     .click();
   await expect(page.locator("#play")).toBeEnabled();
+  await openAdvanced(page);
   await page.locator("#point-b").fill("1.5");
   await page.locator("#point-b").press("Tab");
-  await page.locator("#segment-name").fill("4番の練習");
-  await page.getByRole("button", { name: "区間を保存", exact: true }).click();
   await page.locator("#seek").evaluate((el) => {
     el.value = "1";
     el.dispatchEvent(new Event("input", { bubbles: true }));
@@ -35,14 +35,13 @@ test("ten real audio files persist and reopen without selecting local files agai
     .getByRole("button", { name: "lesson-5.wavを開く", exact: true })
     .click();
   await expect(page.locator("#play")).toBeEnabled();
-  await expect(page.locator(".segment")).toHaveCount(0);
+  await expect(page.locator("#point-b")).toHaveValue("0:03.000");
   await page.reload();
   await expect(page.locator("#audio-list .audio-item")).toHaveCount(10);
   await page
     .getByRole("button", { name: "lesson-4.wavを開く", exact: true })
     .click();
   await expect(page.locator("#play")).toBeEnabled();
-  await expect(page.locator(".segment-name")).toHaveText("4番の練習");
   await expect(page.locator("#point-b")).toHaveValue("0:01.500");
   expect(
     await page.locator("#audio").evaluate((a) => a.currentTime),
@@ -96,11 +95,12 @@ test("switching registered audio cancels pending silence and keeps per-file sett
   page,
 }) => {
   await add(page, 2);
+  await openAdvanced(page);
   await page.locator("#point-b").fill(".3");
   await page.locator("#point-b").press("Tab");
   await page.locator("#gap").fill("1");
   await page.locator("#gap").press("Tab");
-  await page.locator("#repeat-mode").selectOption("ab");
+  await setRepeat(page, true);
   await page.locator("#play").click();
   await expect(page.locator("#play-status")).toHaveText("無音中");
   await page
@@ -113,11 +113,17 @@ test("switching registered audio cancels pending silence and keeps per-file sett
       .locator("#audio")
       .evaluate((a) => a.paused && a.currentTime === 0),
   ).toBe(true);
-  await expect(page.locator("#repeat-mode")).toHaveValue("off");
+  await expect(page.locator("#toggle-ab")).toHaveAttribute(
+    "aria-pressed",
+    "false",
+  );
   await page
     .getByRole("button", { name: "lesson-1.wavを開く", exact: true })
     .click();
-  await expect(page.locator("#repeat-mode")).toHaveValue("ab");
+  await expect(page.locator("#toggle-ab")).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
   await expect(page.locator("#gap")).toHaveValue("1");
 });
 test("invalid files do not prevent valid batch items from being saved", async ({

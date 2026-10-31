@@ -32,28 +32,28 @@ test("touch file selection, playback, skip and speed control", async ({
   await expect(page.locator("#speed-value")).toHaveText("1.00×");
 });
 
-test("touch pause during silence, segment save and landscape layout", async ({
+test("touch pause during silence and landscape layout", async ({
   page,
 }) => {
   await page.locator("#file-input").setInputFiles("tests/fixtures/tone.wav");
   await expect(page.locator("#play")).toBeEnabled();
+  // Turned on before typing: Linux WebKit's iPhone mode drops a tap on this button
+  // while a field still has focus (not checked on a real iPhone).
+  await page.locator("#toggle-ab").tap();
+  await expect(page.locator("#toggle-ab")).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await page.locator("#advanced > summary").tap();
   await page.locator("#point-b").fill("0.3");
   await page.locator("#gap").tap(); // blur commits the interval through a touch gesture
   await page.locator("#gap").fill("1");
-  await page.locator("#repeat-mode").selectOption("ab");
-  await page.locator("#play").tap();
+  await page.locator("#play").tap(); // and the play tap commits the silence
   await expect(page.locator("#play-status")).toHaveText("無音中");
   await page.locator("#play").tap();
   await expect(page.locator("#play-status")).toHaveText("無音中に一時停止");
   await page.waitForTimeout(1100);
   expect(await page.locator("#audio").evaluate((a) => a.paused)).toBe(true);
-  await page.locator("#segment-name").fill("タッチで保存");
-  await page.getByRole("button", { name: "区間を保存", exact: true }).tap();
-  await expect(page.locator(".segment")).toHaveCount(1);
-  await page
-    .getByRole("button", { name: "タッチで保存を呼び出す", exact: true })
-    .tap();
-  await expect(page.locator("#play-status")).toHaveText("一時停止");
   for (const viewport of [
     { width: 360, height: 800 },
     { width: 844, height: 390 },
@@ -65,8 +65,4 @@ test("touch pause during silence, segment save and landscape layout", async ({
       ),
     ).toBe(true);
   }
-  await page
-    .getByRole("button", { name: "タッチで保存を削除", exact: true })
-    .tap();
-  await expect(page.locator(".segment")).toHaveCount(0);
 });

@@ -1,19 +1,9 @@
 import { test, expect } from "@playwright/test";
-import { readFile } from "node:fs/promises";
 const fixture = "tests/fixtures/tone.wav";
 async function load(page) {
   await page.locator("#file-input").setInputFiles(fixture);
   await expect(page.locator("#play")).toBeEnabled();
   await expect(page.locator("#library-status")).not.toContainText("保存中");
-}
-async function saveSegment(page, name) {
-  await page.locator("#point-a").fill("0.5");
-  await page.locator("#point-a").press("Tab");
-  await page.locator("#point-b").fill("1.5");
-  await page.locator("#point-b").press("Tab");
-  await page.locator("#segment-name").fill(name);
-  await page.getByRole("button", { name: "区間を保存", exact: true }).click();
-  await expect(page.locator(".segment-name")).toContainText([name]);
 }
 const playing = (page) =>
   page.locator("#audio").evaluate((audio) => !audio.paused);
@@ -61,26 +51,6 @@ test("hiding the page saves the playback position", async ({ page }) => {
   expect(saved[0].position).toBeCloseTo(1.7, 1);
 });
 
-test("a deleted segment can be restored with the undo bar", async ({
-  page,
-}) => {
-  await load(page);
-  await saveSegment(page, "残したい区間");
-  await page
-    .getByRole("button", { name: "残したい区間を削除", exact: true })
-    .click();
-  await expect(page.locator(".segment")).toHaveCount(0);
-  await expect(page.locator("#undo-message")).toContainText("残したい区間");
-  await page.getByRole("button", { name: "元に戻す", exact: true }).click();
-  await expect(page.locator("#undo-bar")).toBeHidden();
-  await expect(page.locator(".segment-name")).toHaveText("残したい区間");
-  await page.reload();
-  await page
-    .getByRole("button", { name: "tone.wavを開く", exact: true })
-    .click();
-  await expect(page.locator(".segment-name")).toHaveText("残したい区間");
-});
-
 test("deleted audio can be restored and still plays after reload", async ({
   page,
 }) => {
@@ -108,74 +78,65 @@ test("a new deletion replaces the older undo, which then stays deleted", async (
   page,
 }) => {
   await load(page);
-  await saveSegment(page, "一つ目");
-  await saveSegment(page, "二つ目");
-  await page.getByRole("button", { name: "一つ目を削除", exact: true }).click();
-  await page.getByRole("button", { name: "二つ目を削除", exact: true }).click();
-  await expect(page.locator("#undo-message")).toContainText("二つ目");
+  await page.getByRole("button", { name: "スクリプトを貼り付ける" }).click();
+  await page.locator("#transcript-input").fill("One. Two.");
+  await page.getByRole("button", { name: "保存する", exact: true }).click();
+  await page.getByRole("button", { name: "スクリプトを消す" }).click();
+  await expect(page.locator("#undo-message")).toContainText("スクリプト");
+  await page
+    .getByRole("button", { name: "tone.wavの音声を削除", exact: true })
+    .click();
+  await expect(page.locator("#undo-message")).toContainText("tone.wav");
   await page.getByRole("button", { name: "元に戻す", exact: true }).click();
-  await expect(page.locator(".segment-name")).toHaveText(["二つ目"]);
+  await expect(page.locator("#audio-list .audio-item")).toHaveCount(1);
+  await page
+    .getByRole("button", { name: "tone.wavを開く", exact: true })
+    .click();
+  await expect(page.locator("#transcript-status")).toHaveText("スクリプトなし");
 });
 
-test("a backup of segments moves them to another browser", async ({
-  page,
-  browser,
-}) => {
+test("settings saved by earlier versions still open", async ({ page }) => {
   await load(page);
-  await saveSegment(page, "持ち運ぶ区間");
-  const [download] = await Promise.all([
-    page.waitForEvent("download"),
-    page
-      .getByRole("button", { name: "バックアップを保存", exact: true })
-      .click(),
-  ]);
-  expect(download.suggestedFilename()).toMatch(
-    /^coachingl-audio-loop_data_\d{4}-\d{2}-\d{2}\.json$/,
-  );
-  const backup = JSON.parse(await readFile(await download.path(), "utf8"));
-  expect(backup.app).toBe("coachingl-audio-loop");
-  await expect(page.locator("#backup-status")).toContainText("1件");
-
-  const other = await browser.newContext();
-  const fresh = await other.newPage();
-  await fresh.goto("/");
-  await fresh.locator("#import-backup").setInputFiles({
-    name: "backup.json",
-    mimeType: "application/json",
-    buffer: Buffer.from(JSON.stringify(backup)),
+  // Reopen the page with no audio open, so leaving it saves nothing over the old settings.
+  await page.reload();
+  // Earlier versions could repeat the whole audio, speed up each time and name segments.
+  await page.evaluate(() => {
+    const library = JSON.parse(localStorage.getItem("kotonoha.audio.v1"));
+    const key = Object.keys(library)[0];
+    library[key] = {
+      settings: {
+        mode: "all",
+        a: 0.5,
+        b: 1.5,
+        limit: 3,
+        gap: 0.2,
+        gapRatio: 0,
+        rampStep: 0.1,
+        rate: 0.8,
+      },
+      segments: [{ id: "x", name: "以前の区間", mode: "ab", a: 0.5, b: 1 }],
+      position: 0.7,
+    };
+    localStorage.setItem("kotonoha.audio.v1", JSON.stringify(library));
   });
-  await expect(fresh.locator("#backup-status")).toContainText(
-    "1件読み込みました",
+  await page.reload();
+  await page
+    .getByRole("button", { name: "tone.wavを開く", exact: true })
+    .click();
+  await expect(page.locator("#play")).toBeEnabled();
+  await expect(page.locator("#toggle-ab")).toHaveAttribute(
+    "aria-pressed",
+    "false",
   );
-  await fresh.locator("#import-backup").setInputFiles({
-    name: "backup.json",
-    mimeType: "application/json",
-    buffer: Buffer.from(JSON.stringify(backup)),
-  });
-  await expect(fresh.locator("#backup-status")).toContainText(
-    "足すものはありません",
+  await expect(page.locator("#speed-value")).toHaveText("0.80×");
+  await expect(page.locator("#repeat-count")).toHaveValue("3");
+  await expect(page.locator("#point-a")).toHaveValue("0:00.500");
+  // What the screen no longer shows is kept as it was saved.
+  const saved = await page.evaluate(
+    () => Object.values(JSON.parse(localStorage.getItem("kotonoha.audio.v1")))[0],
   );
-  // The same audio file (name, size and date) picks the segments up.
-  await fresh.locator("#file-input").setInputFiles(fixture);
-  await expect(fresh.locator("#play")).toBeEnabled();
-  await expect(fresh.locator(".segment-name")).toHaveText("持ち運ぶ区間");
-  await other.close();
-});
-
-test("a file that is not a backup is rejected without changing anything", async ({
-  page,
-}) => {
-  await page.locator("#import-backup").setInputFiles({
-    name: "other.json",
-    mimeType: "application/json",
-    buffer: Buffer.from('{"records": []}'),
-  });
-  await expect(page.locator("#backup-status")).toContainText(
-    "このアプリのバックアップではない",
-  );
-  expect(
-    await page.evaluate(() => localStorage.getItem("kotonoha.audio.v1")),
-  ).toBeNull();
+  expect(saved.segments[0].name).toBe("以前の区間");
+  expect(saved.settings.mode).toBe("off");
 });
 
 test("the mini player appears when the main controls scroll away", async ({

@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { openAdvanced, setRepeat } from "./helpers.mjs";
 import { createServer } from "node:http";
 import { readFile, mkdtemp, rm } from "node:fs/promises";
 import { shellFiles, shellVersion } from "../scripts/bump-shell.mjs";
@@ -92,9 +93,11 @@ for (const prefix of ["/", "/audio-loop-player/"])
       await page.goto(host.url + prefix);
       await prepared(page);
       await saveAudio(page);
+      await openAdvanced(page);
       await page.locator("#point-b").fill(".4");
       await page.locator("#point-b").press("Tab");
-      await page.locator("#repeat-mode").selectOption("ab");
+      await page.locator("#repeat-count").selectOption("2");
+      await setRepeat(page, true);
       await page.close();
       await context.setOffline(true);
       const offline = await context.newPage();
@@ -113,15 +116,11 @@ for (const prefix of ["/", "/audio-loop-player/"])
       await expect(offline.locator("#repeat-progress")).toHaveText(
         "完了 2 / 2 回",
       );
-      await offline.locator("#segment-name").fill("機内で練習");
-      await offline
-        .getByRole("button", { name: "区間を保存", exact: true })
-        .click();
       await offline.reload();
       await offline
         .getByRole("button", { name: "tone.wavを開く", exact: true })
         .click();
-      await expect(offline.locator(".segment-name")).toHaveText("機内で練習");
+      await expect(offline.locator("#point-b")).toHaveValue("0:00.400");
       await context.setOffline(false);
       await offline.reload();
       await prepared(offline);

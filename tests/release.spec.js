@@ -14,9 +14,20 @@ test("service worker caches every file the page and manifest load", () => {
   );
   const manifest = JSON.parse(read("manifest.webmanifest"));
   for (const icon of manifest.icons) referenced.push(icon.src.slice(2));
-  const modules = [
-    ...read("app.js").matchAll(/from "\.\/([^"]+)"|import "\.\/([^"]+)"/g),
-  ].map((match) => match[1] || match[2]);
+  // Every module the page imports, followed through the modules it imports in turn.
+  const modules = [];
+  const queue = ["app.js"];
+  while (queue.length) {
+    const path = queue.shift();
+    for (const match of read(path).matchAll(
+      /from "\.\/([^"]+)"|import "\.\/([^"]+)"/g,
+    )) {
+      const found = match[1] || match[2];
+      if (modules.includes(found)) continue;
+      modules.push(found);
+      queue.push(found);
+    }
+  }
   for (const path of [...referenced, ...modules]) {
     expect(cached, `${path} is missing from sw.js FILES`).toContain(path);
     expect(existsSync(path.split("?")[0]), `${path} does not exist`).toBe(true);

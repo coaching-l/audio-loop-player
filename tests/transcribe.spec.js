@@ -2,6 +2,7 @@ import { test, expect } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { makePhrasesWav } from "./fixtures/make-audio.mjs";
+import { openAdvanced, setRepeat } from "./helpers.mjs";
 import {
   splitSentences,
   alignSentences,
@@ -92,6 +93,12 @@ async function fakeRecognizer(page, segments, delay = 50) {
     },
     { segments, delay },
   );
+}
+
+// Transcription is a helper, folded into the detailed settings.
+async function startTranscribing(page) {
+  await openAdvanced(page);
+  await page.getByRole("button", { name: "音声から文字起こし" }).click();
 }
 
 // Fills the model cache with placeholders, as if the model had been saved before.
@@ -369,7 +376,7 @@ test("speech is transcribed into sentences timed to the waveform's pauses", asyn
   await load(page);
   await expect(page.locator("#waveform")).toBeVisible();
   await pretendModelSaved(page);
-  await page.getByRole("button", { name: "音声から文字起こし" }).click();
+  await startTranscribing(page);
   await expect(sentences(page)).toHaveText([
     "One two.",
     "Three four.",
@@ -377,6 +384,7 @@ test("speech is transcribed into sentences timed to the waveform's pauses", asyn
   ]);
   await expect(page.locator("#transcript-status")).toHaveText("3文");
   await expect(page.locator("#notice")).toContainText("3文を書き起こしました");
+  await expect(page.locator("#notice")).toContainText("精度はそこそこです");
   const calls = await page.evaluate(() => window.transcribeCalls);
   expect(calls).toHaveLength(1);
   expect(calls[0].language).toBe("en");
@@ -386,13 +394,13 @@ test("speech is transcribed into sentences timed to the waveform's pauses", asyn
   await expect(page.locator("#point-a")).toHaveValue("0:01.050");
   await expect(page.locator("#point-b")).toHaveValue("0:01.700");
   // Fixing a word keeps the times.
-  await page.getByRole("button", { name: "原文を直す" }).click();
+  await page.getByRole("button", { name: "スクリプトを直す" }).click();
   await expect(page.locator("#transcript-input")).toHaveValue(
     "One two. Three four. Five six.",
   );
   await page.locator("#transcript-input").fill("One two. Three for. Five six.");
   await page.getByRole("button", { name: "保存する", exact: true }).click();
-  await page.locator("#repeat-mode").selectOption("off");
+  await setRepeat(page, false);
   await sentences(page).nth(1).click();
   await expect(sentences(page).nth(1)).toHaveText("Three for.");
   await expect(page.locator("#point-a")).toHaveValue("0:01.050");
@@ -405,30 +413,28 @@ test("speech is transcribed into sentences timed to the waveform's pauses", asyn
   await expect(sentences(page)).toHaveCount(3);
 });
 
-test("Chinese is transcribed on opening when that is switched on", async ({
+test("Chinese is transcribed when chosen, only on request, and the language is remembered", async ({
   page,
 }) => {
   await fakeRecognizer(page, chineseSegments);
   await page.goto("/");
-  await load(page, "tests/fixtures/tone.wav");
-  await pretendModelSaved(page);
-  await page.getByLabel("話している言語").selectOption("zh");
-  await page
-    .getByLabel("原文のない音声は、開いたときに自動で文字起こしする")
-    .check();
   await load(page);
+  await pretendModelSaved(page);
+  await openAdvanced(page);
+  await page.getByLabel("話している言語").selectOption("zh");
+  await startTranscribing(page);
   await expect(sentences(page)).toHaveText(["你好。", "我是学生。"]);
   await expect(page.locator("#transcript-sentences")).toHaveAttribute(
     "lang",
     "zh-CN",
   );
+  // Opening audio without a script does not start a transcription by itself.
+  await load(page, "tests/fixtures/tone.wav");
+  await expect(page.locator("#transcript-status")).toHaveText("スクリプトなし");
   const calls = await page.evaluate(() => window.transcribeCalls);
   expect(calls.map((call) => call.language)).toEqual(["zh"]);
-  // The choices are remembered.
   await page.reload();
-  await expect(
-    page.getByLabel("原文のない音声は、開いたときに自動で文字起こしする"),
-  ).toBeChecked();
+  await openAdvanced(page);
   await expect(page.getByLabel("話している言語")).toHaveValue("zh");
 });
 
@@ -449,7 +455,7 @@ test("without much memory, each pass runs in a fresh worker and the times add up
     buffer: makePhrasesWav(Array.from({ length: 140 }, () => 0.5)),
   });
   await pretendModelSaved(page);
-  await page.getByRole("button", { name: "音声から文字起こし" }).click();
+  await startTranscribing(page);
   await expect(page.locator("#notice")).toContainText("書き起こしました");
   const calls = await page.evaluate(() => window.transcribeCalls);
   expect(calls.length).toBeGreaterThan(1);
@@ -478,25 +484,63 @@ test("a transcription can be stopped, and opening another file stops it", async 
   await page.goto("/");
   await load(page);
   await pretendModelSaved(page);
-  await page.getByRole("button", { name: "音声から文字起こし" }).click();
+  await startTranscribing(page);
   await expect(page.locator("#transcript-status")).toHaveText("文字起こし中");
   await expect(page.locator("#transcribe-status")).toContainText(
     "英語の文字を起こしています… 0 / 1",
   );
-  await expect(page.locator("#transcript-manual")).toBeHidden();
+  await expect(page.locator("#transcript-empty")).toBeHidden();
   await page.getByRole("button", { name: "文字起こしを中止" }).click();
   await expect(page.locator("#notice")).toHaveText(
     "文字起こしを中止しました。",
   );
-  await expect(page.locator("#transcript-status")).toHaveText("原文なし");
+  await expect(page.locator("#transcript-status")).toHaveText("スクリプトなし");
   await expect(
     page.getByRole("button", { name: "音声から文字起こし" }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "音声から文字起こし" }).click();
+  await startTranscribing(page);
   await expect(page.locator("#transcribe-status")).toContainText("0 / 1");
   await load(page, "tests/fixtures/tone.wav");
-  await expect(page.locator("#transcript-status")).toHaveText("原文なし");
+  await expect(page.locator("#transcript-status")).toHaveText("スクリプトなし");
   expect(await page.evaluate(() => window.transcribeStopped)).toBe(2);
+});
+
+test("a new model version fetches only the files that changed", async ({
+  page,
+}) => {
+  test.setTimeout(120000);
+  await fakeRecognizer(page, englishSegments);
+  await page.goto("/");
+  await load(page);
+  // The version saved before: everything but the encoder, which changed since.
+  await page.evaluate(async () => {
+    const { MODEL_FILES, MODEL_CACHE } = await import("./transcriber.js");
+    const older = await caches.open(MODEL_CACHE.replace(/\d+$/, "1"));
+    for (const file of MODEL_FILES) {
+      if (file.path.includes("encoder")) continue;
+      const url = new URL(file.path, location.href);
+      await older.put(url, await fetch(url));
+    }
+  });
+  const fetched = new Set();
+  page.on("request", (request) => {
+    const path = new URL(request.url()).pathname;
+    if (/^\/(models|vendor)\//.test(path)) fetched.add(path);
+  });
+  await startTranscribing(page);
+  await expect(sentences(page)).toHaveCount(3, { timeout: 90000 });
+  expect([...fetched]).toEqual([
+    "/models/whisper-base/onnx/encoder_model_quantized.onnx",
+  ]);
+  expect(
+    await page.evaluate(async () =>
+      (await caches.keys()).filter((key) => key.includes("model")),
+    ),
+  ).toEqual([
+    await page.evaluate(
+      async () => (await import("./transcriber.js")).MODEL_CACHE,
+    ),
+  ]);
 });
 
 test("the model is saved once after checking each file, and can be deleted", async ({
@@ -506,12 +550,11 @@ test("the model is saved once after checking each file, and can be deleted", asy
   await fakeRecognizer(page, englishSegments);
   await page.goto("/");
   await load(page);
-  await page.getByRole("button", { name: "音声から文字起こし" }).click();
+  await startTranscribing(page);
   await expect(page.locator("#transcribe-status")).toContainText(
     "文字起こし用のデータを保存しています",
   );
   await expect(sentences(page)).toHaveCount(3, { timeout: 90000 });
-  await page.locator("summary", { hasText: "ご利用にあたって" }).click();
   await expect(page.locator("#model-status")).toContainText("保存しています");
   const saved = await page.evaluate(async () => {
     const { MODEL_FILES, MODEL_CACHE } = await import("./transcriber.js");
@@ -554,16 +597,16 @@ test("Whisper itself transcribes real speech, also offline once saved", async ({
   page.on("pageerror", (e) => problems.push(e.message));
   await page.goto("/");
   await load(page, "tests/fixtures/jfk.wav");
-  await page.getByRole("button", { name: "音声から文字起こし" }).click();
+  await startTranscribing(page);
   await expect(sentences(page).first()).toBeVisible({ timeout: 240000 });
   const heard = (await sentences(page).allTextContents()).join(" ");
   expect(heard.toLowerCase().replace(/[^a-z ]/g, "")).toContain(
     "ask not what your country can do for you",
   );
   // The saved model works without a connection.
-  await page.getByRole("button", { name: "原文を消す" }).click();
+  await page.getByRole("button", { name: "スクリプトを消す" }).click();
   await context.setOffline(true);
-  await page.getByRole("button", { name: "音声から文字起こし" }).click();
+  await startTranscribing(page);
   try {
     await expect(page.locator("#notice")).toContainText("書き起こしました", {
       timeout: 240000,
