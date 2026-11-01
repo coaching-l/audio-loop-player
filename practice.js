@@ -6,6 +6,8 @@ import { audioKey } from "./audio-library.js";
 import { LoopPlayer, GAP_RATIOS, parseTime, formatTime } from "./player.js";
 import { analyzeAudio, drawWaveform } from "./waveform.js";
 import { VoiceRecorder, recordingSupported } from "./recorder.js";
+import { pauseAfter } from "./audio-tools.js";
+import { exportMp3 } from "./export.js";
 import {
   splitSentences,
   alignSentences,
@@ -49,7 +51,17 @@ let lastPositionSave = 0;
 
 // What a new material starts with: interval repeat off, and once it is on, it repeats
 // until paused, with no silence in between (shadowing).
-const DEFAULTS = { mode: "off", a: 0, limit: 0, gap: 0, gapRatio: 0, rate: 1 };
+const DEFAULTS = {
+  mode: "off",
+  a: 0,
+  limit: 0,
+  gap: 0,
+  gapRatio: 0,
+  rate: 1,
+  sentencePause: false,
+};
+// While playing through, stop after each sentence of the script (repeating aloud).
+let sentencePause = false;
 
 function rangeError(message) {
   $("range-error").textContent = message;
@@ -73,6 +85,7 @@ function settings() {
     gap: engine.gap,
     gapRatio: engine.gapRatio,
     rate: engine.baseRate,
+    sentencePause,
   };
 }
 function persist() {
@@ -120,6 +133,7 @@ function savedSettings(s, duration) {
     gap: s.gap,
     gapRatio: s.gapRatio || 0,
     rate: s.rate,
+    sentencePause: s.sentencePause === true,
   };
 }
 function syncFields() {
@@ -130,6 +144,7 @@ function syncFields() {
   $("gap").value = String(engine.gap);
   $("gap-mode").value = String(engine.gapRatio);
   $("gap-seconds").hidden = engine.gapRatio !== 0;
+  $("sentence-pause").checked = sentencePause;
   $("speed").value = String(engine.baseRate);
   $("speed-value").textContent = engine.baseRate.toFixed(2) + "×";
   $("a-legend").textContent = "A " + formatTime(engine.a, 1);
@@ -199,6 +214,7 @@ function enable(value) {
   for (const id of ["player-controls", "repeat-controls", "transcript-controls"])
     $(id).disabled = !value;
   $("record-controls").disabled = !value || !recordingSupported();
+  $("export-controls").disabled = !value || exporting;
   syncMiniPlayer();
 }
 // A compact bar at the bottom keeps play/pause reachable once the main controls are scrolled past.
@@ -264,6 +280,7 @@ export async function openPractice({ file, key, name, script } = {}) {
   rangeError("");
   routineNotice("");
   $("load-audio").hidden = false;
+  $("export-status").textContent = "";
   $("file-name").textContent = name;
   $("mini-name").textContent = name;
   $("play-status").textContent = "音声を読み込み中…";
@@ -315,6 +332,7 @@ export async function openPractice({ file, key, name, script } = {}) {
       $("load-audio").hidden = true;
       currentEngine.configure(s);
       currentEngine.setRate(s.rate);
+      sentencePause = s.sentencePause;
       if (Number.isFinite(stored?.position))
         currentEngine.seek(stored.position);
       $("duration").textContent = formatTime(audio.duration, 1);
@@ -859,6 +877,61 @@ document.addEventListener("keydown", (event) => {
   action();
 });
 
+// Stopping after each sentence follows the script: on with a script, nothing without.
+function syncStops() {
+  const has = Boolean(ready && transcript);
+  $("sentence-pause").disabled = !has;
+  engine?.setStops(
+    has && sentencePause ? transcript.sentences : [],
+    pauseAfter,
+  );
+}
+$("sentence-pause").addEventListener("change", () => {
+  sentencePause = $("sentence-pause").checked;
+  syncStops();
+  persist();
+});
+
+// MP3 export: cutting by sentence and silences after sentences need the script.
+let exporting = false;
+function syncExport() {
+  const has = Boolean(ready && transcript);
+  for (const option of $("export-kind").options)
+    if (!["all", "ab"].includes(option.value)) option.disabled = !has;
+  if (!has && !["all", "ab"].includes($("export-kind").value))
+    $("export-kind").value = "all";
+  $("export-pauses").disabled = !has || $("export-kind").value === "ab";
+  if ($("export-pauses").disabled) $("export-pauses").checked = false;
+}
+$("export-kind").addEventListener("change", syncExport);
+$("export-start").addEventListener("click", async () => {
+  if (!ready || exporting) return;
+  exporting = true;
+  $("export-controls").disabled = true;
+  const generation = loadGeneration;
+  const status = (text) => {
+    if (generation === loadGeneration) $("export-status").textContent = text;
+  };
+  try {
+    const saved = await exportMp3({
+      file: currentFile,
+      name: $("file-name").textContent,
+      kind: $("export-kind").value,
+      withPauses: $("export-pauses").checked,
+      sentences: transcript?.sentences || [],
+      a: engine.a,
+      b: engine.b,
+      onProgress: status,
+    });
+    status(`「${saved}」を書き出しました。`);
+  } catch (error) {
+    status(error.message || "書き出せませんでした。");
+  } finally {
+    exporting = false;
+    $("export-controls").disabled = !ready;
+  }
+});
+
 // Record the learner, then play the model interval and the recording back to back.
 // Kept in memory only: never saved or sent, and dropped when other material opens.
 const voice = new Audio();
@@ -1107,6 +1180,8 @@ function renderTranscript() {
   }
   $("transcript-fit").disabled = !has || selectedSentence < 0;
   showSteps();
+  syncStops();
+  syncExport();
 }
 function highlightSentence(time, follow) {
   if (!transcript || editingTranscript) return;

@@ -1,5 +1,6 @@
-// The way in from audio files ("音源から始める"): the saved audio list, adding files and
-// deleting them. Opening one hands it to the shared practice screen (practice.js).
+// The first screen: the two ways in ("テキストから始める" in text-entry.js and
+// "音源から始める" here: adding audio files) and the list of saved materials, which both
+// fill. Opening one hands it to the shared practice screen (practice.js).
 import "./offline.js";
 import {
   listAudio,
@@ -10,10 +11,75 @@ import {
   validateAudio,
 } from "./audio-library.js";
 import { openPractice, closePractice, practiceState } from "./practice.js";
+import { initTextEntry } from "./text-entry.js";
 import { $, settleUndo, offerUndo } from "./ui.js";
 
 let audioItems = [];
 let importQueue = Promise.resolve();
+
+// Which way in is shown; remembered for the next visit.
+const entryKey = "kotonoha.entry.v1";
+function chooseEntry(entry) {
+  for (const [name, button, card] of [
+    ["text", "entry-text", "text-entry"],
+    ["audio", "entry-audio", "drop-zone"],
+  ]) {
+    $(button).setAttribute("aria-pressed", String(entry === name));
+    $(card).hidden = entry !== name;
+  }
+  try {
+    localStorage.setItem(entryKey, entry);
+  } catch {
+    /* Chosen for this page only. */
+  }
+}
+$("entry-text").addEventListener("click", () => chooseEntry("text"));
+$("entry-audio").addEventListener("click", () => chooseEntry("audio"));
+try {
+  const entry = localStorage.getItem(entryKey);
+  if (["text", "audio"].includes(entry)) chooseEntry(entry);
+} catch {
+  /* Nothing chosen yet: both ways in are offered. */
+}
+
+// Keeps audio made from text in the saved list, in place of the previous version of the
+// same text. With the list full, that previous version makes room for the new one.
+async function saveMaterial(file, replaceId) {
+  const run = importQueue.then(async () => {
+    const replaced = audioItems.find((item) => item.id === replaceId);
+    let record;
+    try {
+      record = await addAudio(file);
+    } catch (error) {
+      if (!replaced || !error.message?.includes("10件")) throw error;
+      await removeAudio(replaced.id);
+      audioItems = audioItems.filter((item) => item.id !== replaced.id);
+      record = await addAudio(file);
+    }
+    if (!audioItems.some((item) => item.id === record.id))
+      audioItems.push(record);
+    if (replaced && replaced.id !== record.id && audioItems.includes(replaced)) {
+      await removeAudio(replaced.id);
+      audioItems = audioItems.filter((item) => item.id !== replaced.id);
+    }
+    renderAudioList();
+    await requestPersistentStorage();
+    void showStorageInfo();
+    $("library-status").textContent = `「${record.name}」を保存しました。次回も一覧から開けます。`;
+    return record;
+  });
+  importQueue = run.catch(() => {});
+  try {
+    return await run;
+  } catch (error) {
+    renderAudioList();
+    $("library-status").textContent = error.message?.includes("10件")
+      ? error.message
+      : "作った音声を保存できませんでした。このページを開いている間は練習できますが、閉じると残りません。";
+    return null;
+  }
+}
+initTextEntry({ saveMaterial });
 
 function openAudio(file) {
   void openPractice({ file });
@@ -176,8 +242,8 @@ importQueue = listAudio()
     audioItems = items;
     renderAudioList();
     $("library-status").textContent = items.length
-      ? "音声名を押すと、前回の設定のまま練習を再開できます。"
-      : "音声は10件まで登録できます。複数のファイルをまとめて選ぶこともできます。";
+      ? "名前を押すと、前回の設定のまま練習を再開できます。"
+      : "作った音声や読み込んだ音源が、ここに10件まで保存されます。";
     void showStorageInfo();
   })
   .catch(() => {

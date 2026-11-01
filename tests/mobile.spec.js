@@ -8,6 +8,7 @@ test.beforeEach(async ({ page, isMobile }) => {
 test("touch file selection, playback, skip and speed control", async ({
   page,
 }) => {
+  await page.locator("#entry-audio").tap();
   const choosing = page.waitForEvent("filechooser");
   await page.locator('label[for="file-input"]').tap();
   await (await choosing).setFiles("tests/fixtures/tone.wav");

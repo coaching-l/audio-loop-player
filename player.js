@@ -3,6 +3,8 @@
 export const GAP_RATIOS = [0, 1, 1.5, 2];
 // "off" plays through once; "ab" repeats the interval from A to B.
 export const MODES = ["off", "ab"];
+// While playing through ("off"), the player can stop after each sentence for as long as
+// `pauseFor(seconds the sentence took)` says, then go on from where it stopped.
 export class LoopPlayer {
   constructor(audio, onChange = () => {}, onError = () => {}) {
     this.audio = audio;
@@ -20,6 +22,10 @@ export class LoopPlayer {
     this.timer = null;
     this.epoch = 0;
     this.remaining = 0;
+    this.stops = [];
+    this.stopIndex = -1;
+    this.pauseFor = () => 0;
+    this.resumeAt = null;
     this.onEnded = () =>
       this.mode === "off" ? this.finish() : this.boundary();
     this.onTime = () => {
@@ -84,6 +90,7 @@ export class LoopPlayer {
     Object.assign(this, { mode, a, b, limit, gap, gapRatio });
     this.completed = 0;
     this.remaining = 0;
+    this.resumeAt = null;
     this.phase = "paused";
     if (
       mode === "ab" &&
@@ -92,6 +99,16 @@ export class LoopPlayer {
       this.audio.currentTime = a;
     this.emit();
     if (wasActive) void this.play();
+  }
+  // Sentences ({ start, end } in seconds) to stop after while playing through.
+  setStops(stops = [], pauseFor = () => 0) {
+    this.stops = stops;
+    this.pauseFor = pauseFor;
+    this.findStop();
+  }
+  findStop() {
+    const time = this.audio.currentTime;
+    this.stopIndex = this.stops.findIndex((s) => s.end > time + 0.05);
   }
   setRate(rate) {
     this.baseRate = rate;
@@ -107,7 +124,7 @@ export class LoopPlayer {
   async play() {
     if (this.active || this.phase === "disposed") return;
     if (this.phase === "gap-paused") {
-      this.wait(this.remaining);
+      this.wait(this.remaining, this.resumeAt);
       return;
     }
     if (
@@ -120,6 +137,7 @@ export class LoopPlayer {
     }
     if (this.mode === "ab" && this.audio.currentTime < this.a)
       this.audio.currentTime = this.a;
+    this.findStop();
     this.phase = "playing";
     this.emit();
     const epoch = this.epoch;
@@ -145,13 +163,25 @@ export class LoopPlayer {
       this.timer = setTimeout(() => this.tick(), 15);
   }
   checkBoundary() {
-    if (
-      this.phase === "playing" &&
-      this.mode === "ab" &&
-      !this.audio.seeking &&
-      this.audio.currentTime >= this.end
-    )
-      this.boundary();
+    if (this.phase !== "playing" || this.audio.seeking) return;
+    if (this.mode === "ab") {
+      if (this.audio.currentTime >= this.end) this.boundary();
+      return;
+    }
+    const stop = this.stops[this.stopIndex];
+    if (stop && this.audio.currentTime >= stop.end) this.sentenceEnd(stop);
+  }
+  sentenceEnd(stop) {
+    this.findStop();
+    // The last sentence runs into the end of the audio; nothing to wait for there.
+    if (stop.end >= this.audio.duration - 0.05) return;
+    const seconds = this.pauseFor(
+      (stop.end - stop.start) / this.audio.playbackRate,
+    );
+    if (!(seconds > 0)) return;
+    this.clearTimer();
+    this.audio.pause();
+    this.wait(seconds * 1000, this.audio.currentTime);
   }
   boundary() {
     if (this.phase !== "playing") return;
@@ -165,9 +195,11 @@ export class LoopPlayer {
     }
     this.wait(this.gapMilliseconds);
   }
-  wait(milliseconds) {
+  // Silence, then playback again from `resumeAt` (after a sentence) or the start (a repeat).
+  wait(milliseconds, resumeAt = null) {
     this.clearTimer();
     this.phase = "waiting";
+    this.resumeAt = resumeAt;
     this.remaining = milliseconds;
     this.deadline = performance.now() + milliseconds;
     const epoch = this.epoch;
@@ -175,7 +207,8 @@ export class LoopPlayer {
     this.timer = setTimeout(() => {
       if (epoch !== this.epoch || this.phase !== "waiting") return;
       this.remaining = 0;
-      this.audio.currentTime = this.start;
+      this.audio.currentTime = resumeAt ?? this.start;
+      this.resumeAt = null;
       this.phase = "paused";
       void this.play();
     }, milliseconds);
@@ -194,6 +227,7 @@ export class LoopPlayer {
     const resume = this.active;
     this.pause();
     this.remaining = 0;
+    this.resumeAt = null;
     this.phase = "paused";
     const min = this.mode === "ab" ? this.a : 0;
     const max = this.mode === "ab" ? this.b : this.audio.duration;
