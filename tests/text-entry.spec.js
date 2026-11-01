@@ -212,7 +212,7 @@ test("a sentence's audio is told apart by its text, voice and pinned model", () 
   );
 });
 
-test("the real worker and its readers load in the browser, and its runtime is saved once", async ({
+test("the real worker loads in the browser, and its runtime is saved once", async ({
   page,
 }) => {
   await page.goto("/");
@@ -228,12 +228,6 @@ test("the real worker and its readers load in the browser, and its runtime is sa
       }),
   );
   expect(answer).toEqual({ type: "error", error: "この声は使えません。" });
-  const readings = await page.evaluate(async () => {
-    const { englishPhonemes } = await import("./english.js");
-    const { mandarinPhonemes } = await import("./mandarin.js");
-    return [await englishPhonemes("Hello world."), mandarinPhonemes("你好。")];
-  });
-  expect(readings).toEqual(["həlˈoʊ wˈɜːld.", "ㄋㄧ2ㄏㄠ3."]);
   // Saving the runtime checks each file against its recorded size and SHA-256.
   const saved = await page.evaluate(async () => {
     const { prepareRuntime, RUNTIME_CACHE, RUNTIME_FILES } = await import("./tts.js");
@@ -243,6 +237,42 @@ test("the real worker and its readers load in the browser, and its runtime is sa
   });
   expect(saved).toBe(true);
 });
+
+// The readers run where the app runs them: in a module worker, as tts-worker.js does.
+// (eSpeak NG starts slowly in WebKit, so these get more time than other tests.)
+for (const [language, source, text, expected] of [
+  [
+    "English",
+    'import { englishPhonemes } from "/english.js"; self.postMessage(await englishPhonemes(TEXT));',
+    "Hello world.",
+    "həlˈoʊ wˈɜːld.",
+  ],
+  [
+    "Mandarin",
+    'import { mandarinPhonemes } from "/mandarin.js"; self.postMessage(mandarinPhonemes(TEXT));',
+    "你好。",
+    "ㄋㄧ2ㄏㄠ3.",
+  ],
+])
+  test(`the ${language} reader works in a worker in the browser`, async ({ page }) => {
+    test.setTimeout(150000);
+    await page.route("**/reader-test-worker.js", (route) =>
+      route.fulfill({
+        contentType: "text/javascript",
+        body: source.replace("TEXT", JSON.stringify(text)),
+      }),
+    );
+    await page.goto("/");
+    const reading = await page.evaluate(
+      () =>
+        new Promise((resolve) => {
+          const worker = new Worker("./reader-test-worker.js", { type: "module" });
+          worker.onmessage = ({ data }) => resolve(data);
+          worker.onerror = (event) => resolve("error: " + event.message);
+        }),
+    );
+    expect(reading).toBe(expected);
+  });
 
 test("the runtime files on disk match their recorded sizes and hashes", async () => {
   const { createHash } = await import("node:crypto");
