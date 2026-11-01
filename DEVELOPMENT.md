@@ -18,7 +18,15 @@ JavaScriptモジュールとService Workerを使うため、HTMLをダブルク�
 | ファイル                   | 役割                                                                                                    |
 | -------------------------- | ------------------------------------------------------------------------------------------------------- |
 | `index.html` / `style.css` | 画面と見た目。CSPは `index.html` の `<meta>` にあります                                                 |
-| `app.js`                   | 入口「音源から始める」：登録音声の一覧・追加・ドラッグ＆ドロップ・削除と取り消し、保存容量の表示       |
+| `app.js`                   | 最初の画面：2つの入口の切り替え、「音源から始める」（追加・ドラッグ＆ドロップ）、「保存した教材」の一覧・削除と取り消し、保存容量の表示 |
+| `text-entry.js`            | 入口「テキストから始める」：言語・声・テキスト、音声づくりの進み具合と中止、止まった文の表示、作った音声とスクリプトを練習画面へ |
+| `tts.js`                   | 音声づくり：Workerの管理（3分進まなければ中止）、出力の確認、文ごとの音声の保存（IndexedDB、今のテキストの分だけ）、20分の確認、途中で止まったことの記録 |
+| `tts-worker.js`            | Workerの中でKokoroを動かし、1文を24kHzの音声にする                                                      |
+| `voices.js`                | 声とモデルの一覧（版を固定）                                                                            |
+| `english.js` / `mandarin.js` | 英語（kokoro-jsの正規化＋eSpeak NG）と中国語（pinyin-pro＋Kokoro v1.1の記号）の読み                   |
+| `audio-tools.js`           | WAVの作成、音声の連結、20分の確認、文のあとの無音の長さ、音声の読み込み                                 |
+| `export.js` / `mp3-worker.js` | MP3の書き出し（全体・A–B・N文ごとのZIP・無音入り）                                                   |
+| `model-files.js`           | このサイトのファイルを、初めて使うときにサイズとSHA-256を確かめて保存する（文字起こしと音声づくりで共通） |
 | `practice.js`              | 練習画面（どの入口からも共通）：再生・A–B・速度・スクリプト・詳しい設定（録音して聞き比べ・文字起こしを含む）・ミニプレーヤー・Media Session・キー操作 |
 | `ui.js`                    | 入口と練習画面で共通のお知らせ・エラー表示と「元に戻す」                                                |
 | `player.js`                | 再生エンジン：A–B・回数・無音、タイマーの破棄、時刻の変換                                               |
@@ -27,14 +35,25 @@ JavaScriptモジュールとService Workerを使うため、HTMLをダブルク�
 | `transcript.js`            | スクリプトの文への区切り（英語・中国語）、波形の無音を使った時刻の対応づけ、文字コードの判別                  |
 | `transcriber.js`           | 文字起こしの準備：モデルの受け取りと確認・保存（Cache Storage）、16kHzへの変換、無音での分割            |
 | `transcribe-worker.js`     | Workerの中でWhisperを動かし、区切り（セグメント）ごとの時刻を返す。中国語は簡体字に直す                 |
-| `vendor/` / `models/`      | Transformers.js・ONNX Runtime・OpenCCと、Whisper baseのモデル（出所とライセンスは各フォルダーのREADME） |
+| `vendor/` / `models/`      | Transformers.js・ONNX Runtime・OpenCC・phonemizer・pinyin-pro・lamejs・fflateと、Whisper baseのモデル（出所とライセンスは `vendor/README.md`） |
 | `waveform.js`              | 低いサンプリングレートでの解析、波形の描画、無音での区切り                                              |
 | `recorder.js`              | マイク録音（メモリ上だけ、最長60秒）                                                                    |
 | `offline.js` / `sw.js`     | オフライン準備と更新、アプリ本体のキャッシュ                                                            |
 | `scripts/serve.mjs`        | 開発用の静的サーバー                                                                                    |
 | `scripts/bump-shell.mjs`   | キャッシュの版を上げるリリース用スクリプト                                                              |
 
-保存先：音声はIndexedDB（`coaching-l-audio-library`）、設定と再生位置はlocalStorage（`kotonoha.audio.v1`、以前の版との互換のため名前はそのまま）。スクリプトは素材ごとに `kotonoha.transcript.v1:<素材のキー>`、文字起こしの言語は `kotonoha.prefs.v1` です。以前の版が保存した練習区間（`segments`）は、画面では使いませんが、保存したまま残します。「音声全体」のくり返しと速度の段階アップの設定は、区間リピートOFF・元の速度として開きます。
+保存先：音声はIndexedDB（`coaching-l-audio-library`）、設定と再生位置はlocalStorage（`kotonoha.audio.v1`、以前の版との互換のため名前はそのまま）。スクリプトは素材ごとに `kotonoha.transcript.v1:<素材のキー>`、文字起こしの言語は `kotonoha.prefs.v1`、選んだ入口は `kotonoha.entry.v1`、「テキストから始める」の入力中のテキスト・声・前回作った音声のキーは `kotonoha.textdraft.v1` です。テキストから作った音声も、音源と同じIndexedDBに保存します。文ごとの音声は `coaching-l-tts-clips`（IndexedDB）に、今のテキストの分だけ16ビットで置きます。以前の版が保存した練習区間（`segments`）は、画面では使いませんが、保存したまま残します。「音声全体」のくり返しと速度の段階アップの設定は、区間リピートOFF・元の速度として開きます。
+
+## テキストからの音声づくり
+
+COACHING-L シャドーイング（`coaching-l/shadowing`）の音声化機能を移植しました。英語は Kokoro-82M v1.0 の q8、中国語は Kokoro-82M v1.1-zh の fp32（q8はブラウザでNaNになるため、移植元の判断どおり）。
+
+- 実行は `tts-worker.js`。Transformers.js と ONNX Runtime（WASM・1スレッド）は文字起こしと同じ `vendor/` のものです。kokoro-js は使わず、英語の読み（正規化と eSpeak NG）を `english.js` に移しました（kokoro-js と同じ結果になることを確認）。512トークンの上限は、kokoro-js の内部に頼らず自分で数えます。
+- モデルと声のデータだけは Hugging Face から受け取ります（中国語のモデルは339MBで、GitHubに置ける1ファイル100MBを超えるため）。`voices.js` で版（コミット）を固定し、文ごとの音声のキーにも版を入れています。Transformers.js が Cache Storage（`transformers-cache`）に、声は `coaching-l-tts-voices` に保存するので、2回目からは通信なしで作れます。テキストは送りません。Workerにはページの CSP がかからないため、CSP は変えていません。
+- Workerが使うこのサイトのファイル（Transformers.js・ONNX Runtime・phonemizer・pinyin-pro）は、`tts.js` の `RUNTIME_FILES` にサイズとSHA-256があり、初めて作るときに `model-files.js` が確かめて保存します。文字起こしで保存済みのファイルは写して使います。
+- 移植元の確認で挙がった点への対応：3分の制限はモデルの受け取りが進むたびに数え直す。古い版の文の音声は残さない（今のテキストの文だけ残す）。20分の確認は1か所（`audio-tools.js`）で、作った音声・書き出す音声の実際の長さで行う。第三声の変調は、pinyin-pro が2音節の語の中で変えたものには重ねてかからない（`tests/text-entry.spec.js` で確認）。
+- 文の区切りはスクリプトと同じ `transcript.js` の `splitSentences` なので、練習画面でスクリプトを直しても、直していない文の時刻は残ります。
+- 生成の速さ（読み上げ速度）は1.0に固定しました。練習画面の再生速度で変えられるためです。試聴はありません（1文目から作られるので、それで確かめます）。
 
 ## 練習画面と入口
 
@@ -53,7 +72,7 @@ openPractice({
 });
 ```
 
-`script` は、その `key` にスクリプトがまだ保存されていないときだけ使います。利用者が直したスクリプトは上書きしません。いまの入口は「音源から始める」（`app.js`）だけです。「テキストから始める」は、テキストから作った音声と、文ごとの時刻つきのスクリプトを、同じように渡す想定です（`tests/transcript.spec.js` の「material can bring its own script…」で確かめています）。文字起こし用のデータは、Cache Storageの `coaching-l-audio-model:<パス>:whisper-base-q8-2` に保存します。
+`script` は、その `key` にスクリプトがまだ保存されていないときだけ使います。利用者が直したスクリプトは上書きしません。「音源から始める」（`app.js`）は `file` だけを、「テキストから始める」（`text-entry.js`）は作ったWAVと、文ごとの時刻つきのスクリプトを渡します。文字起こし用のデータは、Cache Storageの `coaching-l-audio-model:<パス>:whisper-base-q8-2` に保存します。
 
 ## 文字起こし
 
@@ -91,6 +110,7 @@ npm run test:all         # すべて
 
 - Linuxの `/usr/bin/chromium` があればそれを使います（CIではPlaywrightのChromium）。`CHROMIUM_PATH=/path/to/chromium npm test` で指定もできます。
 - 録音のテストはChromiumの偽のマイク（`--use-fake-device-for-media-stream`）を使うため、WebKitでは対象外にしています。
+- テキストからの音声づくりのテスト（`tests/text-entry.spec.js`）は、Kokoroの代わりに文の長さの音を返す偽のWorker（`tests/fixtures/fake-tts-worker.js`）を使います。本物のWorkerとその読み（英語・中国語）がブラウザで読み込めること、`RUNTIME_FILES` とディスク上のファイルの一致も確かめます。本物のモデルでの音声づくりは、モデルの取得が必要なため自動テストに入れていません。
 - 文字起こしの画面のテスト（`tests/transcribe.spec.js`）は、Whisperの代わりに決まった単語を返す偽のWorkerを使います。モデルの受け取りと保存は本物で確かめ、`MODEL_FILES` とディスク上のファイルのサイズ・SHA-256も照合します。
 - モバイル設定は画面幅・タッチ・ユーザーエージェントの模擬で、実機の確認にはなりません。
 

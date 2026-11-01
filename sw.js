@@ -1,19 +1,31 @@
 // Bump this version whenever a shell file changes. Each release is installed atomically.
-const VERSION = "v21";
+const VERSION = "v22";
 const BASE = new URL("./", self.location.href);
 const PREFIX = "coaching-l-audio-offline:" + BASE.pathname + ":";
 const CACHE = PREFIX + VERSION;
 const FILES = [
   "./",
   "./index.html",
-  "./style.css?v=23",
-  "./app.js?v=23",
+  "./style.css?v=24",
+  "./app.js?v=24",
   "./player.js",
   "./audio-library.js",
   "./audio-import.js",
   "./recorder.js",
   "./ui.js",
   "./practice.js",
+  "./text-entry.js",
+  "./tts.js",
+  "./tts-worker.js",
+  "./voices.js",
+  "./english.js",
+  "./mandarin.js",
+  "./audio-tools.js",
+  "./model-files.js",
+  "./export.js",
+  "./mp3-worker.js",
+  "./vendor/lamejs/lamejs.js",
+  "./vendor/fflate/fflate.js",
   "./waveform.js",
   "./transcript.js",
   "./transcriber.js",

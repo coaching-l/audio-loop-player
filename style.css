@@ -844,15 +844,19 @@ label {
 }
 .audio-library {
   margin-bottom: 20px;
+}
+.audio-entry {
   transition:
     background 0.15s,
     border-color 0.15s;
 }
-.audio-library.dragging {
+.audio-entry.dragging {
   background: var(--accent-soft);
   border-color: var(--accent);
 }
-.audio-library .section-heading {
+.audio-library .section-heading,
+.audio-entry .section-heading,
+.text-entry .section-heading {
   margin-bottom: 8px;
 }
 .file-hint {
@@ -1326,4 +1330,95 @@ label {
   height: 10px;
   margin-top: 8px;
   accent-color: var(--accent);
+}
+
+/* 入口：テキストから始める／音源から始める */
+.entry-choice {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.entry-button {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 88px;
+  padding: 14px 12px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--heading);
+  text-align: left;
+}
+.entry-button[aria-pressed="true"] {
+  border-color: var(--heading);
+  box-shadow: inset 0 0 0 1.5px var(--heading);
+}
+.entry-title {
+  font-size: 1rem;
+  font-weight: 700;
+}
+.entry-note {
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+.text-entry,
+.audio-entry {
+  margin-bottom: 20px;
+}
+.tts-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.text-entry textarea {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-small);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 1rem;
+  line-height: 1.7;
+  resize: vertical;
+}
+.tts-note {
+  margin-top: 12px;
+}
+.tts-data {
+  margin-top: 8px;
+}
+.tts-data > summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  margin-top: 8px;
+  cursor: pointer;
+}
+.check-row input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--accent);
+}
+@media (max-width: 360px) {
+  .entry-choice,
+  .tts-options {
+    grid-template-columns: 1fr;
+  }
 }

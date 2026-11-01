@@ -3,11 +3,20 @@
 // runtime are files of this site: the first use saves them in the browser after checking
 // each file's SHA-256, and later uses work offline. The audio never leaves the device.
 
+import {
+  CACHE_PREFIX,
+  failure,
+  filesSaved,
+  deleteFiles,
+  saveFiles,
+} from "./model-files.js";
+
 const BASE = new URL("./", import.meta.url);
-const CACHE_PREFIX = "coaching-l-audio-model:" + BASE.pathname + ":";
+// All versions of the speech-to-text files share this start of their cache name.
+const FAMILY = CACHE_PREFIX + "whisper-";
 // Change the name whenever a file below changes, so browsers fetch the changed files
 // (unchanged ones are copied from the older cache).
-export const MODEL_CACHE = CACHE_PREFIX + "whisper-base-q8-2";
+export const MODEL_CACHE = FAMILY + "base-q8-2";
 export const MODEL_FILES = [
   {
     path: "vendor/transformers/transformers.min.js",
@@ -69,20 +78,6 @@ export const MODEL_BYTES = MODEL_FILES.reduce((sum, f) => sum + f.size, 0);
 const RATE = 16000; // Whisper listens at 16 kHz
 const WINDOW = 28; // seconds per pass; Whisper hears at most 30 seconds at a time
 export const MAX_SECONDS = 20 * 60;
-const TYPES = {
-  js: "text/javascript",
-  mjs: "text/javascript",
-  wasm: "application/wasm",
-  json: "application/json",
-  onnx: "application/octet-stream",
-};
-
-function failure(name, message) {
-  const error = new Error(message);
-  error.name = name;
-  return error;
-}
-
 export function transcriptionSupported() {
   return (
     typeof WebAssembly === "object" &&
@@ -94,115 +89,29 @@ export function transcriptionSupported() {
 }
 
 export async function modelSaved() {
-  try {
-    // caches.open would create an empty cache; only look when there is one.
-    if (!(await caches.has(MODEL_CACHE))) return false;
-    const cache = await caches.open(MODEL_CACHE);
-    const found = await Promise.all(
-      MODEL_FILES.map((file) => cache.match(new URL(file.path, BASE))),
-    );
-    return found.every(Boolean);
-  } catch {
-    return false;
-  }
+  return filesSaved(MODEL_CACHE, MODEL_FILES);
 }
 
 export async function deleteModel() {
-  for (const key of await caches.keys())
-    if (key.startsWith(CACHE_PREFIX)) await caches.delete(key);
+  await deleteFiles(FAMILY);
 }
 
-async function sha256(buffer) {
-  const digest = await crypto.subtle.digest("SHA-256", buffer);
-  return Array.from(new Uint8Array(digest), (b) =>
-    b.toString(16).padStart(2, "0"),
-  ).join("");
-}
-
-async function verified(blob, file) {
-  return (
-    blob.size === file.size &&
-    (await sha256(await blob.arrayBuffer())) === file.sha256
-  );
-}
-
-// Fetches the files not saved yet, checks each one and keeps it in the cache. A file
-// that did not change since the version saved before is copied from there instead,
-// and that older version is removed at the end.
-async function saveModel(onProgress, signal) {
-  const older = (await caches.keys()).filter(
-    (key) => key.startsWith(CACHE_PREFIX) && key !== MODEL_CACHE,
-  );
-  const cache = await caches.open(MODEL_CACHE);
-  let done = 0;
-  for (const file of MODEL_FILES) {
-    const url = new URL(file.path, BASE);
-    if (!(await cache.match(url))) {
-      let blob = null;
-      for (const key of older) {
-        const saved = await (await caches.open(key)).match(url);
-        const copy = saved && (await saved.blob());
-        if (copy && (await verified(copy, file))) {
-          blob = copy;
-          break;
-        }
-      }
-      if (!blob)
-        blob = await download(url, file, signal, (loaded) =>
-          onProgress((done + Math.min(loaded, file.size)) / MODEL_BYTES),
-        );
-      try {
-        await cache.put(
-          url,
-          new Response(blob, {
-            headers: {
-              "Content-Type": TYPES[file.path.split(".").pop()],
-              "Content-Length": String(file.size),
-            },
-          }),
-        );
-      } catch {
-        throw failure(
-          "ModelStorageError",
-          "端末の空き容量が足りないため、文字起こし用のデータを保存できません。空き容量を増やしてから、もう一度お試しください。",
-        );
-      }
-    }
-    done += file.size;
-    onProgress(done / MODEL_BYTES);
-  }
-  for (const key of older) await caches.delete(key);
-}
-
-async function download(url, file, signal, onLoaded) {
-  let response;
-  try {
-    response = await fetch(url, { cache: "no-store", signal });
-    if (!response.ok) throw new Error(String(response.status));
-  } catch (error) {
-    if (error.name === "AbortError") throw error;
-    throw failure(
-      "ModelDownloadError",
-      "文字起こし用のデータを受け取れませんでした。インターネットにつながっているか確かめて、もう一度お試しください。",
-    );
-  }
-  const chunks = [];
-  let loaded = 0;
-  const reader = response.body.getReader();
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    chunks.push(value);
-    loaded += value.length;
-    onLoaded(loaded);
-  }
-  const blob = new Blob(chunks);
-  if (!(await verified(blob, file)))
-    throw failure(
-      "ModelDownloadError",
-      "文字起こし用のデータが途中で途切れました。もう一度お試しください。",
-    );
-  return blob;
+function saveModel(onProgress, signal) {
+  return saveFiles({
+    cacheName: MODEL_CACHE,
+    family: FAMILY,
+    files: MODEL_FILES,
+    onProgress,
+    signal,
+    messages: {
+      storage:
+        "端末の空き容量が足りないため、文字起こし用のデータを保存できません。空き容量を増やしてから、もう一度お試しください。",
+      download:
+        "文字起こし用のデータを受け取れませんでした。インターネットにつながっているか確かめて、もう一度お試しください。",
+      broken:
+        "文字起こし用のデータが途中で途切れました。もう一度お試しください。",
+    },
+  });
 }
 
 // Mono samples at 16 kHz. Engines that refuse that rate decode at a common one, and the

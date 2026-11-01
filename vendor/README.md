@@ -1,6 +1,9 @@
 # 同梱している外部のプログラム
 
-音声からの文字起こし（`transcriber.js`・`transcribe-worker.js`）だけが使います。CDNからは読み込まず、このサイトのファイルとして配信します。最初に文字起こしするときに `transcriber.js` が受け取り、SHA-256を確かめてからブラウザに保存します（`sw.js` の `FILES` には入れていません）。
+CDNからは読み込まず、このサイトのファイルとして配信します。
+
+- 文字起こし（`transcriber.js`・`transcribe-worker.js`）と、テキストからの音声づくり（`tts.js`・`tts-worker.js`）が使う大きなファイルは、初めて使うときに受け取り、SHA-256を確かめてからブラウザに保存します（`sw.js` の `FILES` には入れていません）。
+- MP3の書き出しが使う `lamejs` と `fflate` は小さいので、アプリ本体と一緒に保存します（`sw.js` の `FILES`）。
 
 | ファイル                                  | 元のパッケージ                                      | ライセンス                                                                          |
 | ----------------------------------------- | --------------------------------------------------- | ----------------------------------------------------------------------------------- |
@@ -8,12 +11,19 @@
 | `onnxruntime/ort-wasm-simd-threaded.mjs`  | npm `onnxruntime-web` 1.31.0-dev.20260914-8d85527a0 | MIT（`onnxruntime/LICENSE`、第三者の表示は `onnxruntime/ThirdPartyNotices.txt`）    |
 | `onnxruntime/ort-wasm-simd-threaded.wasm` | 同上                                                | 同上                                                                                |
 | `opencc/t2cn.js`                          | npm `opencc-js` 1.4.2 の `dist/esm/t2cn.js`         | MIT（`opencc/LICENSE`）、辞書データはApache-2.0（`opencc/THIRD_PARTY_LICENSES.md`） |
+| `phonemizer/phonemizer.js`                | npm `phonemizer` 1.2.1 の `dist/phonemizer.js`（変更なし） | Apache-2.0（`phonemizer/LICENSE`）。中に eSpeak NG（GPL-3.0、`phonemizer/GPL-3.0.txt`）を含みます。ソース：https://github.com/xenova/phonemizer.js 、https://github.com/espeak-ng/espeak-ng |
+| `pinyin-pro/pinyin-pro.js`                | npm `pinyin-pro` 3.29.5 の `dist/index.js`（UMD）を、Workerから読み込めるように前後2行で包んだもの（中身は変更なし） | MIT（`pinyin-pro/LICENSE`） |
+| `lamejs/lamejs.js`                        | npm `@breezystack/lamejs` 1.2.7 の `dist/lamejs.js`（変更なし） | LGPL-3.0（`lamejs/LGPL-3.0.txt`、LAMEの案内は `lamejs/LICENSE-LAME.txt`）。別ファイルのまま `mp3-worker.js` から使います。ソース：https://github.com/shijinyu/lamejs |
+| `fflate/fflate.js`                        | npm `fflate` 0.8.2 の `esm/browser.js`（変更なし）  | MIT（`fflate/LICENSE`） |
 
 - `onnxruntime-web` の版は、`transformers.min.js` に組み込まれている版（`1.31.0-dev.20260914-8d85527a0`）と同じものです。違う版のWASMを組み合わせると動きません。
 - WASMは、WebGPUを使わない通常版（`ort-wasm-simd-threaded`）です。複数スレッドにはクロスオリジン分離が必要なため、1スレッドで動かします。
 - `opencc` は、Whisperが繁体字で書いた中国語を簡体字に直すために使います。
+- `english.js` は kokoro-js 1.2.1（Apache-2.0、Copyright hexgrad、https://github.com/hexgrad/kokoro ）の英語の正規化と読みを移したもの、`mandarin.js` の記号の対応表は Misaki の ZHFrontend／PaddleSpeech（Apache-2.0、Copyright (c) 2021 PaddlePaddle Authors）から、COACHING-L シャドーイングを経て移したものです。Apache-2.0 の本文は `transformers/LICENSE` と同じです。
+- Kokoro のモデル（Apache-2.0）は、このサイトには置かず、Hugging Face の `onnx-community/Kokoro-82M-v1.0-ONNX` と `onnx-community/Kokoro-82M-v1.1-zh-ONNX` から、`voices.js` に書いた版で受け取ります。
+- GPL-3.0 の eSpeak NG と LGPL-3.0 の lamejs を含むため、配布するときはこれらのライセンス文とソースへの案内を一緒に置いてください（このリポジトリに同梱しています）。アプリ全体の配布条件の確認までは済んでいません。
 
-各ファイルのサイズとSHA-256は `transcriber.js` の `MODEL_FILES` にあり、`tests/transcribe.spec.js` がディスク上のファイルと一致するか確かめます。
+各ファイルのサイズとSHA-256は `transcriber.js` の `MODEL_FILES` と `tts.js` の `RUNTIME_FILES` にあり、`tests/transcribe.spec.js` と `tests/text-entry.spec.js` がディスク上のファイルと一致するか確かめます。
 
 ## 入れ替えるとき
 

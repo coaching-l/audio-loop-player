@@ -42,8 +42,8 @@
       content="端末の音声で、繰り返し聴く・声に出す。アップロード不要の語学学習プレーヤー。"
     />
     <title>音声リピートプレーヤー | COACHING-L</title>
-    <link rel="stylesheet" href="./style.css?v=23" />
-    <script type="module" src="./app.js?v=23"></script>
+    <link rel="stylesheet" href="./style.css?v=24" />
+    <script type="module" src="./app.js?v=24"></script>
   </head>
   <body>
     <main>
@@ -68,21 +68,109 @@
       </header>
       <div class="intro">
         <h2 class="lead">聴く。くり返す。<br />自分の言葉にする。</h2>
-        <p>素材を用意して、そのまま練習を始めましょう。</p>
+        <p>テキストか音源を用意して、そのまま練習を始めましょう。</p>
+      </div>
+      <div class="entry-choice" role="group" aria-label="始め方">
+        <button
+          id="entry-text"
+          class="entry-button"
+          type="button"
+          aria-pressed="false"
+          aria-controls="text-entry"
+        >
+          <span class="entry-title">テキストから始める</span
+          ><span class="entry-note">英語・中国語の文を音声にします</span>
+        </button>
+        <button
+          id="entry-audio"
+          class="entry-button"
+          type="button"
+          aria-pressed="false"
+          aria-controls="drop-zone"
+        >
+          <span class="entry-title">音源から始める</span
+          ><span class="entry-note">手持ちのMP3などを読み込みます</span>
+        </button>
       </div>
       <section
-        id="drop-zone"
-        class="card audio-library"
-        aria-labelledby="library-heading"
+        id="text-entry"
+        class="card text-entry"
+        aria-labelledby="text-entry-heading"
+        hidden
       >
         <div class="section-heading">
-          <h2 id="library-heading">音源から始める</h2>
-          <span id="audio-count" class="tag">0 / 10件</span>
+          <h2 id="text-entry-heading">テキストから始める</h2>
         </div>
-        <p id="library-status" class="small" role="status">
-          保存した音声を確認中…
+        <fieldset id="tts-controls">
+          <div class="tts-options">
+            <div>
+              <label for="tts-lang">言語</label
+              ><select id="tts-lang">
+                <option value="en">英語</option>
+                <option value="zh">中国語（普通話）</option>
+              </select>
+            </div>
+            <div>
+              <label for="tts-voice">声</label><select id="tts-voice"></select>
+            </div>
+          </div>
+          <label for="tts-text">読み上げるテキスト</label>
+          <textarea
+            id="tts-text"
+            rows="7"
+            spellcheck="false"
+            placeholder="ここにテキストを貼り付けます。1文ずつ音声にして、そのままスクリプトになります。"
+          ></textarea>
+          <div class="transcript-actions">
+            <button id="tts-make" class="button primary" type="button">
+              音声を作る
+            </button>
+          </div>
+        </fieldset>
+        <div id="tts-progress" class="transcribe-block" hidden>
+          <p id="tts-status" class="small" role="status"></p>
+          <progress
+            id="tts-bar"
+            class="transcribe-bar"
+            max="1"
+            aria-labelledby="tts-status"
+          ></progress>
+          <div class="transcript-actions">
+            <button id="tts-cancel" class="button secondary" type="button">
+              音声づくりを中止
+            </button>
+          </div>
+        </div>
+        <p id="tts-failed" class="error" role="alert" hidden></p>
+        <p class="small tts-note">
+          この端末の中で音声にし、テキストはどこにも送りません。初めてのときだけ、音声モデル（英語
+          約92MB・中国語 約340MB）をHugging
+          Faceから受け取って保存します。Wi-Fiにつながっているときにお使いください。作った音声は「保存した教材」に入ります。
         </p>
-        <ul id="audio-list" class="audio-list"></ul>
+        <details class="tts-data">
+          <summary>音声づくり用のデータ</summary>
+          <p class="small">
+            <span id="tts-data-status">音声づくり用のデータは保存していません。</span>
+            <button
+              id="tts-data-delete"
+              class="text-button"
+              type="button"
+              hidden
+            >
+              音声づくり用のデータを削除
+            </button>
+          </p>
+        </details>
+      </section>
+      <section
+        id="drop-zone"
+        class="card audio-entry"
+        aria-labelledby="audio-entry-heading"
+        hidden
+      >
+        <div class="section-heading">
+          <h2 id="audio-entry-heading">音源から始める</h2>
+        </div>
         <label class="button primary file-button" for="file-input"
           >ファイルを選択</label
         ><input
@@ -96,6 +184,16 @@
           MP3・M4A・WAV
           など。パソコンでは、このカードにファイルをドラッグして追加することもできます。
         </p>
+      </section>
+      <section class="card audio-library" aria-labelledby="library-heading">
+        <div class="section-heading">
+          <h2 id="library-heading">保存した教材</h2>
+          <span id="audio-count" class="tag">0 / 10件</span>
+        </div>
+        <p id="library-status" class="small" role="status">
+          保存した教材を確認中…
+        </p>
+        <ul id="audio-list" class="audio-list"></ul>
         <p id="storage-info" class="small storage-info" hidden></p>
       </section>
       <div class="load-actions">
@@ -412,6 +510,13 @@
               <p class="small">
                 回数には最初の1回も含みます。無音を入れると、その間に声に出して練習できます。「区間と同じ」は、区間を聴いたのと同じ時間だけ無音にします。
               </p>
+              <label class="check-row" for="sentence-pause"
+                ><input id="sentence-pause" type="checkbox" />
+                通して聞くとき、文ごとに止める</label
+              >
+              <p id="sentence-pause-help" class="small">
+                区間リピートがOFFのとき、スクリプトの文が終わるたびに、その文と同じ長さ（1〜8秒）だけ止まります。止まっている間に声に出して練習できます（リピーティング）。スクリプトがあるときに使えます。
+              </p>
             </section>
             <section class="advanced-group" aria-labelledby="range-heading">
               <h3 id="range-heading" class="advanced-title">
@@ -481,6 +586,31 @@
               <p id="range-error" class="error" role="alert" hidden></p>
             </section>
           </fieldset>
+          <section class="advanced-group" aria-labelledby="export-heading">
+            <h3 id="export-heading" class="advanced-title">MP3で書き出す</h3>
+            <fieldset id="export-controls" disabled>
+              <label for="export-kind">書き出す範囲</label
+              ><select id="export-kind">
+                <option value="all">音声全体</option>
+                <option value="ab">A–B区間</option>
+                <option value="5">5文ごとに分ける（ZIP）</option>
+                <option value="10">10文ごとに分ける（ZIP）</option>
+              </select>
+              <label class="check-row" for="export-pauses"
+                ><input id="export-pauses" type="checkbox" />
+                文のあとに無音を入れる（文と同じ長さ・1〜8秒）</label
+              >
+              <div class="transcript-actions">
+                <button id="export-start" class="button secondary" type="button">
+                  MP3で書き出す
+                </button>
+              </div>
+            </fieldset>
+            <p id="export-status" class="small" role="status"></p>
+            <p class="small">
+              文ごとに分けるときと無音を入れるときは、スクリプトの文の時刻を使います。書き出せるのは、無音を含めて20分までです。
+            </p>
+          </section>
           <section class="advanced-group" aria-labelledby="record-heading">
             <h3 id="record-heading" class="advanced-title">
               録音して聞き比べ
@@ -577,6 +707,15 @@
         </summary>
         <div class="usage-body">
           <section>
+            <h2>テキストから始める</h2>
+            <p>
+              英語か中国語（普通話）のテキストを貼り付けて、声を選び、「音声を作る」を押します。1文ずつ音声にして、テキストがそのままスクリプトになります。途中の文で止まったときは、その文を直してから「音声を作る」を押すと、続きから作ります。一部の文を直して作り直すときも、直した文だけを作ります。
+            </p>
+            <p>
+              中国語は漢字と句読点だけを読みます。英単語や数字は、読ませたい中国語に書き直してください。1文は400文字まで、全体で20分までです。
+            </p>
+          </section>
+          <section>
             <h2>音源から始める</h2>
             <p>
               「ファイルを選択」から音声を追加します。10件まで登録でき、複数のファイルをまとめて選ぶこともできます。練習する音声は、一覧の音声名を押して切り替えます。「音声の読み込みを始める」ボタンが出たときは、押してください。
@@ -594,7 +733,7 @@
               「スクリプト」には、教材のスクリプトを貼り付けるか、テキストファイルを読み込みます。再生している文に色が付き、文を押すとその文をA–B区間にします。「前の文へ」「次の文へ」で、文ごとに区間を移れます（スクリプトがないときは、波形の無音で区切ります）。
             </p>
             <p>
-              くり返す回数と間の無音、ゲージの拡大、A・Bの時刻の入力、録音して聞き比べ、音声からの文字起こしは「詳しい設定」にあります。区間・速度・再生位置は、音声ごとに自動で記録されます。
+              くり返す回数と間の無音、通して聞くときに文ごとに止める設定、ゲージの拡大、A・Bの時刻の入力、MP3の書き出し、録音して聞き比べ、音声からの文字起こしは「詳しい設定」にあります。区間・速度・再生位置は、音声ごとに自動で記録されます。
             </p>
           </section>
           <section>
@@ -641,6 +780,11 @@
                 class="model-size"
                 >約95MB</span
               >）をこのサイトから受け取り、ブラウザに保存します。削除は「詳しい設定」からできます。
+            </p>
+            <p>
+              テキストからの音声づくりも、この端末の中で行います（Kokoroというモデルを使います）。初めてのときだけ、音声モデル（英語
+              約92MB・中国語 約340MB）をHugging
+              Faceから受け取り、ブラウザに保存します。受け取るのはモデルだけで、テキストや音声は送りません。削除は「テキストから始める」の「音声づくり用のデータ」からできます。
             </p>
             <p>
               音声を保存すると、ブラウザが自動で消さないように設定を求めます。それでも、ブラウザの履歴・サイトデータを削除すると消えます。元のファイルは残しておいてください。「音声を削除」で消えるのはこのアプリ内のコピーだけで、端末の元ファイルはそのまま残ります。削除した直後は、画面下の「元に戻す」で戻せます。
