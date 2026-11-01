@@ -69,12 +69,22 @@ export function renderPieces(samples, rate, pieces) {
   return out;
 }
 
+// A worker that has not said it loaded by then is taken as one that never will (a
+// browser can fail to load a module worker without an error event).
+const WORKER_START_MS = 10000;
 export function encodeMp3(samples, rate, kbps = 128) {
   const worker = new Worker(new URL("./mp3-worker.js", import.meta.url), {
     type: "module",
   });
   return new Promise((resolve, reject) => {
+    const start = setTimeout(() => {
+      done();
+      reject(
+        new Error("MP3に変換できませんでした。変換のしくみを読み込めません。"),
+      );
+    }, WORKER_START_MS);
     const done = () => {
+      clearTimeout(start);
       worker.onmessage = null;
       worker.onerror = null;
       worker.terminate();
@@ -84,6 +94,10 @@ export function encodeMp3(samples, rate, kbps = 128) {
       reject(new Error("MP3に変換できませんでした。" + (event.message || "")));
     };
     worker.onmessage = ({ data }) => {
+      if (data?.ready) {
+        clearTimeout(start);
+        return;
+      }
       done();
       if (data?.blob instanceof Blob) resolve(data.blob);
       else reject(new Error("MP3に変換できませんでした。" + (data?.error || "")));

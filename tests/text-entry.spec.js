@@ -11,6 +11,10 @@ test.use({ serviceWorkers: "block" });
 // tts-worker.js and answers each sentence with a tone (0.04 s per character). The
 // sentences sent to it are recorded on the page as window.ttsCalls.
 async function fakeVoices(page) {
+  // Kept for the message when made audio does not become playable (see ready()).
+  page.log = [];
+  page.on("console", (m) => page.log.push(`${m.type()}: ${m.text()}`));
+  page.on("pageerror", (e) => page.log.push(`pageerror: ${e.message}`));
   await page.route("**/tts-worker.js", (route) =>
     route.fulfill({
       contentType: "text/javascript",
@@ -35,6 +39,22 @@ async function fakeVoices(page) {
 async function make(page, text) {
   await page.locator("#tts-text").fill(text);
   await page.getByRole("button", { name: "音声を作る" }).click();
+}
+// Waits until the made audio can be played; if it cannot, says what the page showed.
+async function ready(page) {
+  try {
+    await expect(page.locator("#play")).toBeEnabled({ timeout: 25000 });
+  } catch (error) {
+    const shown = await page.evaluate(() =>
+      ["tts-status", "tts-failed", "error", "notice", "play-status", "file-name"]
+        .map((id) => `${id}: ${document.getElementById(id)?.textContent.trim()}`)
+        .join("\n"),
+    );
+    const log = (page.log || []).join("\n");
+    throw new Error(
+      `${error.message}\n--- page ---\n${shown}\n--- console ---\n${log}`,
+    );
+  }
 }
 const sentences = (page) => page.locator("#transcript-sentences .sentence");
 const calls = (page) => page.evaluate(() => window.ttsCalls);
@@ -63,7 +83,7 @@ test("text becomes audio whose sentences, with their times, are the script", asy
   await page.goto("/");
   await page.locator("#entry-text").click();
   await make(page, "Hello there. This is a test.\nLast one!");
-  await expect(page.locator("#play")).toBeEnabled({ timeout: 30000 });
+  await ready(page);
   await expect(page.locator("#file-name")).toHaveText("Hello there.mp3");
   await expect(sentences(page)).toHaveText([
     "Hello there.",
@@ -114,6 +134,27 @@ test("text becomes audio whose sentences, with their times, are the script", asy
   );
 });
 
+test("if the MP3 encoder never loads, the audio is kept as WAV instead of waiting forever", async ({
+  page,
+}) => {
+  test.setTimeout(60000);
+  await fakeVoices(page);
+  // A module worker that loads nothing: it neither answers nor reports an error.
+  await page.route("**/mp3-worker.js", (route) =>
+    route.fulfill({ contentType: "text/javascript", body: "" }),
+  );
+  await page.goto("/");
+  await page.locator("#entry-text").click();
+  await make(page, "First line. Second line.");
+  await expect(page.locator("#tts-status")).toHaveText("MP3にしています…");
+  await ready(page);
+  await expect(page.locator("#file-name")).toHaveText("First line.wav");
+  await expect(sentences(page)).toHaveCount(2);
+  // Without the MP3's delay, the times are the sentences' own.
+  await sentences(page).nth(1).click();
+  await expect(page.locator("#point-a")).toHaveValue("0:00.440");
+});
+
 test("a sentence that fails is named, and making again goes on from it", async ({
   page,
 }) => {
@@ -127,7 +168,7 @@ test("a sentence that fails is named, and making again goes on from it", async (
   );
   await expect(page.locator("#play")).toBeDisabled();
   await make(page, "One here. Two is fine. Three here.");
-  await expect(page.locator("#play")).toBeEnabled({ timeout: 30000 });
+  await ready(page);
   await expect(page.locator("#tts-failed")).toBeHidden();
   // The first sentence was made once; only the fixed one and the rest were made now.
   expect(await calls(page)).toEqual([
@@ -145,7 +186,7 @@ test("changing one sentence makes only that one again and replaces the saved aud
   await page.goto("/");
   await page.locator("#entry-text").click();
   await make(page, "First line. Second line.");
-  await expect(page.locator("#play")).toBeEnabled({ timeout: 30000 });
+  await ready(page);
   await expect(page.locator("#audio-list .audio-item")).toHaveCount(1);
   await page.waitForFunction(() => window.ttsCalls.length === 2);
   await make(page, "First line. Second line, changed.");
