@@ -64,16 +64,40 @@ test("text becomes audio whose sentences, with their times, are the script", asy
   await page.locator("#entry-text").click();
   await make(page, "Hello there. This is a test.\nLast one!");
   await expect(page.locator("#play")).toBeEnabled({ timeout: 30000 });
-  await expect(page.locator("#file-name")).toHaveText("Hello there.wav");
+  await expect(page.locator("#file-name")).toHaveText("Hello there.mp3");
   await expect(sentences(page)).toHaveText([
     "Hello there.",
     "This is a test.",
     "Last one!",
   ]);
-  // Times come from the audio of each sentence, not from guessing.
+  // Times come from the audio of each sentence, not from guessing, moved by the
+  // MP3's delay (1105 samples at 24 kHz, 0.046 s).
   await sentences(page).nth(1).click();
-  await expect(page.locator("#point-a")).toHaveValue("0:00.480");
-  await expect(page.locator("#point-b")).toHaveValue("0:01.080");
+  await expect(page.locator("#point-a")).toHaveValue("0:00.526");
+  await expect(page.locator("#point-b")).toHaveValue("0:01.126");
+  // Kept as MP3, a fraction of the WAV's size, and its sound starts where the script
+  // says the first sentence does.
+  const kept = await page.evaluate(async () => {
+    const { listAudio, storedFile } = await import("./audio-library.js");
+    const { decodeMono } = await import("./audio-tools.js");
+    const [record] = await listAudio();
+    const file = storedFile(record);
+    const { samples, rate } = await decodeMono(file, 24000);
+    const script = JSON.parse(
+      localStorage.getItem("kotonoha.transcript.v1:" + record.id),
+    );
+    return {
+      type: file.type,
+      bytes: file.size,
+      seconds: samples.length / rate,
+      onset: samples.findIndex((v) => Math.abs(v) > 0.05) / rate,
+      start: script.sentences[0].start,
+    };
+  });
+  expect(kept.type).toBe("audio/mpeg");
+  // 1.84 s of speech: about 177 KB as 16-bit WAV.
+  expect(kept.bytes).toBeLessThan(25000);
+  expect(Math.abs(kept.onset - kept.start)).toBeLessThan(0.01);
   expect(await calls(page)).toEqual([
     "Hello there.",
     "This is a test.",
@@ -82,7 +106,7 @@ test("text becomes audio whose sentences, with their times, are the script", asy
   await expect(page.locator("#audio-list .audio-item")).toHaveCount(1);
   // Kept with its script: it opens from the saved list after a reload.
   await page.reload();
-  await page.getByRole("button", { name: "Hello there.wavを開く" }).click();
+  await page.getByRole("button", { name: "Hello there.mp3を開く" }).click();
   await expect(page.locator("#play")).toBeEnabled();
   await expect(sentences(page)).toHaveCount(3);
   await expect(page.locator("#tts-text")).toHaveValue(

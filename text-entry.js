@@ -3,6 +3,7 @@
 // time, go to the shared practice screen as they are.
 import { splitSentences } from "./transcript.js";
 import { joinClips, wavBlob } from "./audio-tools.js";
+import { encodeMp3, MP3_DELAY_SAMPLES } from "./export.js";
 import { VOICES, voiceInfo } from "./voices.js";
 import {
   SpeechEngine,
@@ -74,7 +75,33 @@ function title(sentences) {
     .replace(/\s+/g, " ")
     .replace(/[\s.。!?！？…]+$/u, "")
     .trim();
-  return (first.length > 24 ? first.slice(0, 24) + "…" : first) + ".wav";
+  return (first.length > 24 ? first.slice(0, 24) + "…" : first) + ".mp3";
+}
+
+// Speech at 64 kbps (mono, 24 kHz) takes about 0.5 MB a minute, against 2.9 MB as WAV.
+const KBPS = 64;
+// The audio to keep: MP3, with each sentence's time moved by the MP3's delay. Should the
+// encoder fail, the same audio as WAV, so what was made is not lost.
+async function audioFile(joined, name) {
+  const { samples, rate, spans } = joined;
+  const lastModified = Date.now();
+  try {
+    const blob = await encodeMp3(samples, rate, KBPS);
+    const shift = MP3_DELAY_SAMPLES / rate;
+    return {
+      file: new File([blob], name, { type: "audio/mpeg", lastModified }),
+      spans: spans.map((s) => ({ start: s.start + shift, end: s.end + shift })),
+    };
+  } catch {
+    const wav = name.replace(/\.mp3$/, ".wav");
+    return {
+      file: new File([wavBlob(samples, rate)], wav, {
+        type: "audio/wav",
+        lastModified,
+      }),
+      spans,
+    };
+  }
 }
 
 async function make() {
@@ -127,18 +154,18 @@ async function make() {
       return;
     }
     const joined = joinClips(result.clips);
-    const name = title(texts);
-    const file = new File([wavBlob(joined.samples, joined.rate)], name, {
-      type: "audio/wav",
-      lastModified: Date.now(),
-    });
+    progress("MP3にしています…", null);
+    const { file, spans } = await audioFile(joined, title(texts));
+    if (controller.signal.aborted)
+      throw new DOMException("中止しました。", "AbortError");
+    const name = file.name;
     const script = {
       text,
       sentences: sentences.map((s, i) => ({
         text: s.text,
         lineEnd: s.lineEnd,
-        start: joined.spans[i].start,
-        end: joined.spans[i].end,
+        start: spans[i].start,
+        end: spans[i].end,
       })),
     };
     void openPractice({ file, name, script });

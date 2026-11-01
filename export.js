@@ -7,6 +7,10 @@ import { zipSync } from "./vendor/fflate/fflate.js";
 
 // Speech needs no more; it also keeps 20 minutes within a phone's memory.
 const RATE = 24000;
+// An MP3 plays this many samples of silence before the audio it was made from: the
+// encoder's delay (576, lamejs) and the decoder's (529). lamejs writes no header that
+// tells players to skip it, so times taken from the original samples move by this much.
+export const MP3_DELAY_SAMPLES = 576 + 529;
 
 /**
  * Where to cut and where to add silence, as files of pieces { from, to, pause } in seconds.
@@ -65,7 +69,7 @@ export function renderPieces(samples, rate, pieces) {
   return out;
 }
 
-export function encodeMp3(samples, rate) {
+export function encodeMp3(samples, rate, kbps = 128) {
   const worker = new Worker(new URL("./mp3-worker.js", import.meta.url), {
     type: "module",
   });
@@ -84,7 +88,7 @@ export function encodeMp3(samples, rate) {
       if (data?.blob instanceof Blob) resolve(data.blob);
       else reject(new Error("MP3に変換できませんでした。" + (data?.error || "")));
     };
-    worker.postMessage({ samples, rate });
+    worker.postMessage({ samples, rate, kbps });
   });
 }
 
