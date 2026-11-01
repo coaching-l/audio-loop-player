@@ -40,16 +40,26 @@ async function make(page, text) {
   await page.locator("#tts-text").fill(text);
   await page.getByRole("button", { name: "音声を作る" }).click();
 }
-// Waits until the made audio can be played; if it cannot, says what the page showed.
-async function ready(page) {
+// Waits until the audio can be played and logs how long that took; if it cannot, says
+// what the page and its audio element showed. (Linux WebKit in CI can take seconds.)
+async function ready(page, label = "made") {
+  const started = Date.now();
   try {
     await expect(page.locator("#play")).toBeEnabled({ timeout: 25000 });
+    console.log(`[ready] ${test.info().project.name} ${label}: ${Date.now() - started} ms`);
   } catch (error) {
-    const shown = await page.evaluate(() =>
-      ["tts-status", "tts-failed", "error", "notice", "play-status", "file-name"]
-        .map((id) => `${id}: ${document.getElementById(id)?.textContent.trim()}`)
-        .join("\n"),
-    );
+    const shown = await page.evaluate(() => {
+      const audio = document.getElementById("audio");
+      return [
+        ...["tts-status", "tts-failed", "error", "notice", "play-status", "file-name"].map(
+          (id) => `${id}: ${document.getElementById(id)?.textContent.trim()}`,
+        ),
+        audio
+          ? `audio: readyState ${audio.readyState}, networkState ${audio.networkState}, ` +
+            `error ${audio.error?.code ?? "none"} ${audio.error?.message ?? ""}, duration ${audio.duration}`
+          : "audio: none",
+      ].join("\n");
+    });
     const log = (page.log || []).join("\n");
     throw new Error(
       `${error.message}\n--- page ---\n${shown}\n--- console ---\n${log}`,
@@ -79,6 +89,8 @@ test("the first screen offers both ways in and remembers the one chosen", async 
 test("text becomes audio whose sentences, with their times, are the script", async ({
   page,
 }) => {
+  // Makes audio and loads it twice; WebKit in CI needs more than the usual 30 s.
+  test.setTimeout(60000);
   await fakeVoices(page);
   await page.goto("/");
   await page.locator("#entry-text").click();
@@ -127,7 +139,7 @@ test("text becomes audio whose sentences, with their times, are the script", asy
   // Kept with its script: it opens from the saved list after a reload.
   await page.reload();
   await page.getByRole("button", { name: "Hello there.mp3を開く" }).click();
-  await expect(page.locator("#play")).toBeEnabled();
+  await ready(page, "reopened");
   await expect(sentences(page)).toHaveCount(3);
   await expect(page.locator("#tts-text")).toHaveValue(
     "Hello there. This is a test.\nLast one!",
@@ -182,6 +194,8 @@ test("a sentence that fails is named, and making again goes on from it", async (
 test("changing one sentence makes only that one again and replaces the saved audio", async ({
   page,
 }) => {
+  // Makes audio and loads it twice; WebKit in CI needs more than the usual 30 s.
+  test.setTimeout(60000);
   await fakeVoices(page);
   await page.goto("/");
   await page.locator("#entry-text").click();
@@ -190,6 +204,9 @@ test("changing one sentence makes only that one again and replaces the saved aud
   await expect(page.locator("#audio-list .audio-item")).toHaveCount(1);
   await page.waitForFunction(() => window.ttsCalls.length === 2);
   await make(page, "First line. Second line, changed.");
+  // Until making ends, the button still belongs to the previous audio.
+  await expect(page.locator("#tts-progress")).toBeHidden({ timeout: 25000 });
+  await ready(page, "made again");
   await expect(sentences(page)).toHaveText(["First line.", "Second line, changed."], {
     timeout: 30000,
   });
