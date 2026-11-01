@@ -7,6 +7,10 @@ import { zipSync } from "./vendor/fflate/fflate.js";
 
 // Speech needs no more; it also keeps 20 minutes within a phone's memory.
 const RATE = 24000;
+// An MP3 plays this many samples of silence before the audio it was made from: the
+// encoder's delay (576, lamejs) and the decoder's (529). lamejs writes no header that
+// tells players to skip it, so times taken from the original samples move by this much.
+export const MP3_DELAY_SAMPLES = 576 + 529;
 
 /**
  * Where to cut and where to add silence, as files of pieces { from, to, pause } in seconds.
@@ -65,12 +69,22 @@ export function renderPieces(samples, rate, pieces) {
   return out;
 }
 
-export function encodeMp3(samples, rate) {
+// A worker that has not said it loaded by then is taken as one that never will (a
+// browser can fail to load a module worker without an error event).
+const WORKER_START_MS = 10000;
+export function encodeMp3(samples, rate, kbps = 128) {
   const worker = new Worker(new URL("./mp3-worker.js", import.meta.url), {
     type: "module",
   });
   return new Promise((resolve, reject) => {
+    const start = setTimeout(() => {
+      done();
+      reject(
+        new Error("MP3に変換できませんでした。変換のしくみを読み込めません。"),
+      );
+    }, WORKER_START_MS);
     const done = () => {
+      clearTimeout(start);
       worker.onmessage = null;
       worker.onerror = null;
       worker.terminate();
@@ -80,11 +94,15 @@ export function encodeMp3(samples, rate) {
       reject(new Error("MP3に変換できませんでした。" + (event.message || "")));
     };
     worker.onmessage = ({ data }) => {
+      if (data?.ready) {
+        clearTimeout(start);
+        return;
+      }
       done();
       if (data?.blob instanceof Blob) resolve(data.blob);
       else reject(new Error("MP3に変換できませんでした。" + (data?.error || "")));
     };
-    worker.postMessage({ samples, rate });
+    worker.postMessage({ samples, rate, kbps });
   });
 }
 

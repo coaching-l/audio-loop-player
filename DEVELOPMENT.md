@@ -24,7 +24,7 @@ JavaScriptモジュールとService Workerを使うため、HTMLをダブルク�
 | `tts-worker.js`            | Workerの中でKokoroを動かし、1文を24kHzの音声にする                                                      |
 | `voices.js`                | 声とモデルの一覧（版を固定）                                                                            |
 | `english.js` / `mandarin.js` | 英語（kokoro-jsの正規化＋eSpeak NG）と中国語（pinyin-pro＋Kokoro v1.1の記号）の読み                   |
-| `audio-tools.js`           | WAVの作成、音声の連結、20分の確認、文のあとの無音の長さ、音声の読み込み                                 |
+| `audio-tools.js`           | WAVの作成（MP3にできなかったときの予備）、音声の連結、20分の確認、文のあとの無音の長さ、音声の読み込み                                 |
 | `export.js` / `mp3-worker.js` | MP3の書き出し（全体・A–B・N文ごとのZIP・無音入り）                                                   |
 | `model-files.js`           | このサイトのファイルを、初めて使うときにサイズとSHA-256を確かめて保存する（文字起こしと音声づくりで共通） |
 | `practice.js`              | 練習画面（どの入口からも共通。音声を開くまでは隠す）：再生・A–B・速度・スクリプト（文字起こしと文の時刻の直しを含む）・詳しい設定（録音して聞き比べを含む）・ミニプレーヤー・Media Session・キー操作 |
@@ -53,6 +53,7 @@ COACHING-L シャドーイング（`coaching-l/shadowing`）の音声化機能�
 - Workerが使うこのサイトのファイル（Transformers.js・ONNX Runtime・phonemizer・pinyin-pro）は、`tts.js` の `RUNTIME_FILES` にサイズとSHA-256があり、初めて作るときに `model-files.js` が確かめて保存します。文字起こしで保存済みのファイルは写して使います。
 - 移植元の確認で挙がった点への対応：3分の制限はモデルの受け取りが進むたびに数え直す。古い版の文の音声は残さない（今のテキストの文だけ残す）。20分の確認は1か所（`audio-tools.js`）で、作った音声・書き出す音声の実際の長さで行う。第三声の変調は、pinyin-pro が2音節の語の中で変えたものには重ねてかからない（`tests/text-entry.spec.js` で確認）。
 - 文の区切りはスクリプトと同じ `transcript.js` の `splitSentences` なので、練習画面でスクリプトを直しても、直していない文の時刻は残ります。
+- 作った音声は、MP3（モノラル・24kHz・64kbps、1分で約0.5MB）にして保存します（WAVでは1分で約2.9MB）。MP3は書き出しと同じ `mp3-worker.js`（lamejs）で作ります。MP3の再生は、元の音より1,105サンプル（エンコーダー576＋デコーダー529、24kHzで約46ミリ秒）遅れて始まります。lamejsはこれを飛ばすための情報を書かないため、文の時刻をその分うしろへずらします（`export.js` の `MP3_DELAY_SAMPLES`）。MP3にできなかったときは、同じ音声をWAVで保存します。`mp3-worker.js` は読み込めたら最初に知らせ、10秒たっても知らせがないとき（モジュールのWorkerは、読み込めなくてもエラーにならないことがある）は、MP3にできなかったとみなします。
 - 生成の速さ（読み上げ速度）は1.0に固定しました。練習画面の再生速度で変えられるためです。試聴はありません（1文目から作られるので、それで確かめます）。
 
 ## 練習画面と入口
@@ -72,7 +73,7 @@ openPractice({
 });
 ```
 
-`script` は、その `key` にスクリプトがまだ保存されていないときだけ使います。利用者が直したスクリプトは上書きしません。「音源から始める」（`app.js`）は `file` だけを、「テキストから始める」（`text-entry.js`）は作ったWAVと、文ごとの時刻つきのスクリプトを渡します。文字起こし用のデータは、Cache Storageの `coaching-l-audio-model:<パス>:whisper-base-q8-2` に保存します。
+`script` は、その `key` にスクリプトがまだ保存されていないときだけ使います。利用者が直したスクリプトは上書きしません。「音源から始める」（`app.js`）は `file` だけを、「テキストから始める」（`text-entry.js`）は作ったMP3と、文ごとの時刻つきのスクリプトを渡します。文字起こし用のデータは、Cache Storageの `coaching-l-audio-model:<パス>:whisper-base-q8-2` に保存します。
 
 ## 文字起こし
 

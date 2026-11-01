@@ -11,6 +11,10 @@ test.use({ serviceWorkers: "block" });
 // tts-worker.js and answers each sentence with a tone (0.04 s per character). The
 // sentences sent to it are recorded on the page as window.ttsCalls.
 async function fakeVoices(page) {
+  // Kept for the message when made audio does not become playable (see ready()).
+  page.log = [];
+  page.on("console", (m) => page.log.push(`${m.type()}: ${m.text()}`));
+  page.on("pageerror", (e) => page.log.push(`pageerror: ${e.message}`));
   await page.route("**/tts-worker.js", (route) =>
     route.fulfill({
       contentType: "text/javascript",
@@ -36,6 +40,32 @@ async function make(page, text) {
   await page.locator("#tts-text").fill(text);
   await page.getByRole("button", { name: "音声を作る" }).click();
 }
+// Waits until the audio can be played and logs how long that took; if it cannot, says
+// what the page and its audio element showed. (Linux WebKit in CI can take seconds.)
+async function ready(page, label = "made") {
+  const started = Date.now();
+  try {
+    await expect(page.locator("#play")).toBeEnabled({ timeout: 25000 });
+    console.log(`[ready] ${test.info().project.name} ${label}: ${Date.now() - started} ms`);
+  } catch (error) {
+    const shown = await page.evaluate(() => {
+      const audio = document.getElementById("audio");
+      return [
+        ...["tts-status", "tts-failed", "error", "notice", "play-status", "file-name"].map(
+          (id) => `${id}: ${document.getElementById(id)?.textContent.trim()}`,
+        ),
+        audio
+          ? `audio: readyState ${audio.readyState}, networkState ${audio.networkState}, ` +
+            `error ${audio.error?.code ?? "none"} ${audio.error?.message ?? ""}, duration ${audio.duration}`
+          : "audio: none",
+      ].join("\n");
+    });
+    const log = (page.log || []).join("\n");
+    throw new Error(
+      `${error.message}\n--- page ---\n${shown}\n--- console ---\n${log}`,
+    );
+  }
+}
 const sentences = (page) => page.locator("#transcript-sentences .sentence");
 const calls = (page) => page.evaluate(() => window.ttsCalls);
 
@@ -59,21 +89,47 @@ test("the first screen offers both ways in and remembers the one chosen", async 
 test("text becomes audio whose sentences, with their times, are the script", async ({
   page,
 }) => {
+  // Makes audio and loads it twice; WebKit in CI needs more than the usual 30 s.
+  test.setTimeout(60000);
   await fakeVoices(page);
   await page.goto("/");
   await page.locator("#entry-text").click();
   await make(page, "Hello there. This is a test.\nLast one!");
-  await expect(page.locator("#play")).toBeEnabled({ timeout: 30000 });
-  await expect(page.locator("#file-name")).toHaveText("Hello there.wav");
+  await ready(page);
+  await expect(page.locator("#file-name")).toHaveText("Hello there.mp3");
   await expect(sentences(page)).toHaveText([
     "Hello there.",
     "This is a test.",
     "Last one!",
   ]);
-  // Times come from the audio of each sentence, not from guessing.
+  // Times come from the audio of each sentence, not from guessing, moved by the
+  // MP3's delay (1105 samples at 24 kHz, 0.046 s).
   await sentences(page).nth(1).click();
-  await expect(page.locator("#point-a")).toHaveValue("0:00.480");
-  await expect(page.locator("#point-b")).toHaveValue("0:01.080");
+  await expect(page.locator("#point-a")).toHaveValue("0:00.526");
+  await expect(page.locator("#point-b")).toHaveValue("0:01.126");
+  // Kept as MP3, a fraction of the WAV's size, and its sound starts where the script
+  // says the first sentence does.
+  const kept = await page.evaluate(async () => {
+    const { listAudio, storedFile } = await import("./audio-library.js");
+    const { decodeMono } = await import("./audio-tools.js");
+    const [record] = await listAudio();
+    const file = storedFile(record);
+    const { samples, rate } = await decodeMono(file, 24000);
+    const script = JSON.parse(
+      localStorage.getItem("kotonoha.transcript.v1:" + record.id),
+    );
+    return {
+      type: file.type,
+      bytes: file.size,
+      seconds: samples.length / rate,
+      onset: samples.findIndex((v) => Math.abs(v) > 0.05) / rate,
+      start: script.sentences[0].start,
+    };
+  });
+  expect(kept.type).toBe("audio/mpeg");
+  // 1.84 s of speech: about 177 KB as 16-bit WAV.
+  expect(kept.bytes).toBeLessThan(25000);
+  expect(Math.abs(kept.onset - kept.start)).toBeLessThan(0.01);
   expect(await calls(page)).toEqual([
     "Hello there.",
     "This is a test.",
@@ -82,12 +138,33 @@ test("text becomes audio whose sentences, with their times, are the script", asy
   await expect(page.locator("#audio-list .audio-item")).toHaveCount(1);
   // Kept with its script: it opens from the saved list after a reload.
   await page.reload();
-  await page.getByRole("button", { name: "Hello there.wavを開く" }).click();
-  await expect(page.locator("#play")).toBeEnabled();
+  await page.getByRole("button", { name: "Hello there.mp3を開く" }).click();
+  await ready(page, "reopened");
   await expect(sentences(page)).toHaveCount(3);
   await expect(page.locator("#tts-text")).toHaveValue(
     "Hello there. This is a test.\nLast one!",
   );
+});
+
+test("if the MP3 encoder never loads, the audio is kept as WAV instead of waiting forever", async ({
+  page,
+}) => {
+  test.setTimeout(60000);
+  await fakeVoices(page);
+  // A module worker that loads nothing: it neither answers nor reports an error.
+  await page.route("**/mp3-worker.js", (route) =>
+    route.fulfill({ contentType: "text/javascript", body: "" }),
+  );
+  await page.goto("/");
+  await page.locator("#entry-text").click();
+  await make(page, "First line. Second line.");
+  await expect(page.locator("#tts-status")).toHaveText("MP3にしています…");
+  await ready(page);
+  await expect(page.locator("#file-name")).toHaveText("First line.wav");
+  await expect(sentences(page)).toHaveCount(2);
+  // Without the MP3's delay, the times are the sentences' own.
+  await sentences(page).nth(1).click();
+  await expect(page.locator("#point-a")).toHaveValue("0:00.440");
 });
 
 test("a sentence that fails is named, and making again goes on from it", async ({
@@ -103,7 +180,7 @@ test("a sentence that fails is named, and making again goes on from it", async (
   );
   await expect(page.locator("#play")).toBeDisabled();
   await make(page, "One here. Two is fine. Three here.");
-  await expect(page.locator("#play")).toBeEnabled({ timeout: 30000 });
+  await ready(page);
   await expect(page.locator("#tts-failed")).toBeHidden();
   // The first sentence was made once; only the fixed one and the rest were made now.
   expect(await calls(page)).toEqual([
@@ -117,14 +194,19 @@ test("a sentence that fails is named, and making again goes on from it", async (
 test("changing one sentence makes only that one again and replaces the saved audio", async ({
   page,
 }) => {
+  // Makes audio and loads it twice; WebKit in CI needs more than the usual 30 s.
+  test.setTimeout(60000);
   await fakeVoices(page);
   await page.goto("/");
   await page.locator("#entry-text").click();
   await make(page, "First line. Second line.");
-  await expect(page.locator("#play")).toBeEnabled({ timeout: 30000 });
+  await ready(page);
   await expect(page.locator("#audio-list .audio-item")).toHaveCount(1);
   await page.waitForFunction(() => window.ttsCalls.length === 2);
   await make(page, "First line. Second line, changed.");
+  // Until making ends, the button still belongs to the previous audio.
+  await expect(page.locator("#tts-progress")).toBeHidden({ timeout: 25000 });
+  await ready(page, "made again");
   await expect(sentences(page)).toHaveText(["First line.", "Second line, changed."], {
     timeout: 30000,
   });

@@ -2,9 +2,12 @@
 // lamejs (LGPL-3.0) is used unchanged, as a separate file: vendor/lamejs.
 import { Mp3Encoder } from "./vendor/lamejs/lamejs.js";
 
+// Says it has loaded, so the page knows to wait for the encoding (see encodeMp3).
+self.postMessage({ ready: true });
+
 self.onmessage = ({ data }) => {
   try {
-    const encoder = new Mp3Encoder(1, data.rate, 128);
+    const encoder = new Mp3Encoder(1, data.rate, data.kbps || 128);
     const parts = [];
     const pcm = new Int16Array(data.samples.length);
     for (let i = 0; i < pcm.length; i++)
