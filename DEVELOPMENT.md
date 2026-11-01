@@ -42,7 +42,7 @@ JavaScriptモジュールとService Workerを使うため、HTMLをダブルク�
 | `scripts/serve.mjs`        | 開発用の静的サーバー                                                                                    |
 | `scripts/bump-shell.mjs`   | キャッシュの版を上げるリリース用スクリプト                                                              |
 
-保存先：音声はIndexedDB（`coaching-l-audio-library`）、設定と再生位置はlocalStorage（`kotonoha.audio.v1`、以前の版との互換のため名前はそのまま）。スクリプトは素材ごとに `kotonoha.transcript.v1:<素材のキー>`、文字起こしの言語は `kotonoha.prefs.v1`、選んだ入口は `kotonoha.entry.v1`、「テキストから始める」の入力中のテキスト・声・前回作った音声のキーは `kotonoha.textdraft.v1` です。テキストから作った音声も、音源と同じIndexedDBに保存します。文ごとの音声は `coaching-l-tts-clips`（IndexedDB）に、今のテキストの分だけ16ビットで置きます。以前の版が保存した練習区間（`segments`）は、画面では使いませんが、保存したまま残します。「音声全体」のくり返しと速度の段階アップの設定は、区間リピートOFF・元の速度として開きます。
+保存先：音声はIndexedDB（`coaching-l-audio-library`）、設定と再生位置はlocalStorage（`kotonoha.audio.v1`、以前の版との互換のため名前はそのまま）。スクリプトは素材ごとに `kotonoha.transcript.v1:<素材のキー>`、文字起こしの言語は `kotonoha.prefs.v1`、選んだ入口は `kotonoha.entry.v1`、「テキストから始める」の入力中のテキスト・声・前回作った音声のキーは `kotonoha.textdraft.v1` です。テキストから作った音声も、音源と同じIndexedDBに保存します。文ごとの音声は `coaching-l-tts-clips`（IndexedDB）に、今のテキストの分だけ16ビットで置きます。以前の版が保存した練習区間（`segments`）は、画面では使いませんが、保存したまま残します。練習のしかたは設定の `practice`（`shadowing` か `repeating`）で、無音の長さ（`gap`・`gapRatio`）はシャドーイングの間も選んだまま保存し、プレーヤーにはリピーティングのときだけ渡します。`practice` のない以前の設定は、無音があるか「文ごとに止める」（`sentencePause`）がONなら `repeating` として開きます。無音を選んでいない設定は、リピーティングにすると文（区間）の1.5倍になります。「音声全体」のくり返しと速度の段階アップの設定は、区間リピートOFF・元の速度として開きます。
 
 ## テキストからの音声づくり
 

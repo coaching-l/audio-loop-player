@@ -49,6 +49,7 @@ test("touch pause during silence and landscape layout", async ({
   );
   await page.locator("#advanced > summary").tap();
   await page.locator("#point-b").fill("0.3");
+  await page.locator("#gap-mode").selectOption("0");
   await page.locator("#gap").tap(); // blur commits the interval through a touch gesture
   await page.locator("#gap").fill("1");
   await page.locator("#play").tap(); // and the play tap commits the silence

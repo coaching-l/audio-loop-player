@@ -42,8 +42,8 @@
       content="端末の音声で、繰り返し聴く・声に出す。アップロード不要の語学学習プレーヤー。"
     />
     <title>音声リピートプレーヤー | COACHING-L</title>
-    <link rel="stylesheet" href="./style.css?v=26" />
-    <script type="module" src="./app.js?v=26"></script>
+    <link rel="stylesheet" href="./style.css?v=28" />
+    <script type="module" src="./app.js?v=28"></script>
   </head>
   <body>
     <main>
@@ -343,6 +343,35 @@
                 <span>5秒</span>
               </button>
             </div>
+            <div class="mode-section">
+              <span id="practice-mode-label" class="mode-label"
+                >練習のしかた</span
+              >
+              <div
+                class="mode-choices"
+                role="group"
+                aria-labelledby="practice-mode-label"
+              >
+                <button
+                  class="mode-choice"
+                  type="button"
+                  data-mode="shadowing"
+                  aria-pressed="true"
+                >
+                  シャドーイング</button
+                ><button
+                  class="mode-choice"
+                  type="button"
+                  data-mode="repeating"
+                  aria-pressed="false"
+                >
+                  リピーティング
+                </button>
+              </div>
+              <p id="practice-mode-help" class="small">
+                音声のすぐあとを追いかけて、声に出して言います。
+              </p>
+            </div>
             <div class="speed-section">
               <div class="label-row">
                 <span id="speed-label">再生速度</span
@@ -521,7 +550,9 @@
           <summary>詳しい設定</summary>
           <fieldset id="repeat-controls" disabled>
             <section class="advanced-group" aria-labelledby="repeat-heading">
-              <h3 id="repeat-heading" class="advanced-title">くり返し</h3>
+              <h3 id="repeat-heading" class="advanced-title">
+                くり返しとリピーティング
+              </h3>
               <div class="repeat-options">
                 <div>
                   <label for="repeat-count">再生する回数</label
@@ -534,12 +565,12 @@
                   </select>
                 </div>
                 <div>
-                  <label for="gap-mode">くり返しの間の無音</label
+                  <label for="gap-mode">リピーティングの無音</label
                   ><select id="gap-mode">
                     <option value="0">秒数で決める</option>
-                    <option value="1">区間と同じ</option>
-                    <option value="1.5">区間の1.5倍</option>
-                    <option value="2">区間の2倍</option>
+                    <option value="1">文（区間）と同じ</option>
+                    <option value="1.5" selected>文（区間）の1.5倍</option>
+                    <option value="2">文（区間）の2倍</option>
                   </select>
                 </div>
               </div>
@@ -557,14 +588,7 @@
                 </div>
               </div>
               <p class="small">
-                回数には最初の1回も含みます。無音を入れると、その間に声に出して練習できます。「区間と同じ」は、区間を聴いたのと同じ時間だけ無音にします。
-              </p>
-              <label class="check-row" for="sentence-pause"
-                ><input id="sentence-pause" type="checkbox" />
-                通して聞くとき、文ごとに止める</label
-              >
-              <p id="sentence-pause-help" class="small">
-                区間リピートがOFFのとき、スクリプトの文が終わるたびに、その文と同じ長さ（1〜8秒）だけ止まります。止まっている間に声に出して練習できます（リピーティング）。スクリプトがあるときに使えます。
+                回数には最初の1回も含みます。無音は「リピーティング」のときに入ります。区間リピートがONなら区間のあとに、OFFなら1文ごとに入ります（文の長さに合わせるときは1秒以上）。初めは「文（区間）の1.5倍」です。
               </p>
             </section>
             <section class="advanced-group" aria-labelledby="range-heading">
@@ -743,7 +767,10 @@
               「スクリプト」には、教材のスクリプトを貼り付けるか、テキストファイルを読み込みます。再生している文に色が付き、文を押すとその文をA–B区間にします。「前の文へ」「次の文へ」で、文ごとに区間を移れます（スクリプトがないときは、波形の無音で区切ります）。スクリプトがないときは、「その他の方法」から音声を文字起こしすることもできます。色の位置がずれる文は、「スクリプトを直す」の中で時刻を直せます。
             </p>
             <p>
-              くり返す回数と間の無音、通して聞くときに文ごとに止める設定、ゲージの拡大、A・Bの時刻の入力、細かい速度、録音して聞き比べ、MP3の書き出しは「詳しい設定」にあります。区間・速度・再生位置は、音声ごとに自動で記録されます。
+              「練習のしかた」で「リピーティング」を選ぶと、文のあとに無音が入り、その間に声に出して言えます。区間リピートがONなら区間のあとに、OFFなら1文ごとに入ります（スクリプトがないときは、波形の無音で区切ります）。無音の長さは、初めは文（区間）の1.5倍です。
+            </p>
+            <p>
+              くり返す回数とリピーティングの無音の長さ、ゲージの拡大、A・Bの時刻の入力、細かい速度、録音して聞き比べ、MP3の書き出しは「詳しい設定」にあります。区間・速度・再生位置は、音声ごとに自動で記録されます。
             </p>
           </section>
           <section>

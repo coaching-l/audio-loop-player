@@ -16,6 +16,8 @@ async function configure(
   await page.locator("#point-b").fill(b);
   await page.locator("#point-b").press("Tab");
   await page.locator("#repeat-count").selectOption(count);
+  // Silence in seconds, instead of the usual 1.5 times the interval.
+  await page.locator("#gap-mode").selectOption("0");
   await page.locator("#gap").fill(gap);
   await page.locator("#gap").press("Tab");
   await setRepeat(page, repeat);

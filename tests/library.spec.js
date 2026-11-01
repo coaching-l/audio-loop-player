@@ -98,6 +98,7 @@ test("switching registered audio cancels pending silence and keeps per-file sett
   await openAdvanced(page);
   await page.locator("#point-b").fill(".3");
   await page.locator("#point-b").press("Tab");
+  await page.locator("#gap-mode").selectOption("0");
   await page.locator("#gap").fill("1");
   await page.locator("#gap").press("Tab");
   await setRepeat(page, true);

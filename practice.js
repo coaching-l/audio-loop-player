@@ -6,7 +6,7 @@ import { audioKey } from "./audio-library.js";
 import { LoopPlayer, GAP_RATIOS, parseTime, formatTime } from "./player.js";
 import { analyzeAudio, drawWaveform } from "./waveform.js";
 import { VoiceRecorder, recordingSupported } from "./recorder.js";
-import { pauseAfter } from "./audio-tools.js";
+import { PAUSE_MIN } from "./audio-tools.js";
 import { exportMp3 } from "./export.js";
 import {
   splitSentences,
@@ -36,6 +36,9 @@ import {
   offerUndo,
 } from "./ui.js";
 
+// Learners usually say a sentence more slowly than the model, so repeating starts with a
+// silence half as long again as the sentence.
+const REPEAT_RATIO = 1.5;
 // Settings and playback position per material. The name is kept from earlier versions.
 const storageKey = "kotonoha.audio.v1";
 let library = {};
@@ -56,12 +59,15 @@ const DEFAULTS = {
   a: 0,
   limit: 0,
   gap: 0,
-  gapRatio: 0,
+  gapRatio: REPEAT_RATIO,
   rate: 1,
-  sentencePause: false,
+  practice: "shadowing",
 };
-// While playing through, stop after each sentence of the script (repeating aloud).
-let sentencePause = false;
+// Shadowing plays without silences. Repeating leaves a silence to say each sentence (or
+// the interval) aloud: after each sentence while playing through, or between repeats.
+// `silence` is how long, kept while shadowing so repeating comes back as it was.
+let practiceMode = "shadowing";
+let silence = { gap: 0, gapRatio: REPEAT_RATIO };
 
 function rangeError(message) {
   $("range-error").textContent = message;
@@ -76,17 +82,30 @@ try {
     "このブラウザでは設定を保存できません。このページを開いている間は使えますが、閉じると設定は残りません。",
   );
 }
+// What is saved: the silence as chosen, even while shadowing leaves it out.
 function settings() {
   return {
     mode: engine.mode,
     a: engine.a,
     b: engine.b,
     limit: engine.limit,
-    gap: engine.gap,
-    gapRatio: engine.gapRatio,
+    gap: silence.gap,
+    gapRatio: silence.gapRatio,
     rate: engine.baseRate,
-    sentencePause,
+    practice: practiceMode,
   };
+}
+// What the player runs with: the silence only while repeating.
+function playerSettings(changes = {}) {
+  const s = {
+    mode: engine.mode,
+    a: engine.a,
+    b: engine.b,
+    limit: engine.limit,
+    ...silence,
+    ...changes,
+  };
+  return practiceMode === "repeating" ? s : { ...s, gap: 0, gapRatio: 0 };
 }
 function persist() {
   if (!ready || !materialKey) return;
@@ -125,15 +144,26 @@ function savedSettings(s, duration) {
     s.rate >= 0.5 &&
     s.rate <= 2;
   if (!valid) return { ...DEFAULTS, b: duration };
+  const gapRatio = s.gapRatio || 0;
+  const hasSilence = s.gap > 0 || gapRatio > 0;
+  // Earlier versions had no practice mode: a silence or stopping after each sentence
+  // meant repeating.
+  const practice = ["shadowing", "repeating"].includes(s.practice)
+    ? s.practice
+    : hasSilence || s.sentencePause === true
+      ? "repeating"
+      : "shadowing";
   return {
     mode: s.mode === "ab" ? "ab" : "off",
     a: s.a,
     b: s.b,
     limit: s.limit,
-    gap: s.gap,
-    gapRatio: s.gapRatio || 0,
+    // No silence chosen yet: repeating starts with the usual one.
+    ...(hasSilence
+      ? { gap: s.gap, gapRatio }
+      : { gap: 0, gapRatio: REPEAT_RATIO }),
     rate: s.rate,
-    sentencePause: s.sentencePause === true,
+    practice,
   };
 }
 function syncFields() {
@@ -141,10 +171,18 @@ function syncFields() {
   $("point-a").value = formatTime(engine.a);
   $("point-b").value = formatTime(engine.b);
   $("repeat-count").value = String(engine.limit);
-  $("gap").value = String(engine.gap);
-  $("gap-mode").value = String(engine.gapRatio);
-  $("gap-seconds").hidden = engine.gapRatio !== 0;
-  $("sentence-pause").checked = sentencePause;
+  $("gap").value = String(silence.gap);
+  $("gap-mode").value = String(silence.gapRatio);
+  $("gap-seconds").hidden = silence.gapRatio !== 0;
+  for (const choice of document.querySelectorAll(".mode-choice"))
+    choice.setAttribute(
+      "aria-pressed",
+      String(choice.dataset.mode === practiceMode),
+    );
+  $("practice-mode-help").textContent =
+    practiceMode === "repeating"
+      ? `文（区間）のあとに、${silenceText()}の無音が入ります。その間に声に出して言います。`
+      : "音声のすぐあとを追いかけて、声に出して言います。";
   $("speed").value = String(engine.baseRate);
   $("speed-value").textContent = engine.baseRate.toFixed(2) + "×";
   for (const choice of document.querySelectorAll(".speed-choice"))
@@ -340,9 +378,11 @@ export async function openPractice({ file, key, name, script } = {}) {
       const s = savedSettings(stored?.settings, audio.duration);
       ready = true;
       $("load-audio").hidden = true;
-      currentEngine.configure(s);
+      practiceMode = s.practice;
+      silence = { gap: s.gap, gapRatio: s.gapRatio };
+      const { mode, a, b, limit } = s;
+      currentEngine.configure(playerSettings({ mode, a, b, limit }));
       currentEngine.setRate(s.rate);
-      sentencePause = s.sentencePause;
       if (Number.isFinite(stored?.position))
         currentEngine.seek(stored.position);
       $("duration").textContent = formatTime(audio.duration, 1);
@@ -494,9 +534,16 @@ function updateSettings(overrides = {}) {
     ...overrides,
   };
   // The seconds field is hidden for a relative gap, so a stale entry there must not block changes.
-  if (s.gapRatio && !(s.gap >= 0 && s.gap <= 10)) s.gap = engine.gap;
+  if (s.gapRatio && !(s.gap >= 0 && s.gap <= 10)) s.gap = silence.gap;
   try {
-    engine.configure(s);
+    if (!(s.gap >= 0 && s.gap <= 10)) throw new RangeError();
+    // Choosing a silence is choosing to repeat aloud.
+    const changed = s.gap !== silence.gap || s.gapRatio !== silence.gapRatio;
+    if (changed && (s.gap > 0 || s.gapRatio > 0)) practiceMode = "repeating";
+    const { mode, a, b, limit, gap, gapRatio } = s;
+    engine.configure(playerSettings({ mode, a, b, limit, gap, gapRatio }));
+    silence = { gap: s.gap, gapRatio: s.gapRatio };
+    syncStops();
     rangeError("");
     syncFields();
     persist();
@@ -594,6 +641,7 @@ function steps() {
 }
 function showSteps() {
   $("phrase-actions").hidden = steps().length < 2;
+  syncStops();
 }
 function stepPhrase(direction) {
   if (!ready) return;
@@ -703,7 +751,7 @@ function moveMarker(point, time) {
     point === "a"
       ? Math.max(0, Math.min(engine.b - minimum, time))
       : Math.min(duration, Math.max(engine.a + minimum, time));
-  engine.configure({ ...settings(), [point]: value, mode: "ab" });
+  engine.configure(playerSettings({ [point]: value, mode: "ab" }));
   syncFields();
   rangeError("");
 }
@@ -891,20 +939,35 @@ document.addEventListener("keydown", (event) => {
   action();
 });
 
-// Stopping after each sentence follows the script: on with a script, nothing without.
+// How long the silence after a sentence (or between repeats) is, in words.
+function silenceText() {
+  if (!silence.gapRatio) return `${silence.gap}秒`;
+  return silence.gapRatio === 1 ? "同じ長さ" : `その${silence.gapRatio}倍`;
+}
+// Repeating while playing through stops after each sentence: the script's sentences, or
+// without a script, the stretches of sound between the waveform's pauses.
 function syncStops() {
-  const has = Boolean(ready && transcript);
-  $("sentence-pause").disabled = !has;
-  engine?.setStops(
-    has && sentencePause ? transcript.sentences : [],
-    pauseAfter,
+  if (!engine) return;
+  const repeating = ready && practiceMode === "repeating";
+  engine.setStops(repeating ? steps() : [], (seconds) =>
+    silence.gapRatio
+      ? Math.max(PAUSE_MIN, seconds * silence.gapRatio)
+      : silence.gap,
   );
 }
-$("sentence-pause").addEventListener("change", () => {
-  sentencePause = $("sentence-pause").checked;
+function setPracticeMode(mode) {
+  if (!ready || mode === practiceMode) return;
+  practiceMode = mode;
+  // Repeating needs some silence to speak in; with none chosen, use the usual one.
+  if (mode === "repeating" && !silence.gap && !silence.gapRatio)
+    silence = { gap: 0, gapRatio: REPEAT_RATIO };
+  engine.configure(playerSettings());
   syncStops();
+  syncFields();
   persist();
-});
+}
+for (const choice of document.querySelectorAll(".mode-choice"))
+  choice.addEventListener("click", () => setPracticeMode(choice.dataset.mode));
 
 // MP3 export: cutting by sentence and silences after sentences need the script.
 let exporting = false;
@@ -1198,7 +1261,6 @@ function renderTranscript() {
   }
   $("transcript-fit").disabled = !has || selectedSentence < 0;
   showSteps();
-  syncStops();
   syncExport();
 }
 function highlightSentence(time, follow) {
