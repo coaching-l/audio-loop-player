@@ -2,6 +2,8 @@
 // Ported from kokoro-js 1.2.1 (Apache-2.0, Copyright hexgrad; see vendor/phonemizer and
 // the kokoro-js notice in vendor/README.md): its text normalization and phonemize()
 // unchanged in behavior, with phonemizer (eSpeak NG) loaded from this site.
+// Before phonemizer: older Safari cannot iterate the stream it unpacks its data from.
+import "./stream-iterator.js";
 import { phonemize as espeak } from "./vendor/phonemizer/phonemizer.js";
 
 // "1990" → "19 90", "4:30" → "4 30", "2:00" → "2 o'clock".

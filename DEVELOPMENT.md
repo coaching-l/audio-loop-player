@@ -48,7 +48,7 @@ JavaScriptモジュールとService Workerを使うため、HTMLをダブルク�
 
 COACHING-L シャドーイング（`coaching-l/shadowing`）の音声化機能を移植しました。英語は Kokoro-82M v1.0 の q8、中国語は Kokoro-82M v1.1-zh の fp32（q8はブラウザでNaNになるため、移植元の判断どおり）。
 
-- 実行は `tts-worker.js`。Transformers.js と ONNX Runtime（WASM・1スレッド）は文字起こしと同じ `vendor/` のものです。kokoro-js は使わず、英語の読み（正規化と eSpeak NG）を `english.js` に移しました（kokoro-js と同じ結果になることを確認）。512トークンの上限は、kokoro-js の内部に頼らず自分で数えます。
+- 実行は `tts-worker.js`。Transformers.js と ONNX Runtime（WASM・1スレッド）は文字起こしと同じ `vendor/` のものです。kokoro-js は使わず、英語の読み（正規化と eSpeak NG）を `english.js` に移しました（kokoro-js と同じ結果になることを確認）。512トークンの上限は、kokoro-js の内部に頼らず自分で数えます。phonemizer はデータを `for await` で `ReadableStream` から取り出しますが、古いSafari（CIのWebKitを含む）はこれに対応しておらず、エラーも出さずに止まり続けていました。`stream-iterator.js` がその機能を補います（phonemizer より先に読み込む）。
 - モデルと声のデータだけは Hugging Face から受け取ります（中国語のモデルは339MBで、GitHubに置ける1ファイル100MBを超えるため）。`voices.js` で版（コミット）を固定し、文ごとの音声のキーにも版を入れています。Transformers.js が Cache Storage（`transformers-cache`）に、声は `coaching-l-tts-voices` に保存するので、2回目からは通信なしで作れます。テキストは送りません。Workerにはページの CSP がかからないため、CSP は変えていません。
 - Workerが使うこのサイトのファイル（Transformers.js・ONNX Runtime・phonemizer・pinyin-pro）は、`tts.js` の `RUNTIME_FILES` にサイズとSHA-256があり、初めて作るときに `model-files.js` が確かめて保存します。文字起こしで保存済みのファイルは写して使います。
 - 移植元の確認で挙がった点への対応：3分の制限はモデルの受け取りが進むたびに数え直す。古い版の文の音声は残さない（今のテキストの文だけ残す）。20分の確認は1か所（`audio-tools.js`）で、作った音声・書き出す音声の実際の長さで行う。第三声の変調は、pinyin-pro が2音節の語の中で変えたものには重ねてかからない（`tests/text-entry.spec.js` で確認）。

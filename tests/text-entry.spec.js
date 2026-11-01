@@ -239,7 +239,7 @@ test("the real worker loads in the browser, and its runtime is saved once", asyn
 });
 
 // The readers run where the app runs them: in a module worker, as tts-worker.js does.
-// (eSpeak NG starts slowly in WebKit, so these get more time than other tests.)
+// (eSpeak NG takes a while to start, so these get more time than other tests.)
 for (const [language, source, text, expected] of [
   [
     "English",
@@ -273,6 +273,31 @@ for (const [language, source, text, expected] of [
     );
     expect(reading).toBe(expected);
   });
+
+// Older Safari cannot iterate a ReadableStream with for await, and phonemizer then hung
+// forever (CI WebKit). Without that iteration, English is still read (stream-iterator.js).
+test("English is read in a worker even where streams cannot be iterated", async ({
+  page,
+}) => {
+  await page.route("**/reader-test-worker.js", (route) =>
+    route.fulfill({
+      contentType: "text/javascript",
+      body: `delete ReadableStream.prototype[Symbol.asyncIterator];
+        const { englishPhonemes } = await import("/english.js");
+        self.postMessage(await englishPhonemes("Hello world."));`,
+    }),
+  );
+  await page.goto("/");
+  const reading = await page.evaluate(
+    () =>
+      new Promise((resolve) => {
+        const worker = new Worker("./reader-test-worker.js", { type: "module" });
+        worker.onmessage = ({ data }) => resolve(data);
+        worker.onerror = (event) => resolve("error: " + event.message);
+      }),
+  );
+  expect(reading).toBe("həlˈoʊ wˈɜːld.");
+});
 
 test("the runtime files on disk match their recorded sizes and hashes", async () => {
   const { createHash } = await import("node:crypto");
