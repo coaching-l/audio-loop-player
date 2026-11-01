@@ -278,6 +278,38 @@ test("invalid A–B and gap inputs are rejected without changing valid configura
     await expect(page.locator("#range-error")).toContainText("0〜10");
   }
 });
+test("audio whose length comes a moment after its metadata still opens", async ({
+  page,
+}) => {
+  // As WebKit does with an MP3 that has no header giving its length: the player's
+  // element says nothing about its length at loadedmetadata, and tells it 0.3 s later.
+  await page.addInitScript(() => {
+    const real = Object.getOwnPropertyDescriptor(
+      HTMLMediaElement.prototype,
+      "duration",
+    );
+    Object.defineProperty(HTMLMediaElement.prototype, "duration", {
+      configurable: true,
+      get() {
+        if (this.id === "audio" && !this.lengthKnown) return Infinity;
+        return real.get.call(this);
+      },
+    });
+    document.addEventListener(
+      "loadedmetadata",
+      ({ target }) =>
+        setTimeout(() => {
+          target.lengthKnown = true;
+          target.dispatchEvent(new Event("durationchange"));
+        }, 300),
+      true,
+    );
+  });
+  await page.reload();
+  await load(page);
+  await expect(page.locator("#duration")).toHaveText("0:03.0");
+  await expect(page.locator("#error")).toBeHidden();
+});
 test("settings are kept for each audio file", async ({ page }) => {
   await load(page);
   await configure(page, { gap: ".3", count: "5" });

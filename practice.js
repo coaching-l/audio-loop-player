@@ -367,11 +367,14 @@ export async function openPractice({ file, key, name, script } = {}) {
   );
   audio.addEventListener(
     "loadedmetadata",
-    () => {
+    async () => {
       if (generation !== loadGeneration) return;
       clearTimeout(loadTimeout);
-      if (!Number.isFinite(audio.duration) || audio.duration <= 0) {
-        fail("音声の長さを読み取れません。別の音声ファイルをお試しください。");
+      // Some browsers know an MP3's length only a moment after its metadata (WebKit
+      // with an MP3 that has no header giving it), so wait a little for it.
+      if (!(await knownDuration(audio)) || generation !== loadGeneration) {
+        if (generation === loadGeneration)
+          fail("音声の長さを読み取れません。別の音声ファイルをお試しください。");
         return;
       }
       const stored = library[materialKey];
@@ -430,6 +433,25 @@ export async function openPractice({ file, key, name, script } = {}) {
   } catch (e) {
     fail(e.message);
   }
+}
+
+const hasDuration = (audio) =>
+  Number.isFinite(audio.duration) && audio.duration > 0;
+// Resolves true once the audio's length is known, or false after `wait` ms without it.
+function knownDuration(audio, wait = 10000) {
+  if (hasDuration(audio)) return Promise.resolve(true);
+  return new Promise((resolve) => {
+    const done = (value) => {
+      clearTimeout(timer);
+      audio.removeEventListener("durationchange", check);
+      audio.removeEventListener("canplay", check);
+      resolve(value);
+    };
+    const check = () => hasDuration(audio) && done(true);
+    const timer = setTimeout(() => done(hasDuration(audio)), wait);
+    audio.addEventListener("durationchange", check);
+    audio.addEventListener("canplay", check);
+  });
 }
 
 // Empties the practice screen, for example when its audio is deleted.
