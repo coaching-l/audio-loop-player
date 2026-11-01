@@ -65,7 +65,9 @@ async function saveMaterial(file, replaceId) {
     renderAudioList();
     await requestPersistentStorage();
     void showStorageInfo();
-    $("library-status").textContent = `「${record.name}」を保存しました。次回も一覧から開けます。`;
+    libraryStatus(
+      `「${record.name}」を保存しました。次回も一覧から開けます。`,
+    );
     return record;
   });
   importQueue = run.catch(() => {});
@@ -73,9 +75,12 @@ async function saveMaterial(file, replaceId) {
     return await run;
   } catch (error) {
     renderAudioList();
-    $("library-status").textContent = error.message?.includes("10件")
-      ? error.message
-      : "作った音声を保存できませんでした。このページを開いている間は練習できますが、閉じると残りません。";
+    libraryStatus(
+      error.message?.includes("10件")
+        ? error.message
+        : "作った音声を保存できませんでした。このページを開いている間は練習できますが、閉じると残りません。",
+      true,
+    );
     return null;
   }
 }
@@ -107,7 +112,19 @@ dropZone.addEventListener("drop", (event) => {
 window.addEventListener("dragover", (event) => event.preventDefault());
 window.addEventListener("drop", (event) => event.preventDefault());
 
+// The saved list stays out of the way while it is empty, unless it has news to show
+// (saving in progress, or something that could not be saved).
+let libraryNews = false;
+function libraryStatus(message, news = false) {
+  $("library-status").textContent = message;
+  libraryNews = news;
+  showLibrary();
+}
+function showLibrary() {
+  $("audio-library").hidden = !audioItems.length && !libraryNews;
+}
 function renderAudioList() {
+  showLibrary();
   const { key } = practiceState();
   $("audio-list").replaceChildren();
   $("audio-count").textContent = audioItems.length + " / 10件";
@@ -129,7 +146,8 @@ function renderAudioList() {
     });
     const remove = document.createElement("button");
     remove.className = "delete-button";
-    remove.textContent = "音声を削除";
+    remove.type = "button";
+    remove.textContent = "×";
     remove.setAttribute("aria-label", record.name + "の音声を削除");
     remove.addEventListener("click", () => void deleteAudio(record, remove));
     li.append(open, remove);
@@ -148,8 +166,9 @@ async function deleteAudio(record, button) {
   try {
     await removeAudio(record.id);
   } catch {
-    $("library-status").textContent =
-      "削除できませんでした。音声は一覧に残っています。";
+    libraryStatus(
+      "削除できませんでした。音声は一覧に残っています。",
+    );
     button.disabled = false;
     return;
   }
@@ -157,8 +176,9 @@ async function deleteAudio(record, button) {
   if (practiceState().key === record.id) closePractice();
   renderAudioList();
   void showStorageInfo();
-  $("library-status").textContent =
-    "音声を削除しました。設定とスクリプトは残っているので、同じファイルをもう一度追加すると使えます。";
+  libraryStatus(
+    "音声を削除しました。設定とスクリプトは残っているので、同じファイルをもう一度追加すると使えます。",
+  );
   if (!bytes) {
     settleUndo();
     return;
@@ -171,11 +191,16 @@ async function deleteAudio(record, button) {
       );
       renderAudioList();
       void showStorageInfo();
-      $("library-status").textContent = `「${record.name}」を元に戻しました。`;
+      libraryStatus(
+      `「${record.name}」を元に戻しました。`,
+    );
     } catch (e) {
-      $("library-status").textContent = e.message.includes("10件")
-        ? e.message
-        : "元に戻せませんでした。元のファイルをもう一度追加してください。";
+      libraryStatus(
+        e.message.includes("10件")
+          ? e.message
+          : "元に戻せませんでした。元のファイルをもう一度追加してください。",
+        true,
+      );
     }
   });
 }
@@ -185,8 +210,10 @@ function importFiles(files) {
   // Serialize imports so overlapping selections cannot exceed the cap or lose entries.
   importQueue = importQueue
     .then(async () => {
-      $("library-status").textContent =
-        "音声を保存中です。終わるまでこのページを閉じないでください。";
+      libraryStatus(
+        "音声を保存中です。終わるまでこのページを閉じないでください。",
+        true,
+      );
       let saved = 0;
       let deferred = 0;
       // iOS defers metadata for every file alike; after the first, do not wait 8 s per file.
@@ -219,21 +246,26 @@ function importFiles(files) {
         }
       }
       if (saved) await requestPersistentStorage();
-      $("library-status").textContent = problems.length
-        ? saved +
-          "件を保存しました。保存できなかった音声：" +
-          problems.join(" / ") +
-          " 保存できなかった音声も、このページを開いている間は再生できますが、閉じると残りません。"
-        : saved +
-          "件の音声を保存しました。次回も一覧から開けます。" +
-          (deferred
-            ? " まだ再生を確認できていない音声があります。その音声を開き、「音声の読み込みを始める」を押して、再生できるか確かめてください。"
-            : "");
+      libraryStatus(
+        problems.length
+          ? saved +
+            "件を保存しました。保存できなかった音声：" +
+            problems.join(" / ") +
+            " 保存できなかった音声も、このページを開いている間は再生できますが、閉じると残りません。"
+          : saved +
+            "件の音声を保存しました。次回も一覧から開けます。" +
+            (deferred
+              ? " まだ再生を確認できていない音声があります。その音声を開き、「音声の読み込みを始める」を押して、再生できるか確かめてください。"
+              : ""),
+        problems.length > 0,
+      );
       void showStorageInfo();
     })
     .catch(() => {
-      $("library-status").textContent =
-        "音声の保存に失敗しました。再度お試しください。";
+      libraryStatus(
+        "音声の保存に失敗しました。再度お試しください。",
+        true,
+      );
     });
 }
 // Avoid racing an import with the initial database read.
@@ -241,14 +273,18 @@ importQueue = listAudio()
   .then((items) => {
     audioItems = items;
     renderAudioList();
-    $("library-status").textContent = items.length
-      ? "名前を押すと、前回の設定のまま練習を再開できます。"
-      : "作った音声や読み込んだ音源が、ここに10件まで保存されます。";
+    libraryStatus(
+      items.length
+        ? "名前を押すと、前回の設定のまま練習を再開できます。"
+        : "作った音声や読み込んだ音源が、ここに10件まで保存されます。",
+    );
     void showStorageInfo();
   })
   .catch(() => {
-    $("library-status").textContent =
-      "このブラウザでは音声を保存できません。ファイルを選べば、このページを開いている間は再生できます。";
+    libraryStatus(
+      "このブラウザでは音声を保存できません。ファイルを選べば、このページを開いている間は再生できます。",
+      true,
+    );
   });
 
 // Without persistent storage, browsers may evict saved audio when the device runs low on space.
@@ -264,6 +300,7 @@ function formatBytes(bytes) {
   if (bytes >= 1024 ** 3) return (bytes / 1024 ** 3).toFixed(1) + "GB";
   return Math.max(0.1, bytes / 1024 ** 2).toFixed(1) + "MB";
 }
+const LOW_SPACE = 500 * 1024 ** 2;
 async function showStorageInfo() {
   const info = $("storage-info");
   if (!navigator.storage?.estimate || !audioItems.length) {
@@ -271,15 +308,21 @@ async function showStorageInfo() {
     return;
   }
   try {
-    const [{ usage = 0 }, persisted] = await Promise.all([
+    const [{ usage = 0, quota = 0 }, persisted] = await Promise.all([
       navigator.storage.estimate(),
       navigator.storage.persisted?.() ?? false,
     ]);
+    // Shown only when space runs low: otherwise there is nothing to do about it.
+    const free = quota - usage;
+    if (!(quota > 0 && (free < LOW_SPACE || usage / quota > 0.8))) {
+      info.hidden = true;
+      return;
+    }
     info.textContent =
-      `使用中の容量：約${formatBytes(usage)}。` +
+      `保存容量が残り少なくなっています（使用中 約${formatBytes(usage)}・残り 約${formatBytes(Math.max(0, free))}）。使わない教材を削除してください。` +
       (persisted
-        ? "空き容量が少なくなっても、ブラウザが自動で消さない設定です。"
-        : "空き容量が少なくなると、ブラウザが音声を消す場合があります。元のファイルは残しておいてください。");
+        ? ""
+        : "空き容量が足りなくなると、ブラウザが音声を消す場合があります。元のファイルは残しておいてください。");
     info.hidden = false;
   } catch {
     info.hidden = true;

@@ -92,7 +92,7 @@ test("a new deletion replaces the older undo, which then stays deleted", async (
   await page
     .getByRole("button", { name: "tone.wavを開く", exact: true })
     .click();
-  await expect(page.locator("#transcript-status")).toHaveText("スクリプトなし");
+  await expect(page.locator("#transcript-status")).toBeHidden();
 });
 
 test("settings saved by earlier versions still open", async ({ page }) => {

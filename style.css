@@ -403,6 +403,10 @@ input[type="range"] {
   justify-content: space-between;
   align-items: center;
 }
+.label-row > span {
+  font-size: 0.9375rem;
+  font-weight: 500;
+}
 .label-row output {
   font-size: 16px;
   font-weight: 600;
@@ -518,10 +522,18 @@ select {
 .delete-button {
   background: none;
   color: var(--text-muted);
-  font-size: 0.875rem;
-  font-weight: 600;
+  font-size: 1.375rem;
+  font-weight: 400;
+  line-height: 1;
   min-width: 44px;
   min-height: 44px;
+  border-radius: var(--radius-small);
+}
+@media (hover: hover) {
+  .delete-button:hover {
+    background: var(--surface-muted);
+    color: var(--heading);
+  }
 }
 .error {
   background: var(--gold-soft);
@@ -716,9 +728,36 @@ label {
 .gauge-tools button {
   white-space: nowrap;
 }
-#toggle-ab[aria-pressed="true"] {
-  color: var(--gold-label);
+/* 区間リピートのON・OFF：押せることが分かるスイッチの形 */
+.repeat-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 2px;
+  background: none;
+  color: var(--heading);
+  font-size: 0.9375rem;
   font-weight: 700;
+}
+.switch-track {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 52px;
+  height: 30px;
+  padding: 0 10px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--surface-muted);
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+  letter-spacing: 0.04em;
+}
+.repeat-switch[aria-pressed="true"] .switch-track {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-contrast);
 }
 .interval-gauge {
   position: relative;
@@ -1391,18 +1430,6 @@ label {
 .tts-note {
   margin-top: 12px;
 }
-.tts-data {
-  margin-top: 8px;
-}
-.tts-data > summary {
-  min-height: 44px;
-  display: flex;
-  align-items: center;
-  cursor: pointer;
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: var(--text-muted);
-}
 .check-row {
   display: flex;
   align-items: center;
@@ -1421,4 +1448,99 @@ label {
   .tts-options {
     grid-template-columns: 1fr;
   }
+}
+
+/* 再生速度：よく使う4つだけをボタンで（細かい速度は「詳しい設定」） */
+.speed-choices {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin: 10px 0 6px;
+}
+.speed-choice {
+  min-height: 44px;
+  padding: 6px 4px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-small);
+  background: var(--surface);
+  color: var(--heading);
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+.speed-choice[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+/* スクリプトがないときの「その他の方法」（文字起こし）と、ご利用にあたっての小さな折りたたみ */
+.more-ways,
+.shortcut-details {
+  margin-top: 12px;
+}
+.more-ways > summary,
+.shortcut-details > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  cursor: pointer;
+  list-style: none;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--heading);
+}
+.more-ways > summary::-webkit-details-marker,
+.shortcut-details > summary::-webkit-details-marker {
+  display: none;
+}
+.more-ways > summary::after,
+.shortcut-details > summary::after {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(45deg) translateY(-2px);
+  transition: transform 0.15s ease;
+}
+.more-ways[open] > summary::after,
+.shortcut-details[open] > summary::after {
+  transform: rotate(-135deg) translateY(-2px);
+}
+.more-ways > summary:focus-visible,
+.shortcut-details > summary:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+.more-ways {
+  border-top: 1px solid var(--line);
+  padding-top: 4px;
+}
+.more-title {
+  margin: 4px 0 6px;
+  font-size: 1rem;
+  color: var(--heading);
+}
+.more-ways label {
+  display: block;
+}
+.more-ways .transcript-actions + .small {
+  margin-top: 10px;
+}
+
+/* スクリプトを直しているときだけ出す「文の時刻を直す」 */
+.fit-block {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.fit-title {
+  font-weight: 700;
+  color: var(--heading);
+}
+.fit-block .button {
+  margin-top: 10px;
+  width: 100%;
+  font-size: 0.9375rem;
 }

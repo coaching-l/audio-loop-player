@@ -73,7 +73,7 @@ test("pasted text follows playback and a sentence becomes the A–B interval", a
 }) => {
   await page.goto("/");
   await load(page);
-  await expect(page.locator("#transcript-status")).toHaveText("スクリプトなし");
+  await expect(page.locator("#transcript-status")).toBeHidden();
   await paste(page, english);
   await expect(sentences(page)).toHaveText([
     "One two three.",
@@ -128,13 +128,19 @@ test("a sentence's timing can be corrected from the A–B interval", async ({
   await load(page);
   await expect(page.locator("#waveform")).toBeVisible();
   await paste(page, english);
+  // The fix is offered only while the script is being edited.
+  await expect(
+    page.getByRole("button", { name: "選んだ文の時刻を今のA–Bにする" }),
+  ).toBeHidden();
   await sentences(page).nth(2).click();
   await openAdvanced(page);
   await page.locator("#point-b").fill("2.6");
   await page.locator("#point-b").press("Tab");
+  await page.getByRole("button", { name: "スクリプトを直す" }).click();
   await page
     .getByRole("button", { name: "選んだ文の時刻を今のA–Bにする" })
     .click();
+  await page.getByRole("button", { name: "やめる", exact: true }).click();
   await page.reload();
   await page
     .getByRole("button", { name: "phrases.wavを開く", exact: true })
@@ -185,7 +191,7 @@ test("the script can be edited and deleted with undo", async ({ page }) => {
   await page.getByRole("button", { name: "保存する", exact: true }).click();
   await expect(sentences(page)).toHaveText(["Only one sentence"]);
   await page.getByRole("button", { name: "スクリプトを消す" }).click();
-  await expect(page.locator("#transcript-status")).toHaveText("スクリプトなし");
+  await expect(page.locator("#transcript-status")).toBeHidden();
   await page.getByRole("button", { name: "元に戻す", exact: true }).click();
   await expect(sentences(page)).toHaveText(["Only one sentence"]);
 });

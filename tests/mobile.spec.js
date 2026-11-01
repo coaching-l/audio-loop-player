@@ -23,13 +23,15 @@ test("touch file selection, playback, skip and speed control", async ({
   expect(await page.locator("#audio").evaluate((a) => a.currentTime)).toBe(3);
   await page.locator("#back").tap();
   expect(await page.locator("#audio").evaluate((a) => a.currentTime)).toBe(0);
-  const speed = page.locator("#speed");
-  const bounds = await speed.boundingBox();
-  await speed.tap({ position: { x: bounds.width - 12, y: bounds.height / 2 } });
-  expect(
-    await page.locator("#audio").evaluate((a) => a.playbackRate),
-  ).toBeGreaterThanOrEqual(1.8);
-  await page.locator("#normal-speed").tap();
+  await page.getByRole("button", { name: "1.25×" }).tap();
+  expect(await page.locator("#audio").evaluate((a) => a.playbackRate)).toBe(
+    1.25,
+  );
+  await expect(page.getByRole("button", { name: "1.25×" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await page.getByRole("button", { name: "1.0×" }).tap();
   await expect(page.locator("#speed-value")).toHaveText("1.00×");
 });
 

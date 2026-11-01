@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { makePhrasesWav } from "./fixtures/make-audio.mjs";
-import { openAdvanced, setRepeat } from "./helpers.mjs";
+import { setRepeat } from "./helpers.mjs";
 import {
   splitSentences,
   alignSentences,
@@ -95,9 +95,14 @@ async function fakeRecognizer(page, segments, delay = 50) {
   );
 }
 
-// Transcription is a helper, folded into the detailed settings.
+// Transcription is a helper, folded under "その他の方法" in the empty script card.
+async function openMoreWays(page) {
+  const details = page.locator("#transcribe-setup");
+  if (!(await details.evaluate((d) => d.open)))
+    await details.locator("summary").click();
+}
 async function startTranscribing(page) {
-  await openAdvanced(page);
+  await openMoreWays(page);
   await page.getByRole("button", { name: "音声から文字起こし" }).click();
 }
 
@@ -420,7 +425,7 @@ test("Chinese is transcribed when chosen, only on request, and the language is r
   await page.goto("/");
   await load(page);
   await pretendModelSaved(page);
-  await openAdvanced(page);
+  await openMoreWays(page);
   await page.getByLabel("話している言語").selectOption("zh");
   await startTranscribing(page);
   await expect(sentences(page)).toHaveText(["你好。", "我是学生。"]);
@@ -430,11 +435,14 @@ test("Chinese is transcribed when chosen, only on request, and the language is r
   );
   // Opening audio without a script does not start a transcription by itself.
   await load(page, "tests/fixtures/tone.wav");
-  await expect(page.locator("#transcript-status")).toHaveText("スクリプトなし");
+  await expect(page.locator("#transcript-status")).toBeHidden();
   const calls = await page.evaluate(() => window.transcribeCalls);
   expect(calls.map((call) => call.language)).toEqual(["zh"]);
   await page.reload();
-  await openAdvanced(page);
+  await page
+    .getByRole("button", { name: "tone.wavを開く", exact: true })
+    .click();
+  await openMoreWays(page);
   await expect(page.getByLabel("話している言語")).toHaveValue("zh");
 });
 
@@ -494,14 +502,14 @@ test("a transcription can be stopped, and opening another file stops it", async 
   await expect(page.locator("#notice")).toHaveText(
     "文字起こしを中止しました。",
   );
-  await expect(page.locator("#transcript-status")).toHaveText("スクリプトなし");
+  await expect(page.locator("#transcript-status")).toBeHidden();
   await expect(
     page.getByRole("button", { name: "音声から文字起こし" }),
   ).toBeVisible();
   await startTranscribing(page);
   await expect(page.locator("#transcribe-status")).toContainText("0 / 1");
   await load(page, "tests/fixtures/tone.wav");
-  await expect(page.locator("#transcript-status")).toHaveText("スクリプトなし");
+  await expect(page.locator("#transcript-status")).toBeHidden();
   expect(await page.evaluate(() => window.transcribeStopped)).toBe(2);
 });
 
@@ -567,6 +575,8 @@ test("the model is saved once after checking each file, and can be deleted", asy
     return sizes;
   });
   expect(saved.every(Boolean)).toBe(true);
+  // Saved data is managed from the usage guide, with the text-to-speech data.
+  await page.locator("#usage-guide > summary").click();
   await page
     .getByRole("button", { name: "文字起こし用のデータを削除" })
     .click();

@@ -147,6 +147,11 @@ function syncFields() {
   $("sentence-pause").checked = sentencePause;
   $("speed").value = String(engine.baseRate);
   $("speed-value").textContent = engine.baseRate.toFixed(2) + "×";
+  for (const choice of document.querySelectorAll(".speed-choice"))
+    choice.setAttribute(
+      "aria-pressed",
+      String(Math.abs(Number(choice.dataset.rate) - engine.baseRate) < 0.001),
+    );
   $("a-legend").textContent = "A " + formatTime(engine.a, 1);
   $("b-legend").textContent = "B " + formatTime(engine.b, 1);
   syncGauge();
@@ -228,7 +233,9 @@ function syncMiniPlayer() {
 let transportFrame = 0;
 function checkTransport() {
   transportFrame = 0;
+  // A hidden practice screen has no position; its controls are not "passed".
   const passed =
+    !$("practice").hidden &&
     document.querySelector(".transport").getBoundingClientRect().bottom <= 0;
   if (transportVisible === !passed) return;
   transportVisible = !passed;
@@ -276,6 +283,9 @@ export async function openPractice({ file, key, name, script } = {}) {
   if (objectURL) URL.revokeObjectURL(objectURL);
   ready = false;
   enable(false);
+  // The practice screen stays out of the way until there is something to practise.
+  $("practice").hidden = false;
+  transportFrame ||= requestAnimationFrame(checkTransport);
   error("");
   rangeError("");
   routineNotice("");
@@ -405,6 +415,7 @@ export function closePractice() {
   $("load-audio").hidden = true;
   materialKey = null;
   enable(false);
+  $("practice").hidden = true;
   $("file-name").textContent = "まだ音声を開いていません";
   $("play-status").textContent = "音声を選んでください";
   $("play").dataset.state = "paused";
@@ -467,7 +478,10 @@ function changeRate(rate) {
 $("speed").addEventListener("input", () =>
   changeRate(Number($("speed").value)),
 );
-$("normal-speed").addEventListener("click", () => changeRate(1));
+for (const choice of document.querySelectorAll(".speed-choice"))
+  choice.addEventListener("click", () =>
+    changeRate(Number(choice.dataset.rate)),
+  );
 function updateSettings(overrides = {}) {
   if (!ready) return false;
   const s = {
@@ -678,8 +692,8 @@ function syncGauge() {
   $("interval-fill").style.left = clamp(percent(engine.a)) + "%";
   $("interval-fill").style.right = 100 - clamp(percent(engine.b)) + "%";
   $("toggle-ab").setAttribute("aria-pressed", String(engine.mode === "ab"));
-  $("toggle-ab").textContent =
-    "区間リピート " + (engine.mode === "ab" ? "ON" : "OFF");
+  $("toggle-ab").querySelector(".switch-state").textContent =
+    engine.mode === "ab" ? "ON" : "OFF";
   drawGauge();
 }
 function moveMarker(point, time) {
@@ -1120,7 +1134,7 @@ function setTranscriptText(text, source = "manual") {
   editingTranscript = false;
   renderTranscript();
   notice(
-    `スクリプトを${sentences.length}文に分けて表示しました。色の位置がずれる文は、「詳しい設定」で時刻を直せます。`,
+    `スクリプトを${sentences.length}文に分けて表示しました。色の位置がずれる文は、「スクリプトを直す」の中で時刻を直せます。`,
   );
   return true;
 }
@@ -1143,22 +1157,26 @@ function realignTranscript() {
 }
 function renderTranscript() {
   const has = Boolean(ready && transcript);
-  $("transcript-status").textContent = !ready
-    ? "—"
+  // The tag says only what is there; with no script the card's own text says so.
+  const status = !ready
+    ? ""
     : editingTranscript
       ? "入力中"
       : has
         ? `${transcript.sentences.length}文`
         : transcribing
           ? "文字起こし中"
-          : "スクリプトなし";
+          : "";
+  $("transcript-status").textContent = status;
+  $("transcript-status").hidden = !status;
   $("transcript-empty").hidden =
     has || editingTranscript || Boolean(transcribing);
-  $("transcribe-hint").hidden = !canTranscribe;
+  $("transcribe-setup").hidden = !canTranscribe;
   $("transcribe-progress").hidden = !transcribing;
-  $("transcribe-controls").hidden = !canTranscribe;
   $("transcribe-controls").disabled = !ready || Boolean(transcribing);
   $("transcript-editor").hidden = !editingTranscript;
+  // Fixing a sentence's time belongs to editing the script it is in.
+  $("fit-block").hidden = !has;
   $("transcript-view").hidden = !has || editingTranscript;
   const list = $("transcript-sentences");
   list.replaceChildren();
