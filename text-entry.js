@@ -164,6 +164,8 @@ async function showData() {
     ? "音声づくり用のデータを、この端末に保存しています。通信がなくても音声を作れます（一度使った言語のみ）。"
     : "音声づくり用のデータは、まだ保存していません。";
   $("tts-data-delete").hidden = !saved;
+  // The download note matters only before the first download.
+  $("tts-first-note").hidden = saved;
 }
 
 /**

@@ -4,10 +4,13 @@ test("usage guide is collapsed at the bottom and explains storage and practice",
 }) => {
   await page.goto("/");
   await expect(page.locator("#usage-guide")).not.toHaveAttribute("open", "");
-  // Detailed settings start folded; transcription is among them, marked as a helper.
+  // Before any audio is open, only the ways in show: no practice screen, no empty list.
+  await expect(page.locator("#practice")).toBeHidden();
+  await expect(page.locator("#audio-library")).toBeHidden();
+  // Detailed settings start folded; transcription is folded in the script card, marked as a helper.
   await expect(page.locator("#advanced")).not.toHaveAttribute("open", "");
   await expect(page.locator("#transcribe-start")).toBeHidden();
-  await expect(page.locator("#advanced")).toContainText(
+  await expect(page.locator("#transcribe-setup")).toContainText(
     "精度はそこそこです。必要に応じて手直ししてください。",
   );
   expect(
@@ -48,6 +51,9 @@ test("manual load action has spacing and is centered on mobile", async ({
   await page
     .locator("#load-audio")
     .evaluate((button) => (button.hidden = false));
+  await page
+    .locator("#audio-library")
+    .evaluate((section) => (section.hidden = false));
   const box = await page.locator("#load-audio").boundingBox();
   const library = await page.locator(".audio-library").boundingBox();
   expect(box.y - (library.y + library.height)).toBeGreaterThanOrEqual(20);

@@ -105,22 +105,8 @@ test("the audio is written out as MP3: whole, A–B, and a few sentences per fil
   await expect(page.locator("#export-status")).toContainText("書き出しました");
 });
 
-test("playing through can stop after each sentence for as long as it took", async ({
-  page,
-}) => {
-  await page.goto("/");
-  // Tones at 0–0.5, 1.1–1.6 and 2.2–2.7 seconds.
-  await load(page, {
-    name: "phrases.wav",
-    mimeType: "audio/wav",
-    buffer: makePhrasesWav(),
-  });
-  await expect(page.locator("#waveform")).toBeVisible();
-  await openAdvanced(page);
-  await expect(page.locator("#sentence-pause")).toBeDisabled();
-  await paste(page, "One. Two. Three.");
-  await page.locator("#sentence-pause").check();
-  await setRepeat(page, false);
+// Times the media element's pause and the play that follows it.
+async function traceStop(page) {
   await page.locator("#audio").evaluate((audio) => {
     window.mediaTrace = [];
     for (const type of ["play", "pause"])
@@ -132,23 +118,89 @@ test("playing through can stop after each sentence for as long as it took", asyn
         }),
       );
   });
+}
+async function firstSilence(page) {
+  const trace = await page.evaluate(() => window.mediaTrace);
+  const stop = trace.find((x) => x.type === "pause");
+  const resume = trace.find((x) => x.type === "play" && x.at > stop.at);
+  return { stop, resume, ms: resume.at - stop.at };
+}
+const mode = (page, name) => page.getByRole("button", { name, exact: true });
+
+test("repeating stops after each sentence, even without a script, and is kept", async ({
+  page,
+}) => {
+  await page.goto("/");
+  // Tones at 0–0.5, 1.1–1.6 and 2.2–2.7 seconds.
+  await load(page, {
+    name: "phrases.wav",
+    mimeType: "audio/wav",
+    buffer: makePhrasesWav(),
+  });
+  await expect(page.locator("#waveform")).toBeVisible();
+  // New material starts with shadowing: no silences.
+  await expect(mode(page, "シャドーイング")).toHaveAttribute("aria-pressed", "true");
+  await setRepeat(page, false);
+  await mode(page, "リピーティング").click();
+  await expect(mode(page, "リピーティング")).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator("#practice-mode-help")).toContainText("1.5倍");
+  // No script: the waveform's phrases are the sentences.
+  await traceStop(page);
   await page.locator("#play").click();
   await expect(page.locator("#play-status")).toHaveText("無音中");
   await expect(page.locator("#play-status")).toHaveText("再生中", {
     timeout: 3000,
   });
-  const trace = await page.evaluate(() => window.mediaTrace);
-  const stop = trace.find((x) => x.type === "pause");
-  const resume = trace.find((x) => x.type === "play" && x.at > stop.at);
-  // The first sentence is short, so the silence is the 1-second minimum.
-  expect(resume.at - stop.at).toBeGreaterThanOrEqual(950);
-  expect(resume.at - stop.at).toBeLessThan(1600);
+  const { stop, resume, ms } = await firstSilence(page);
+  // The first phrase is short, so 1.5 times it is about the 1-second minimum.
+  expect(ms).toBeGreaterThanOrEqual(950);
+  expect(ms).toBeLessThan(2000);
   // It goes on from where it stopped, not from the start.
   expect(resume.time).toBeGreaterThan(0.4);
   expect(Math.abs(resume.time - stop.time)).toBeLessThan(0.1);
+  await page.locator("#play").click();
   // The choice is kept with the audio.
   await page.reload();
   await page.getByRole("button", { name: "phrases.wavを開く" }).click();
   await expect(page.locator("#play")).toBeEnabled();
-  await expect(page.locator("#sentence-pause")).toBeChecked();
+  await expect(mode(page, "リピーティング")).toHaveAttribute("aria-pressed", "true");
+  // Shadowing plays straight through the same place.
+  await mode(page, "シャドーイング").click();
+  await page.locator("#audio").evaluate((audio) => (audio.currentTime = 0));
+  await page.locator("#play").click();
+  await expect
+    .poll(() => page.locator("#audio").evaluate((a) => a.currentTime))
+    .toBeGreaterThan(1.2);
+  await expect(page.locator("#play-status")).toHaveText("再生中");
+});
+
+test("repeating an interval leaves a silence 1.5 times as long, changeable in the settings", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await load(page, "tests/fixtures/tone.wav");
+  await mode(page, "リピーティング").click();
+  await openAdvanced(page);
+  await expect(page.locator("#gap-mode")).toHaveValue("1.5");
+  await page.locator("#point-b").fill("0.8");
+  await page.locator("#point-b").press("Tab");
+  await setRepeat(page, true);
+  await traceStop(page);
+  await page.locator("#play").click();
+  await expect(page.locator("#play-status")).toHaveText("無音中");
+  await expect(page.locator("#play-status")).toHaveText("再生中", {
+    timeout: 3000,
+  });
+  // 0.8 seconds of interval, then 1.2 seconds of silence.
+  const { ms } = await firstSilence(page);
+  expect(ms).toBeGreaterThanOrEqual(1100);
+  expect(ms).toBeLessThan(1700);
+  await page.locator("#play").click();
+  // Back to shadowing, the interval repeats with no silence, and the length is kept.
+  await mode(page, "シャドーイング").click();
+  await expect(page.locator("#gap-mode")).toHaveValue("1.5");
+  // Choosing a silence in the settings is choosing to repeat.
+  await page.locator("#gap-mode").selectOption("2");
+  await expect(mode(page, "リピーティング")).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator("#practice-mode-help")).toContainText("2倍");
 });

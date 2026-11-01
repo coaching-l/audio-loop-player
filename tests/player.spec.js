@@ -16,6 +16,8 @@ async function configure(
   await page.locator("#point-b").fill(b);
   await page.locator("#point-b").press("Tab");
   await page.locator("#repeat-count").selectOption(count);
+  // Silence in seconds, instead of the usual 1.5 times the interval.
+  await page.locator("#gap-mode").selectOption("0");
   await page.locator("#gap").fill(gap);
   await page.locator("#gap").press("Tab");
   await setRepeat(page, repeat);
@@ -51,10 +53,10 @@ test.beforeEach(async ({ page }) => {
 test("initial state, real WAV playback, seek, skip and pause", async ({
   page,
 }) => {
-  await expect(
-    page.getByRole("button", { name: "再生", exact: true }),
-  ).toBeDisabled();
+  // The player is not shown until there is audio to practise.
+  await expect(page.locator("#practice")).toBeHidden();
   await load(page);
+  await expect(page.locator("#practice")).toBeVisible();
   await expect(page.locator("#duration")).toHaveText("0:03.0");
   await page.getByRole("button", { name: "再生", exact: true }).click();
   await expect
@@ -399,6 +401,7 @@ test("capture A and B during playback, disable repeat, and restore settings", as
   await expect
     .poll(() => page.locator("#audio").evaluate((a) => a.currentTime))
     .toBeGreaterThan(0.2);
+  await openAdvanced(page);
   await page.locator("#gauge-set-a").click();
   const a = await page.locator("#point-a").inputValue();
   expect(Number(a.split(":")[1])).toBeGreaterThan(0.1);

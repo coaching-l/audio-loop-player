@@ -98,6 +98,7 @@ test("switching registered audio cancels pending silence and keeps per-file sett
   await openAdvanced(page);
   await page.locator("#point-b").fill(".3");
   await page.locator("#point-b").press("Tab");
+  await page.locator("#gap-mode").selectOption("0");
   await page.locator("#gap").fill("1");
   await page.locator("#gap").press("Tab");
   await setRepeat(page, true);
@@ -193,7 +194,7 @@ test("quota failure keeps registered audio and reports that the new audio was no
     page.getByRole("button", { name: "quota.wavを開く", exact: true }),
   ).toHaveCount(0);
 });
-test("saving audio requests persistent storage once and shows the space used", async ({
+test("saving audio requests persistent storage once, and the space is shown only when it runs low", async ({
   page,
 }) => {
   // A full stub keeps the check independent of each engine's Storage API support.
@@ -209,20 +210,27 @@ test("saving audio requests persistent storage once and shows the space used", a
           granted = true;
           return true;
         },
-        estimate: async () => ({ usage: 600 * 1024, quota: 2 * 1024 ** 3 }),
+        estimate: async () => ({
+          usage: window.usage ?? 600 * 1024,
+          quota: 2 * 1024 ** 3,
+        }),
       },
     });
   });
   await page.goto("/");
   await expect(page.locator("#storage-info")).toBeHidden();
   await add(page, 1);
-  await expect(page.locator("#storage-info")).toContainText("使用中の容量");
-  await expect(page.locator("#storage-info")).toContainText("自動で消さない");
+  await expect(page.locator("#library-status")).toContainText("保存しました");
+  // Plenty of space: nothing to read about it.
+  await expect(page.locator("#storage-info")).toBeHidden();
+  await page.evaluate(() => (window.usage = 1.8 * 1024 ** 3));
   // Injected files get a fresh lastModified, so both count as new audio.
   await page.locator("#file-input").setInputFiles(files(2));
   await expect(page.locator("#audio-list .audio-item")).toHaveCount(3);
   await expect(page.locator("#library-status")).not.toContainText("保存中");
   expect(await page.evaluate(() => window.persistCalls)).toBe(1);
+  await expect(page.locator("#storage-info")).toContainText("残り少なく");
+  await expect(page.locator("#storage-info")).not.toContainText("ブラウザが音声を消す");
 });
 test("audio is saved as bytes where the browser cannot store Blobs, and reopens after reload", async ({
   page,
