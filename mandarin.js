@@ -196,15 +196,37 @@ function complementJoins(text) {
   return joins;
 }
 
+// An adverb is said together with the word it qualifies (越来越看不清, 已经走了); the
+// segmenter makes it a word of its own, and Kokoro pauses after it. These adverbs lose
+// the boundary after them when a Chinese character follows.
+const ADVERBS = new Set([
+  ..."很太都也就才还又再更最越不没只刚先正真挺",
+  "越来越", "已经", "一直", "非常", "特别", "总是", "经常", "常常", "马上",
+  "立刻", "终于", "一定", "也许", "好像", "正在", "曾经", "一起", "真的", "比较",
+  "有点", "有点儿", "稍微", "完全", "确实", "到底", "其实",
+]);
+function adverbJoins(text, words) {
+  const joins = new Set();
+  for (const word of words)
+    if (ADVERBS.has(word.segment) && /\p{Script=Han}/u.test(text[word.index + word.segment.length] || ""))
+      joins.add(word.index + word.segment.length);
+  return joins;
+}
+
 export function mandarinPhonemes(text) {
   if (/[A-Za-z\d\p{Script=Hiragana}\p{Script=Katakana}]/u.test(text))
     throw Error(
       "中国語の音声生成は漢字と句読点に対応しています。英単語や数字は、意図した中国語の読み方に編集してください。自動削除はしません。",
     );
-  const joins = complementJoins(text);
+  const words = [
+    ...new Intl.Segmenter("zh", { granularity: "word" }).segment(text),
+  ].filter((w) => w.isWordLike);
+  const joins = new Set([
+    ...complementJoins(text),
+    ...adverbJoins(text, words),
+  ]);
   const boundaries = new Set(
-    [...new Intl.Segmenter("zh", { granularity: "word" }).segment(text)]
-      .filter((w) => w.isWordLike)
+    words
       .map((w) => w.index + w.segment.length)
       .filter((offset) => !joins.has(offset)),
   );

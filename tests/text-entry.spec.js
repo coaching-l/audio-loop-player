@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 import { readFileSync } from "node:fs";
 import { mandarinPhonemes, syllable } from "../mandarin.js";
 import { englishPhonemes } from "../english.js";
-import { clipKey, READING_VERSION } from "../tts.js";
+import { clipKey, READING_VERSION, sentenceParts } from "../tts.js";
 
 // The service worker would answer for tts-worker.js before the stand-in below can.
 test.use({ serviceWorkers: "block" });
@@ -183,6 +183,25 @@ test("the text can be cleared with one button, and switching language clears it,
   await expect(page.locator("#undo-message")).not.toContainText("言語を切り替えた");
 });
 
+test("the parts of a Chinese sentence are joined with a short pause at the comma", async ({
+  page,
+}) => {
+  await fakeVoices(page);
+  await page.goto("/");
+  await page.locator("#entry-text").click();
+  await page.locator("#tts-lang").selectOption("zh");
+  await make(page, "说实话，我很好。");
+  await ready(page);
+  // Each part is made on its own, ending at its comma.
+  expect(await calls(page)).toEqual(["说实话，", "我很好。"]);
+  // One sentence in the script: 4 characters, 0.15 s, 4 characters (0.04 s each),
+  // after the MP3's 0.046 s delay.
+  await expect(sentences(page)).toHaveText(["说实话，我很好。"]);
+  await sentences(page).first().click();
+  await expect(page.locator("#point-a")).toHaveValue("0:00.046");
+  await expect(page.locator("#point-b")).toHaveValue("0:00.516");
+});
+
 test("if the MP3 encoder never loads, the audio is kept as WAV instead of waiting forever", async ({
   page,
 }) => {
@@ -357,6 +376,33 @@ test("a verb and its complement are read as one word, without a pause between th
   // Other boundaries stay: a pronoun is not a verb, and nouns stay apart.
   expect(stretches("我到了。")).toEqual(["我", "到了"]);
   expect(stretches("我找到了钥匙。")).toEqual(["我", "找到", "了", "钥匙"]);
+});
+
+test("an adverb is read with the word after it", () => {
+  const han = (text) => [...text].filter((c) => /\p{Script=Han}/u.test(c));
+  const stretches = (text) => {
+    const chars = han(text);
+    let i = 0;
+    let out = "";
+    for (const ch of mandarinPhonemes(text))
+      if (/[0-5]/.test(ch)) out += chars[i++];
+      else if (ch === "/" || ch === ",") out += "/";
+    return out.split("/").filter(Boolean);
+  };
+  expect(
+    stretches("说实话，我感觉自己越来越看不清什么才是真正重要的了。"),
+  ).toContain("越来越看不清");
+  expect(stretches("他已经走了。")).toContain("已经走了");
+  expect(stretches("我很喜欢你。")).toContain("很喜欢");
+});
+
+test("a Chinese sentence is made comma by comma; other sentences whole", () => {
+  expect(sentenceParts("说实话，我感觉自己越来越看不清了。", "zf_001")).toEqual([
+    "说实话，",
+    "我感觉自己越来越看不清了。",
+  ]);
+  expect(sentenceParts("你好。", "zf_001")).toEqual(["你好。"]);
+  expect(sentenceParts("Well, I see.", "af_heart")).toEqual(["Well, I see."]);
 });
 
 test("English is read by eSpeak NG after Kokoro's normalization", async () => {
