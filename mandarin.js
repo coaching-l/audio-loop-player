@@ -169,15 +169,44 @@ function correctReadings(text, tokens) {
   return tokens;
 }
 
+// A verb and its complement are said as one (看不清, 听懂, 走过来), but the segmenter
+// often splits them (我看|不清, 走过|来), and Kokoro pauses at each word boundary. These
+// are the boundaries (offsets in the text) to leave out:
+// - potential: verb + 不/得 + complement (看不清, 拿不动, 想不起来, 看得见)
+// - result: verb + 清懂见完动到住掉错好开 (听懂, 吃完, 找到)
+// - direction: verb + (过出进回起上下) + 来/去 (走过来, 拿出来, 站起来)
+const RESULT = "清懂见完动到住掉错好开";
+const DIRECTION = "过出进回起上下";
+const COMPLEMENT = RESULT + DIRECTION + "来去";
+const NOT_VERB = "我你他她它您们咱";
+function complementJoins(text) {
+  const han = (ch) => /\p{Script=Han}/u.test(ch || "");
+  const verb = (ch) => han(ch) && !NOT_VERB.includes(ch);
+  const joins = new Set();
+  for (let i = 1; i < text.length; i++) {
+    const [prev, ch, next] = [text[i - 1], text[i], text[i + 1]];
+    if ("不得".includes(ch) && verb(prev) && next && COMPLEMENT.includes(next)) {
+      joins.add(i).add(i + 1);
+      if (DIRECTION.includes(next) && "来去".includes(text[i + 2] || ""))
+        joins.add(i + 2);
+    } else if (verb(prev) && RESULT.includes(ch)) joins.add(i);
+    else if (verb(prev) && DIRECTION.includes(ch) && "来去".includes(next || ""))
+      joins.add(i).add(i + 1);
+  }
+  return joins;
+}
+
 export function mandarinPhonemes(text) {
   if (/[A-Za-z\d\p{Script=Hiragana}\p{Script=Katakana}]/u.test(text))
     throw Error(
       "中国語の音声生成は漢字と句読点に対応しています。英単語や数字は、意図した中国語の読み方に編集してください。自動削除はしません。",
     );
+  const joins = complementJoins(text);
   const boundaries = new Set(
     [...new Intl.Segmenter("zh", { granularity: "word" }).segment(text)]
       .filter((w) => w.isWordLike)
-      .map((w) => w.index + w.segment.length),
+      .map((w) => w.index + w.segment.length)
+      .filter((offset) => !joins.has(offset)),
   );
   const tokens = correctReadings(
     text,

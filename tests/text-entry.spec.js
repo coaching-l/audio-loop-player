@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 import { readFileSync } from "node:fs";
 import { mandarinPhonemes, syllable } from "../mandarin.js";
 import { englishPhonemes } from "../english.js";
-import { clipKey } from "../tts.js";
+import { clipKey, READING_VERSION } from "../tts.js";
 
 // The service worker would answer for tts-worker.js before the stand-in below can.
 test.use({ serviceWorkers: "block" });
@@ -334,6 +334,31 @@ test("地, 得 and 长 are read as the grammar asks, where pinyin-pro reads them
   expect(mandarinPhonemes("这条河很长。")).toContain("ㄔㄤ2");
 });
 
+test("a verb and its complement are read as one word, without a pause between them", () => {
+  // The characters of each stretch between word boundaries ("/") in the reading.
+  const stretches = (text) => {
+    let at = 0;
+    return mandarinPhonemes(text)
+      .replace(/[.,!?]/g, "")
+      .split("/")
+      .filter(Boolean)
+      .map((part) => {
+        const count = part.match(/[0-5]/g).length;
+        return text.slice(at, (at += count));
+      });
+  };
+  expect(stretches("我看不清黑板。")).toContain("我看不清");
+  expect(stretches("这个箱子我拿不动。")).toContain("拿不动");
+  expect(stretches("你看得见吗？")).toContain("看得见");
+  expect(stretches("我想不起来他的名字。")).toContain("我想不起来");
+  expect(stretches("我听懂了。")).toContain("听懂了");
+  expect(stretches("他走过来了。")).toContain("走过来");
+  expect(stretches("请把书拿出来。")).toContain("拿出来");
+  // Other boundaries stay: a pronoun is not a verb, and nouns stay apart.
+  expect(stretches("我到了。")).toEqual(["我", "到了"]);
+  expect(stretches("我找到了钥匙。")).toEqual(["我", "找到", "了", "钥匙"]);
+});
+
 test("English is read by eSpeak NG after Kokoro's normalization", async () => {
   expect(await englishPhonemes("Dr. Smith paid $3.50.")).toBe(
     "dˈɑːktɚ smˈɪθ pˈeɪd θɹˈiː dˈɑːlɚz ænd fˈɪfti sˈɛnts.",
@@ -344,8 +369,10 @@ test("English is read by eSpeak NG after Kokoro's normalization", async () => {
   );
 });
 
-test("a sentence's audio is told apart by its text, voice and pinned model", () => {
+test("a sentence's audio is told apart by its text, voice, pinned model and reading rules", () => {
   expect(clipKey("Hi.", "af_heart")).not.toBe(clipKey("Hi!", "af_heart"));
+  // Made under older reading rules, a sentence is made again.
+  expect(JSON.parse(clipKey("Hi.", "af_heart")).at(-1)).toBe(READING_VERSION);
   expect(clipKey("Hi.", "af_heart")).not.toBe(clipKey("Hi.", "af_bella"));
   expect(clipKey("Hi.", "af_heart")).toContain(
     "1939ad2a8e416c0acfeecc08a694d14ef25f2231",
