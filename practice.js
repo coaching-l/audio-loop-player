@@ -454,6 +454,13 @@ function knownDuration(audio, wait = 10000) {
   });
 }
 
+// Shows a new name for the open material (it was renamed in the saved list).
+export function renamePractice(name) {
+  $("file-name").textContent = name;
+  $("mini-name").textContent = name;
+  if (ready) setMediaMetadata(name);
+}
+
 // Empties the practice screen, for example when its audio is deleted.
 export function closePractice() {
   persist();

@@ -17,7 +17,7 @@ import {
   RUNTIME_BYTES,
 } from "./tts.js";
 import { openPractice } from "./practice.js";
-import { $, notice } from "./ui.js";
+import { $, notice, offerUndo } from "./ui.js";
 
 const draftKey = "kotonoha.textdraft.v1";
 const MAX_TEXT = 50000;
@@ -195,6 +195,26 @@ async function showData() {
   $("tts-first-note").hidden = saved;
 }
 
+function showClear() {
+  $("tts-clear").hidden = !$("tts-text").value;
+}
+// Empties the text box, with undo. The next audio made is new material: it does not
+// replace the audio made from the text that was cleared.
+function clearText(message) {
+  const text = $("tts-text").value;
+  if (!text) return;
+  const { audioId } = readDraft();
+  $("tts-text").value = "";
+  saveDraft({ text: "", audioId: null });
+  failed("");
+  showClear();
+  offerUndo(message, () => {
+    $("tts-text").value = text;
+    saveDraft({ text, audioId });
+    showClear();
+  });
+}
+
 /**
  * Sets up the text entry. `saveMaterial(file, replaceId)` keeps the made audio in the
  * saved list, in place of the previous version of the same draft, and returns its record.
@@ -209,16 +229,23 @@ export function initTextEntry({ saveMaterial }) {
   $("tts-lang").value = lang;
   fillVoices(lang, voice);
   if (typeof draft.text === "string") $("tts-text").value = draft.text;
+  showClear();
+  // Text in one language is not read in the other: switching starts with an empty box.
   $("tts-lang").addEventListener("change", () => {
     fillVoices($("tts-lang").value);
     saveDraft({ voice: $("tts-voice").value });
+    clearText("言語を切り替えたので、テキストを消しました。");
   });
+  $("tts-clear").addEventListener("click", () =>
+    clearText("テキストを消しました。"),
+  );
   $("tts-voice").addEventListener("change", () =>
     saveDraft({ voice: $("tts-voice").value }),
   );
-  $("tts-text").addEventListener("input", () =>
-    saveDraft({ text: $("tts-text").value }),
-  );
+  $("tts-text").addEventListener("input", () => {
+    saveDraft({ text: $("tts-text").value });
+    showClear();
+  });
   $("tts-make").addEventListener("click", () => void make());
   $("tts-cancel").addEventListener("click", () => {
     running?.abort();

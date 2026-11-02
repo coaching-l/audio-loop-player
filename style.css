@@ -519,7 +519,8 @@ select {
 .gap-seconds {
   margin-bottom: 12px;
 }
-.delete-button {
+.delete-button,
+.rename-button {
   background: none;
   color: var(--text-muted);
   font-size: 1.375rem;
@@ -530,7 +531,8 @@ select {
   border-radius: var(--radius-small);
 }
 @media (hover: hover) {
-  .delete-button:hover {
+  .delete-button:hover,
+  .rename-button:hover {
     background: var(--surface-muted);
     color: var(--heading);
   }
@@ -943,7 +945,8 @@ label {
   font-weight: 700;
   border-left: 3px solid var(--gold);
 }
-.audio-item .delete-button {
+.audio-item .delete-button,
+.audio-item .rename-button {
   flex-shrink: 0;
 }
 .storage-info {
@@ -1575,4 +1578,14 @@ label {
   margin-top: 10px;
   width: 100%;
   font-size: 0.9375rem;
+}
+
+/* 「テキストを消す」：入力欄の右下に小さく */
+.text-tools {
+  display: flex;
+  justify-content: flex-end;
+  min-height: 8px;
+}
+.rename-button {
+  font-size: 1.125rem;
 }

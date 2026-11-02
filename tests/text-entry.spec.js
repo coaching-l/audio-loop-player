@@ -146,6 +146,43 @@ test("text becomes audio whose sentences, with their times, are the script", asy
   );
 });
 
+test("the text can be cleared with one button, and switching language clears it, with undo", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.locator("#entry-text").click();
+  const clear = page.getByRole("button", { name: "テキストを消す" });
+  await expect(clear).toBeHidden();
+  await page.locator("#tts-text").fill("Hello there.");
+  await clear.click();
+  await expect(page.locator("#tts-text")).toHaveValue("");
+  await expect(clear).toBeHidden();
+  await page.getByRole("button", { name: "元に戻す", exact: true }).click();
+  await expect(page.locator("#tts-text")).toHaveValue("Hello there.");
+  // Pretend this text has made audio: clearing must forget it, so the next audio made
+  // is new material instead of replacing that one; undo brings it back.
+  await page.evaluate(() => {
+    const draft = JSON.parse(localStorage.getItem("kotonoha.textdraft.v1"));
+    localStorage.setItem(
+      "kotonoha.textdraft.v1",
+      JSON.stringify({ ...draft, audioId: "made" }),
+    );
+  });
+  const draft = () =>
+    page.evaluate(() => JSON.parse(localStorage.getItem("kotonoha.textdraft.v1")));
+  await page.locator("#tts-lang").selectOption("zh");
+  await expect(page.locator("#tts-text")).toHaveValue("");
+  await expect(page.locator("#undo-message")).toContainText("言語を切り替えた");
+  expect(await draft()).toMatchObject({ text: "", audioId: null });
+  await page.getByRole("button", { name: "元に戻す", exact: true }).click();
+  await expect(page.locator("#tts-text")).toHaveValue("Hello there.");
+  expect(await draft()).toMatchObject({ text: "Hello there.", audioId: "made" });
+  // Switching with an empty box leaves nothing to undo.
+  await clear.click();
+  await page.locator("#tts-lang").selectOption("en");
+  await expect(page.locator("#undo-message")).not.toContainText("言語を切り替えた");
+});
+
 test("if the MP3 encoder never loads, the audio is kept as WAV instead of waiting forever", async ({
   page,
 }) => {
