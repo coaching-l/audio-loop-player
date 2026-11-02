@@ -103,10 +103,21 @@ export function checkSentence(text, voiceId) {
     );
 }
 
-// The same sentence in the same voice and model makes the same audio.
+// How a sentence is read before the model (mandarin.js, english.js). Raise it whenever
+// those rules change, so sentences made under the old rules are made again.
+// 2: Mandarin 地/得/长 readings; 3: a Mandarin verb and its complement read as one.
+export const READING_VERSION = 3;
+// The same sentence in the same voice, model and reading rules makes the same audio.
 export function clipKey(text, voiceId) {
   const { model } = voiceInfo(voiceId);
-  return JSON.stringify([text, voiceId, model.repo, model.revision, model.dtype]);
+  return JSON.stringify([
+    text,
+    voiceId,
+    model.repo,
+    model.revision,
+    model.dtype,
+    READING_VERSION,
+  ]);
 }
 
 // A note in this tab's session storage while a sentence is being made, so a page that
