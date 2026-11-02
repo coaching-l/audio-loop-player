@@ -132,6 +132,43 @@ export function syllable(py, tone) {
     );
   return (initial ? symbols[initial] : "") + symbols[base] + (tone || 5);
 }
+// pinyin-pro reads a few common characters by their dictionary reading where the grammar
+// asks for another. These rules correct them using the word boundaries of
+// Intl.Segmenter; anything they do not match keeps pinyin-pro's reading.
+// 地 marking an adverb (高兴地笑, 慢慢地走) is "de" (neutral), not "dì" (ground).
+// After these, as in 这块地, it is the noun.
+const NOUN_BEFORE_DI = new Set([..."块片这那此每该种的"]);
+// 得 after a verb (跑得快, 说得对) is "de"; in these words it is "dé".
+const DE2_WORDS = new Set(["获得", "取得", "赢得", "难得", "求得", "博得", "心得", "所得"]);
+function correctReadings(text, tokens) {
+  const words = [...new Intl.Segmenter("zh", { granularity: "word" }).segment(text)]
+    .filter((w) => w.isWordLike)
+    .map((w) => ({ start: w.index, end: w.index + w.segment.length, text: w.segment }));
+  const wordAt = (offset) => words.find((w) => w.start <= offset && offset < w.end);
+  const isHan = (ch) => /\p{Script=Han}/u.test(ch || "");
+  let offset = 0;
+  tokens.forEach((t, i) => {
+    const at = offset;
+    offset += t.origin.length;
+    if (!t.isZh) return;
+    const word = wordAt(at);
+    const before = text[at - 1];
+    const after = text[at + 1];
+    const neutral = (py) => Object.assign(t, { pinyin: py + "0", num: 0 });
+    if (t.origin === "地" && word) {
+      const alone = word.text === "地" && isHan(before) && !NOUN_BEFORE_DI.has(before) && isHan(after);
+      const doubled = word.text.length >= 3 && word.end === at + 1 && word.text[0] === word.text[1];
+      if (alone || doubled) neutral("de");
+    } else if (t.origin === "得" && word && word.text.length === 2 && word.end === at + 1) {
+      if (!DE2_WORDS.has(word.text) && t.num === 2) neutral("de");
+      // 长得 (to look, to have grown) is zhǎng, not cháng.
+      if (word.text === "长得" && tokens[i - 1]?.pinyin.startsWith("chang"))
+        Object.assign(tokens[i - 1], { pinyin: "zhang3", num: 3 });
+    }
+  });
+  return tokens;
+}
+
 export function mandarinPhonemes(text) {
   if (/[A-Za-z\d\p{Script=Hiragana}\p{Script=Katakana}]/u.test(text))
     throw Error(
@@ -142,11 +179,14 @@ export function mandarinPhonemes(text) {
       .filter((w) => w.isWordLike)
       .map((w) => w.index + w.segment.length),
   );
-  const tokens = pinyin(text, {
-    type: "all",
-    toneType: "num",
-    toneSandhi: { yi: true, bu: true, thirdTone: true },
-  });
+  const tokens = correctReadings(
+    text,
+    pinyin(text, {
+      type: "all",
+      toneType: "num",
+      toneSandhi: { yi: true, bu: true, thirdTone: true },
+    }),
+  );
   let offset = 0;
   return tokens
     .map((t, i) => {

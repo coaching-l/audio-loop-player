@@ -47,22 +47,25 @@ export function wavBlob(samples, rate) {
   return new Blob([buffer], { type: "audio/wav" });
 }
 
-// Joins clips of the same rate, back to back, and returns where each one sits.
-export function joinClips(clips) {
+// Joins clips of the same rate, each followed by `pauses[i]` seconds of silence (none
+// after the last), and returns where each clip sits; a span leaves its silence out.
+export function joinClips(clips, pauses = []) {
   if (!clips.length) throw new Error("音声がありません。");
   const rate = clips[0].rate;
   if (clips.some((c) => c.rate !== rate))
     throw new Error("サンプルレートが異なります。");
-  const length = clips.reduce((sum, c) => sum + c.samples.length, 0);
+  const gap = (i) =>
+    i < clips.length - 1 ? Math.round(Math.max(0, pauses[i] || 0) * rate) : 0;
+  const length = clips.reduce((sum, c, i) => sum + c.samples.length + gap(i), 0);
   checkLength(length / rate);
   const samples = new Float32Array(length);
   const spans = [];
   let at = 0;
-  for (const clip of clips) {
+  clips.forEach((clip, i) => {
     samples.set(clip.samples, at);
     spans.push({ start: at / rate, end: (at + clip.samples.length) / rate });
-    at += clip.samples.length;
-  }
+    at += clip.samples.length + gap(i);
+  });
   return { samples, rate, spans };
 }
 

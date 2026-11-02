@@ -149,6 +149,29 @@ export async function removeAudio(id) {
     transaction.onerror = () => {};
   });
 }
+// The name shown for a material: the learner's own, or else its file name. The file
+// name itself never changes, since it identifies the material and its settings.
+export function displayName(record) {
+  return record.title || record.name;
+}
+export async function renameAudio(id, title) {
+  const db = await openLibrary();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction("audio", "readwrite");
+    const store = transaction.objectStore("audio");
+    let record;
+    const lookup = store.get(id);
+    lookup.onsuccess = () => {
+      if (!lookup.result) return;
+      record = { ...lookup.result, title };
+      store.put(record);
+    };
+    transaction.oncomplete = () =>
+      record ? resolve(record) : reject(new Error("音声が見つかりません。"));
+    transaction.onabort = () => reject(transaction.error);
+    transaction.onerror = () => {};
+  });
+}
 export function storedFile(record) {
   return new File([record.blob], record.name, {
     type: record.type,

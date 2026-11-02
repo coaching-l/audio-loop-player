@@ -9,8 +9,15 @@ import {
   restoreAudio,
   storedFile,
   validateAudio,
+  displayName,
+  renameAudio,
 } from "./audio-library.js";
-import { openPractice, closePractice, practiceState } from "./practice.js";
+import {
+  openPractice,
+  closePractice,
+  practiceState,
+  renamePractice,
+} from "./practice.js";
 import { initTextEntry } from "./text-entry.js";
 import { $, settleUndo, offerUndo } from "./ui.js";
 
@@ -58,6 +65,14 @@ async function saveMaterial(file, replaceId) {
     }
     if (!audioItems.some((item) => item.id === record.id))
       audioItems.push(record);
+    // Made again from the same text: the name the learner gave it carries over.
+    if (replaced?.title && !record.title) {
+      record = await renameAudio(record.id, replaced.title);
+      audioItems = audioItems.map((item) =>
+        item.id === record.id ? record : item,
+      );
+      if (practiceState().key === record.id) renamePractice(record.title);
+    }
     if (replaced && replaced.id !== record.id && audioItems.includes(replaced)) {
       await removeAudio(replaced.id);
       audioItems = audioItems.filter((item) => item.id !== replaced.id);
@@ -66,7 +81,7 @@ async function saveMaterial(file, replaceId) {
     await requestPersistentStorage();
     void showStorageInfo();
     libraryStatus(
-      `「${record.name}」を保存しました。次回も一覧から開けます。`,
+      `「${displayName(record)}」を保存しました。次回も一覧から開けます。`,
     );
     return record;
   });
@@ -89,6 +104,34 @@ initTextEntry({ saveMaterial });
 function openAudio(file) {
   void openPractice({ file });
   renderAudioList();
+}
+// A saved material opens under its own name, with the settings kept for its file.
+function openRecord(record) {
+  void openPractice({
+    file: storedFile(record),
+    key: record.id,
+    name: displayName(record),
+  });
+  renderAudioList();
+}
+const MAX_TITLE = 60;
+async function renameRecord(record) {
+  const current = displayName(record);
+  const answer = prompt("新しい名前を入力してください。", current);
+  if (answer === null) return;
+  const title = answer.replace(/\s+/g, " ").trim().slice(0, MAX_TITLE);
+  if (!title || title === current) return;
+  try {
+    const renamed = await renameAudio(record.id, title);
+    audioItems = audioItems.map((item) =>
+      item.id === record.id ? renamed : item,
+    );
+    renderAudioList();
+    if (practiceState().key === record.id) renamePractice(title);
+    libraryStatus(`名前を「${title}」に変えました。`);
+  } catch {
+    libraryStatus("名前を変えられませんでした。もう一度お試しください。", true);
+  }
 }
 $("file-input").addEventListener("change", (event) => {
   importFiles(Array.from(event.target.files));
@@ -133,8 +176,9 @@ function renderAudioList() {
     li.className = "audio-item";
     const open = document.createElement("button");
     open.className = "audio-open";
-    open.textContent = record.name;
-    open.setAttribute("aria-label", record.name + "を開く");
+    const name = displayName(record);
+    open.textContent = name;
+    open.setAttribute("aria-label", name + "を開く");
     if (record.id === key) {
       open.setAttribute("aria-current", "true");
       li.classList.add("current");
@@ -142,15 +186,21 @@ function renderAudioList() {
     open.addEventListener("click", () => {
       const state = practiceState();
       if (record.id !== state.key || !state.ready)
-        openAudio(storedFile(record));
+        openRecord(record);
     });
+    const rename = document.createElement("button");
+    rename.className = "rename-button";
+    rename.type = "button";
+    rename.textContent = "✎";
+    rename.setAttribute("aria-label", name + "の名前を変更");
+    rename.addEventListener("click", () => void renameRecord(record));
     const remove = document.createElement("button");
     remove.className = "delete-button";
     remove.type = "button";
     remove.textContent = "×";
-    remove.setAttribute("aria-label", record.name + "の音声を削除");
+    remove.setAttribute("aria-label", name + "の音声を削除");
     remove.addEventListener("click", () => void deleteAudio(record, remove));
-    li.append(open, remove);
+    li.append(open, rename, remove);
     $("audio-list").append(li);
   }
 }
@@ -183,7 +233,7 @@ async function deleteAudio(record, button) {
     settleUndo();
     return;
   }
-  offerUndo(`「${record.name}」を削除しました。`, async () => {
+  offerUndo(`「${displayName(record)}」を削除しました。`, async () => {
     try {
       const restored = await restoreAudio(record, bytes);
       audioItems = [...audioItems, restored].sort(
@@ -192,7 +242,7 @@ async function deleteAudio(record, button) {
       renderAudioList();
       void showStorageInfo();
       libraryStatus(
-      `「${record.name}」を元に戻しました。`,
+      `「${displayName(record)}」を元に戻しました。`,
     );
     } catch (e) {
       libraryStatus(

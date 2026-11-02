@@ -259,3 +259,47 @@ test("audio is saved as bytes where the browser cannot store Blobs, and reopens 
     .poll(() => page.locator("#audio").evaluate((a) => a.currentTime))
     .toBeGreaterThan(0.1);
 });
+
+test("a saved material can be renamed, keeping its settings and script", async ({
+  page,
+}) => {
+  await add(page, 2);
+  await page.getByRole("button", { name: "lesson-1.wavを開く", exact: true }).click();
+  await expect(page.locator("#play")).toBeEnabled();
+  await page.getByRole("button", { name: "0.75×" }).click();
+  page.once("dialog", (dialog) => {
+    expect(dialog.defaultValue()).toBe("lesson-1.wav");
+    void dialog.accept("  第1課  会話 ");
+  });
+  await page
+    .getByRole("button", { name: "lesson-1.wavの名前を変更", exact: true })
+    .click();
+  // Spaces are tidied; the open material shows the new name at once.
+  await expect(
+    page.getByRole("button", { name: "第1課 会話を開く", exact: true }),
+  ).toBeVisible();
+  await expect(page.locator("#file-name")).toHaveText("第1課 会話");
+  // Cancelling or leaving it empty changes nothing.
+  page.once("dialog", (dialog) => void dialog.dismiss());
+  await page
+    .getByRole("button", { name: "第1課 会話の名前を変更", exact: true })
+    .click();
+  page.once("dialog", (dialog) => void dialog.accept("   "));
+  await page
+    .getByRole("button", { name: "第1課 会話の名前を変更", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "第1課 会話を開く", exact: true }),
+  ).toBeVisible();
+  // Kept after a reload, and the settings saved for the file still apply.
+  await page.reload();
+  await page
+    .getByRole("button", { name: "第1課 会話を開く", exact: true })
+    .click();
+  await expect(page.locator("#play")).toBeEnabled();
+  await expect(page.locator("#file-name")).toHaveText("第1課 会話");
+  await expect(page.locator("#speed-value")).toHaveText("0.75×");
+  await expect(
+    page.getByRole("button", { name: "lesson-2.wavを開く", exact: true }),
+  ).toBeVisible();
+});

@@ -17,7 +17,7 @@ import {
   RUNTIME_BYTES,
 } from "./tts.js";
 import { openPractice } from "./practice.js";
-import { $, notice } from "./ui.js";
+import { $, notice, offerUndo } from "./ui.js";
 
 const draftKey = "kotonoha.textdraft.v1";
 const MAX_TEXT = 50000;
@@ -78,6 +78,8 @@ function title(sentences) {
   return (first.length > 24 ? first.slice(0, 24) + "…" : first) + ".mp3";
 }
 
+const SENTENCE_PAUSE = 0.3;
+const LINE_PAUSE = 0.6;
 // Speech at 64 kbps (mono, 24 kHz) takes about 0.5 MB a minute, against 2.9 MB as WAV.
 const KBPS = 64;
 // The audio to keep: MP3, with each sentence's time moved by the MP3's delay. Should the
@@ -153,7 +155,12 @@ async function make() {
       );
       return;
     }
-    const joined = joinClips(result.clips);
+    // Sentences joined back to back ran into each other: a short pause between them,
+    // a longer one where the text starts a new line.
+    const joined = joinClips(
+      result.clips,
+      sentences.map((s) => (s.lineEnd ? LINE_PAUSE : SENTENCE_PAUSE)),
+    );
     progress("MP3にしています…", null);
     const { file, spans } = await audioFile(joined, title(texts));
     if (controller.signal.aborted)
@@ -195,6 +202,26 @@ async function showData() {
   $("tts-first-note").hidden = saved;
 }
 
+function showClear() {
+  $("tts-clear").hidden = !$("tts-text").value;
+}
+// Empties the text box, with undo. The next audio made is new material: it does not
+// replace the audio made from the text that was cleared.
+function clearText(message) {
+  const text = $("tts-text").value;
+  if (!text) return;
+  const { audioId } = readDraft();
+  $("tts-text").value = "";
+  saveDraft({ text: "", audioId: null });
+  failed("");
+  showClear();
+  offerUndo(message, () => {
+    $("tts-text").value = text;
+    saveDraft({ text, audioId });
+    showClear();
+  });
+}
+
 /**
  * Sets up the text entry. `saveMaterial(file, replaceId)` keeps the made audio in the
  * saved list, in place of the previous version of the same draft, and returns its record.
@@ -209,16 +236,23 @@ export function initTextEntry({ saveMaterial }) {
   $("tts-lang").value = lang;
   fillVoices(lang, voice);
   if (typeof draft.text === "string") $("tts-text").value = draft.text;
+  showClear();
+  // Text in one language is not read in the other: switching starts with an empty box.
   $("tts-lang").addEventListener("change", () => {
     fillVoices($("tts-lang").value);
     saveDraft({ voice: $("tts-voice").value });
+    clearText("言語を切り替えたので、テキストを消しました。");
   });
+  $("tts-clear").addEventListener("click", () =>
+    clearText("テキストを消しました。"),
+  );
   $("tts-voice").addEventListener("change", () =>
     saveDraft({ voice: $("tts-voice").value }),
   );
-  $("tts-text").addEventListener("input", () =>
-    saveDraft({ text: $("tts-text").value }),
-  );
+  $("tts-text").addEventListener("input", () => {
+    saveDraft({ text: $("tts-text").value });
+    showClear();
+  });
   $("tts-make").addEventListener("click", () => void make());
   $("tts-cancel").addEventListener("click", () => {
     running?.abort();
