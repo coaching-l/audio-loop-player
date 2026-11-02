@@ -78,6 +78,8 @@ function title(sentences) {
   return (first.length > 24 ? first.slice(0, 24) + "…" : first) + ".mp3";
 }
 
+const SENTENCE_PAUSE = 0.3;
+const LINE_PAUSE = 0.6;
 // Speech at 64 kbps (mono, 24 kHz) takes about 0.5 MB a minute, against 2.9 MB as WAV.
 const KBPS = 64;
 // The audio to keep: MP3, with each sentence's time moved by the MP3's delay. Should the
@@ -153,7 +155,12 @@ async function make() {
       );
       return;
     }
-    const joined = joinClips(result.clips);
+    // Sentences joined back to back ran into each other: a short pause between them,
+    // a longer one where the text starts a new line.
+    const joined = joinClips(
+      result.clips,
+      sentences.map((s) => (s.lineEnd ? LINE_PAUSE : SENTENCE_PAUSE)),
+    );
     progress("MP3にしています…", null);
     const { file, spans } = await audioFile(joined, title(texts));
     if (controller.signal.aborted)

@@ -103,10 +103,10 @@ test("text becomes audio whose sentences, with their times, are the script", asy
     "Last one!",
   ]);
   // Times come from the audio of each sentence, not from guessing, moved by the
-  // MP3's delay (1105 samples at 24 kHz, 0.046 s).
+  // MP3's delay (1105 samples at 24 kHz, 0.046 s), with 0.3 s between sentences.
   await sentences(page).nth(1).click();
-  await expect(page.locator("#point-a")).toHaveValue("0:00.526");
-  await expect(page.locator("#point-b")).toHaveValue("0:01.126");
+  await expect(page.locator("#point-a")).toHaveValue("0:00.826");
+  await expect(page.locator("#point-b")).toHaveValue("0:01.426");
   // Kept as MP3, a fraction of the WAV's size, and its sound starts where the script
   // says the first sentence does.
   const kept = await page.evaluate(async () => {
@@ -127,7 +127,7 @@ test("text becomes audio whose sentences, with their times, are the script", asy
     };
   });
   expect(kept.type).toBe("audio/mpeg");
-  // 1.84 s of speech: about 177 KB as 16-bit WAV.
+  // 2.34 s with its pauses: about 112 KB as 16-bit WAV.
   expect(kept.bytes).toBeLessThan(25000);
   expect(Math.abs(kept.onset - kept.start)).toBeLessThan(0.01);
   expect(await calls(page)).toEqual([
@@ -201,7 +201,8 @@ test("if the MP3 encoder never loads, the audio is kept as WAV instead of waitin
   await expect(sentences(page)).toHaveCount(2);
   // Without the MP3's delay, the times are the sentences' own.
   await sentences(page).nth(1).click();
-  await expect(page.locator("#point-a")).toHaveValue("0:00.440");
+  // The first sentence, then 0.3 s of pause: the second starts at 0.74 s.
+  await expect(page.locator("#point-a")).toHaveValue("0:00.740");
 });
 
 test("a sentence that fails is named, and making again goes on from it", async ({
@@ -311,6 +312,26 @@ test("Mandarin becomes Kokoro v1.1 reading symbols, with tone changes and punctu
   expect(() => mandarinPhonemes("今天练习AI。")).toThrow();
   expect(() => mandarinPhonemes("2026年")).toThrow();
   expect(() => mandarinPhonemes("你好😊")).toThrow();
+});
+
+test("地, 得 and 长 are read as the grammar asks, where pinyin-pro reads them wrongly", () => {
+  const de = "ㄉㄜ5";
+  // 地 marking an adverb is "de", alone after a word or after a doubled one.
+  for (const text of ["他高兴地笑了。", "他慢慢地走过来。", "天气渐渐地变冷了。"])
+    expect(mandarinPhonemes(text)).toContain(de);
+  // As a noun, or in words, it stays "dì".
+  for (const text of ["这块土地很大。", "这块地很大。", "他特地来看我。", "飞机落地了。"]) {
+    expect(mandarinPhonemes(text)).toContain("ㄉㄧ4");
+    expect(mandarinPhonemes(text)).not.toContain(de);
+  }
+  // 得 after a verb is "de"; in 获得 and 得到 it stays "dé".
+  expect(mandarinPhonemes("我跑得很快。")).toContain(de);
+  expect(mandarinPhonemes("他说得对。")).toContain(de);
+  expect(mandarinPhonemes("他获得了冠军。")).toContain("ㄉㄜ2");
+  expect(mandarinPhonemes("我想得到它。")).toContain("ㄉㄜ2");
+  // 长得 is "zhǎng de"; 长 elsewhere keeps pinyin-pro's reading.
+  expect(mandarinPhonemes("他长得很高。")).toContain("ㄓㄤ3" + "ㄉㄜ5");
+  expect(mandarinPhonemes("这条河很长。")).toContain("ㄔㄤ2");
 });
 
 test("English is read by eSpeak NG after Kokoro's normalization", async () => {
