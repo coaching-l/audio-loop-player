@@ -16,7 +16,7 @@ import {
   deleteFiles,
   saveFiles,
 } from "./model-files.js";
-import { checkLength, joinClips } from "./audio-tools.js";
+import { checkLength } from "./audio-tools.js";
 
 // The worker's runtime: files of this site, saved once so it works offline later.
 const FAMILY = CACHE_PREFIX + "tts-runtime-";
@@ -105,9 +105,8 @@ export function checkSentence(text, voiceId) {
 
 // How a sentence is read before the model (mandarin.js, english.js). Raise it whenever
 // those rules change, so sentences made under the old rules are made again.
-// 2: Mandarin 地/得/长 readings; 3: a Mandarin verb and its complement read as one;
-// 4: a Mandarin adverb read with the word after it, and sentences made comma by comma.
-export const READING_VERSION = 4;
+// 2: Mandarin 地/得/长 readings; 3: a Mandarin verb and its complement read as one.
+export const READING_VERSION = 3;
 // The same sentence in the same voice, model and reading rules makes the same audio.
 export function clipKey(text, voiceId) {
   const { model } = voiceInfo(voiceId);
@@ -335,24 +334,6 @@ async function clearClips() {
   }
 }
 
-// Kokoro's own pause at a Chinese comma is short for repeating aloud. A Chinese sentence
-// is made in parts, each ending at its comma (so it still sounds unfinished), and the
-// parts are joined with this much silence added.
-export const COMMA_PAUSE = 0.15;
-export function sentenceParts(text, voiceId) {
-  if (voiceInfo(voiceId).lang !== "zh") return [text];
-  const parts = text
-    .split(/(?<=，)/u)
-    .map((part) => part.trim())
-    .filter(Boolean);
-  // A part with nothing to read joins the one before it.
-  const merged = [];
-  for (const part of parts)
-    if (merged.length && !/\p{Script=Han}/u.test(part)) merged[merged.length - 1] += part;
-    else merged.push(part);
-  return merged.length ? merged : [text];
-}
-
 /**
  * Makes the audio of each sentence, reusing the ones already made.
  * Stops at the first sentence that cannot be made and says which one, so the learner
@@ -362,36 +343,22 @@ export function sentenceParts(text, voiceId) {
 export async function synthesize(sentences, voiceId, { engine, onProgress, signal }) {
   const clips = [];
   let seconds = 0;
-  const parts = sentences.map((text) => sentenceParts(text, voiceId));
-  await keepClips(parts.flat().map((text) => clipKey(text, voiceId)));
+  const keys = sentences.map((text) => clipKey(text, voiceId));
+  await keepClips(keys);
   for (let i = 0; i < sentences.length; i++) {
     if (signal?.aborted) throw new DOMException("中止しました。", "AbortError");
     onProgress?.({ index: i, total: sentences.length });
-    const made = [];
-    for (const part of parts[i]) {
-      if (signal?.aborted) throw new DOMException("中止しました。", "AbortError");
-      const key = clipKey(part, voiceId);
-      let piece = await getClip(key);
-      if (!piece) {
-        try {
-          piece = await engine.generate(part, voiceId, (download) =>
-            onProgress?.({ index: i, total: sentences.length, download }),
-          );
-        } catch (error) {
-          if (error.name === "AbortError") throw error;
-          return { clips, failed: { index: i, message: error.message } };
-        }
-        await putClip(key, piece);
+    let clip = await getClip(keys[i]);
+    if (!clip) {
+      try {
+        clip = await engine.generate(sentences[i], voiceId, (download) =>
+          onProgress?.({ index: i, total: sentences.length, download }),
+        );
+      } catch (error) {
+        if (error.name === "AbortError") throw error;
+        return { clips, failed: { index: i, message: error.message } };
       }
-      made.push(piece);
-    }
-    let clip = made[0];
-    if (made.length > 1) {
-      const { samples, rate } = joinClips(
-        made,
-        made.map(() => COMMA_PAUSE),
-      );
-      clip = { samples, rate };
+      await putClip(keys[i], clip);
     }
     seconds += clip.samples.length / clip.rate;
     try {
