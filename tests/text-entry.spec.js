@@ -264,7 +264,15 @@ test("each language offers its own voices, and an English voice refuses Chinese 
   await fakeVoices(page);
   await page.goto("/");
   await page.locator("#entry-text").click();
-  await expect(page.locator("#tts-voice option")).toHaveCount(5);
+  // English: three American and three British voices.
+  await expect(page.locator("#tts-voice option")).toHaveText([
+    "Heart（米国英語・女性）",
+    "Bella（米国英語・女性）",
+    "Michael（米国英語・男性）",
+    "Emma（英国英語・女性）",
+    "Isabella（英国英語・女性）",
+    "George（英国英語・男性）",
+  ]);
   await page.locator("#tts-lang").selectOption("zh");
   await expect(page.locator("#tts-voice option")).toHaveCount(3);
   await expect(page.locator("#tts-voice")).toHaveValue("zf_001");
