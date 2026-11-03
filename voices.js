@@ -26,9 +26,10 @@ export const MODELS = {
 export const VOICES = [
   { id: "af_heart", lang: "en", name: "Heart（米国英語・女性）" },
   { id: "af_bella", lang: "en", name: "Bella（米国英語・女性）" },
-  { id: "af_nicole", lang: "en", name: "Nicole（米国英語・女性）" },
   { id: "am_michael", lang: "en", name: "Michael（米国英語・男性）" },
   { id: "bf_emma", lang: "en", name: "Emma（英国英語・女性）" },
+  { id: "bf_isabella", lang: "en", name: "Isabella（英国英語・女性）" },
+  { id: "bm_george", lang: "en", name: "George（英国英語・男性）" },
   { id: "zf_001", lang: "zh", name: "普通話 001（女性）" },
   { id: "zf_002", lang: "zh", name: "普通話 002（女性）" },
   { id: "zm_010", lang: "zh", name: "普通話 010（男性）" },
