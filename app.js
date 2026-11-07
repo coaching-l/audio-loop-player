@@ -11,6 +11,7 @@ import {
   validateAudio,
   displayName,
   renameAudio,
+  MAX_AUDIO_FILES,
 } from "./audio-library.js";
 import {
   openPractice,
@@ -58,7 +59,7 @@ async function saveMaterial(file, replaceId) {
     try {
       record = await addAudio(file);
     } catch (error) {
-      if (!replaced || !error.message?.includes("10件")) throw error;
+      if (!replaced || error.name !== "LibraryFullError") throw error;
       await removeAudio(replaced.id);
       audioItems = audioItems.filter((item) => item.id !== replaced.id);
       record = await addAudio(file);
@@ -91,7 +92,7 @@ async function saveMaterial(file, replaceId) {
   } catch (error) {
     renderAudioList();
     libraryStatus(
-      error.message?.includes("10件")
+      error.name === "LibraryFullError"
         ? error.message
         : "作った音声を保存できませんでした。このページを開いている間は練習できますが、閉じると残りません。",
       true,
@@ -170,7 +171,7 @@ function renderAudioList() {
   showLibrary();
   const { key } = practiceState();
   $("audio-list").replaceChildren();
-  $("audio-count").textContent = audioItems.length + " / 10件";
+  $("audio-count").textContent = `${audioItems.length} / ${MAX_AUDIO_FILES}件`;
   for (const record of audioItems) {
     const li = document.createElement("li");
     li.className = "audio-item";
@@ -246,7 +247,7 @@ async function deleteAudio(record, button) {
     );
     } catch (e) {
       libraryStatus(
-        e.message.includes("10件")
+        e.name === "LibraryFullError"
           ? e.message
           : "元に戻せませんでした。元のファイルをもう一度追加してください。",
         true,
@@ -289,7 +290,7 @@ function importFiles(files) {
                     "AudioFormatError",
                   ].includes(e.name)
                 ? e.message
-                : e.message?.includes("10件")
+                : e.name === "LibraryFullError"
                   ? e.message
                   : "音声を保存できませんでした。ファイルの形式・保存容量・ブラウザの設定を確認してください。";
           problems.push(file.name + "：" + message);
@@ -326,7 +327,7 @@ importQueue = listAudio()
     libraryStatus(
       items.length
         ? "名前を押すと、前回の設定のまま練習を再開できます。"
-        : "作った音声や読み込んだ音源が、ここに10件まで保存されます。",
+        : `作った音声や読み込んだ音源が、ここに${MAX_AUDIO_FILES}件まで保存されます。`,
     );
     void showStorageInfo();
   })

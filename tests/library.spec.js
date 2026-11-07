@@ -11,15 +11,15 @@ async function add(page, count = 3) {
   await page.goto("/");
   await page.locator("#file-input").setInputFiles(files(count));
   await expect(page.locator("#audio-list .audio-item")).toHaveCount(
-    Math.min(count, 10),
+    Math.min(count, 20),
   );
   await expect(page.locator("#library-status")).not.toContainText("保存中");
 }
-test("ten real audio files persist and reopen without selecting local files again", async ({
+test("twenty real audio files persist and reopen without selecting local files again", async ({
   page,
 }) => {
-  await add(page, 10);
-  await expect(page.locator("#audio-count")).toHaveText("10 / 10件");
+  await add(page, 20);
+  await expect(page.locator("#audio-count")).toHaveText("20 / 20件");
   await page
     .getByRole("button", { name: "lesson-4.wavを開く", exact: true })
     .click();
@@ -37,7 +37,7 @@ test("ten real audio files persist and reopen without selecting local files agai
   await expect(page.locator("#play")).toBeEnabled();
   await expect(page.locator("#point-b")).toHaveValue("0:03.000");
   await page.reload();
-  await expect(page.locator("#audio-list .audio-item")).toHaveCount(10);
+  await expect(page.locator("#audio-list .audio-item")).toHaveCount(20);
   await page
     .getByRole("button", { name: "lesson-4.wavを開く", exact: true })
     .click();
@@ -54,10 +54,10 @@ test("ten real audio files persist and reopen without selecting local files agai
 test("batch cap does not overwrite files, duplicate files are reused, and deleting releases a slot", async ({
   page,
 }) => {
-  await add(page, 11);
-  await expect(page.locator("#library-status")).toContainText("10件まで");
+  await add(page, 21);
+  await expect(page.locator("#library-status")).toContainText("20件まで");
   await page.reload();
-  await expect(page.locator("#audio-list .audio-item")).toHaveCount(10);
+  await expect(page.locator("#audio-list .audio-item")).toHaveCount(20);
   // Reopen the persisted File with its original metadata to test exact deduplication.
   await page.evaluate(async () => {
     const m = await import("/audio-library.js");
@@ -65,7 +65,7 @@ test("batch cap does not overwrite files, duplicate files are reused, and deleti
     await m.addAudio(m.storedFile(saved[0]));
   });
   await page.reload();
-  await expect(page.locator("#audio-list .audio-item")).toHaveCount(10);
+  await expect(page.locator("#audio-list .audio-item")).toHaveCount(20);
   await page
     .getByRole("button", { name: "lesson-1.wavを開く", exact: true })
     .click();
@@ -74,14 +74,14 @@ test("batch cap does not overwrite files, duplicate files are reused, and deleti
   await page
     .getByRole("button", { name: "lesson-1.wavの音声を削除", exact: true })
     .click();
-  await expect(page.locator("#audio-list .audio-item")).toHaveCount(9);
+  await expect(page.locator("#audio-list .audio-item")).toHaveCount(19);
   await expect(page.locator("#play")).toBeDisabled();
   await page.locator("#file-input").setInputFiles({
     name: "replacement.wav",
     mimeType: "audio/wav",
     buffer: makeWav(),
   });
-  await expect(page.locator("#audio-list .audio-item")).toHaveCount(10);
+  await expect(page.locator("#audio-list .audio-item")).toHaveCount(20);
   await expect(page.locator("#library-status")).not.toContainText("保存中");
   await page.reload();
   await expect(
