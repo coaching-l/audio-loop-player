@@ -17,9 +17,11 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Playwright 1.58.2 supports Ubuntu 24.04; ubuntu-latest may advance to an
+  # unsupported OS before we update Playwright. Pin both browser jobs together.
   chromium:
     name: Chromium（パソコン・Android想定）
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -35,7 +37,7 @@ jobs:
 
   webkit:
     name: WebKit（Safari・iPhone想定）
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     # WebKit のテストはこれまで一度も実行できていない。結果を確かめて安定するまでは、失敗しても PR を止めない
     continue-on-error: true

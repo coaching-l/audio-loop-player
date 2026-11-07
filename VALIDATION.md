@@ -334,3 +334,10 @@
 - 実音声比較は **未完了**：固定版Hugging Face `config.json` の取得はこの環境のプロキシで403。ツールを本物のWorkerで実行したところ、最初のモデル取得が `Failed to fetch` で失敗し、`test-results/tts-comparison-1794057728894/result.json` に failed を記録した。比較音声は生成できていない。偽の音声で代用したり、速度や声の優劣を確認済みとしたりしていない。
 - macOS・実機Android・実機Safariでの今回の変更の検証は未実施。次の判断には同一原稿・話者での実音声比較が必要で、生成速度変更・別モデルへの移行はその結果を見て行う。
 - 最終レビューで第三声の語境界処理を語末だけに限定し、`tests/mandarin.spec.js tests/release.spec.js tests/text-entry.spec.js` を同2設定で再実行：**50 passed (59.8s)**。最終キャッシュ版はv38、CSS/JSクエリはv40。`git diff --check` と比較スクリプトの構文確認も成功。
+
+## 2026-11-07 CIのブラウザ導入失敗
+
+- 利用者提供の両ジョブのログで、Playwright 1.58.2が `ubuntu26.04-x64` に対応せず、ブラウザ導入で終了していることを確認。アプリのテストは実行されていない。
+- `.github/workflows/test.yml` の両ジョブを `ubuntu-latest` から `ubuntu-24.04` に固定。アプリ本体・音声処理・保存データは変更なし。
+- 同梱Playwrightの対応表でUbuntu 24.04向けのChromium/WebKitを確認。`PLAYWRIGHT_HOST_PLATFORM_OVERRIDE=ubuntu24.04-x64 npx playwright install --dry-run chromium webkit` は成功し、両ブラウザの配信先を解決。これは導入計画の確認であり、GitHubの新しい実行や実ブラウザの導入成功を確認したものではない。`git diff --check` 成功。
+- この環境からGitHub Actions APIのログ取得はForbiddenとなるため、変更後のCI完走は未確認。

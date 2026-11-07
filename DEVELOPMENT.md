@@ -139,6 +139,8 @@ npm run test:all         # すべて
 
 ### CI（GitHub Actions）
 
+テスト用OSは両ジョブとも `ubuntu-24.04` に固定しています。`ubuntu-latest` が26.04へ切り替わるとPlaywright 1.58.2ではブラウザを導入できないためです。OSを更新するときは、Playwrightの対応OSと両ブラウザの導入を合わせて確認してください。
+
 `.github/workflows/test.yml` が、PRと `main` への変更ごとにChromium（デスクトップ・Android想定）とWebKit（デスクトップ・iPhone想定）を実行します。
 
 WebKitのジョブは失敗してもPRを止めない設定です。Linux版WebKitでは、通信を切ったあとの読み込みでブラウザが内部エラー（`WebKit encountered an internal error`）になるため、次の11件が失敗します。iPhone実機ではオフラインで使えることを確認済みです。それ以外のWebKitの失敗は調べてください。
