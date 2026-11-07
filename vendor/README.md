@@ -30,3 +30,7 @@ CDNからは読み込まず、このサイトのファイルとして配信し�
 1. 新しい版のファイルをここに置き、`transcriber.js` の `MODEL_FILES` のサイズとSHA-256を書き換えます。
 2. `transcriber.js` の `MODEL_CACHE` の末尾の番号を1つ上げます（利用者のブラウザは、変わったファイルだけを受け取り直し、変わっていないファイルは前の保存先から写します）。
 3. `npm run bump-shell` を実行します。
+
+## 中国語の読み規則の参照
+
+`mandarin.js` のKokoro v1.1記号表、および語のまとまりごとの第三声の処理は、[Misaki](https://github.com/hexgrad/misaki) の `zh_frontend.py`・`tone_sandhi.py` と、その参照元 [PaddleSpeech](https://github.com/PaddlePaddle/PaddleSpeech) を参考にしています（Apache-2.0、Copyright (c) 2021 PaddlePaddle Authors）。`mandarin-lexicon.js` はこのアプリの小規模な読み辞書です。公式フロントエンド全体を同梱しているわけではありません。

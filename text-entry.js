@@ -80,8 +80,9 @@ function title(sentences) {
 
 const SENTENCE_PAUSE = 0.3;
 const LINE_PAUSE = 0.6;
-// Speech at 64 kbps (mono, 24 kHz) takes about 0.5 MB a minute, against 2.9 MB as WAV.
-const KBPS = 64;
+// Keep consonants clear without a second encoding on an unchanged whole-file export.
+// 128 kbps mono is about 1 MB/minute (24 kHz PCM would be 2.9 MB/minute).
+const KBPS = 128;
 // The audio to keep: MP3, with each sentence's time moved by the MP3's delay. Should the
 // encoder fail, the same audio as WAV, so what was made is not lost.
 async function audioFile(joined, name) {

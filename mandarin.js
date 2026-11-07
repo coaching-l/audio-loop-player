@@ -1,11 +1,10 @@
 // Mandarin text to the reading symbols of Kokoro v1.1-zh, for the text-to-speech worker.
-// Ported unchanged in behavior from COACHING-L Shadowing (src/mandarin.ts).
-// pinyin-pro turns each character into pinyin (it already changes a third tone before a
-// third tone inside a two-syllable word); the rule below handles longer runs of third
-// tones, only where pinyin-pro left a third tone, so no syllable is changed twice.
+// Chinese readings, then word-level tone changes, then Kokoro's symbols. Keeping these
+// steps separate lets a dictionary correction take part in sandhi exactly once.
 import { pinyin } from "./vendor/pinyin-pro/pinyin-pro.js";
+import { WORD_READINGS } from "./mandarin-lexicon.js";
 // Kokoro v1.1 symbol mapping: adapted from Misaki ZHFrontend / PaddleSpeech (Apache-2.0).
-// Copyright (c) 2021 PaddlePaddle Authors. See docs/ATTRIBUTIONS.md.
+// Copyright (c) 2021 PaddlePaddle Authors. See vendor/README.md.
 const symbols = {
   b: "ㄅ",
   p: "ㄆ",
@@ -140,10 +139,7 @@ export function syllable(py, tone) {
 const NOUN_BEFORE_DI = new Set([..."块片这那此每该种的"]);
 // 得 after a verb (跑得快, 说得对) is "de"; in these words it is "dé".
 const DE2_WORDS = new Set(["获得", "取得", "赢得", "难得", "求得", "博得", "心得", "所得"]);
-function correctReadings(text, tokens) {
-  const words = [...new Intl.Segmenter("zh", { granularity: "word" }).segment(text)]
-    .filter((w) => w.isWordLike)
-    .map((w) => ({ start: w.index, end: w.index + w.segment.length, text: w.segment }));
+function correctReadings(text, tokens, words) {
   const wordAt = (offset) => words.find((w) => w.start <= offset && offset < w.end);
   const isHan = (ch) => /\p{Script=Han}/u.test(ch || "");
   let offset = 0;
@@ -167,6 +163,75 @@ function correctReadings(text, tokens) {
     }
   });
   return tokens;
+}
+
+function setReading(token, reading) {
+  token.pinyin = reading;
+  token.num = Number(reading.at(-1));
+}
+
+// Only override complete dictionary words, not matching characters inside another word.
+// Contextual 得 rules are deliberately limited: 得到/获得 and 不得 are not modal děi.
+function lexicalReadings(text, tokens, words) {
+  for (const word of words) {
+    const reading = WORD_READINGS[word.text];
+    if (!reading) continue;
+    const part = tokens.filter((t) => t.start >= word.start && t.end <= word.end);
+    reading.split(" ").forEach((py, i) => setReading(part[i], py));
+  }
+  for (let i = 0; i < tokens.length; i++) {
+    const t = tokens[i];
+    if (!t.isZh) continue;
+    const before = text.slice(0, t.start);
+    const after = text.slice(t.end);
+    if (t.origin === "得") {
+      if (/(?:我|你|您|他|她|我们|你们|他们|她们|大家)(?:也|都|还)?$/u.test(before) &&
+          /^(?:走|去|来|回|好好|赶快|赶紧|先|再|学习|工作|休息|注意|小心|想|买|吃|喝)/u.test(after))
+        setReading(t, "dei3");
+      else if (/[看听吃喝拿搬做写读说记认睡跑走]$/u.test(before) &&
+               /^[见清懂完动住下起进出对快慢好远]/u.test(after))
+        setReading(t, "de0");
+    }
+    // 好好 can be embedded in 请好好 by ICU. Correct this adverb before common verbs,
+    // without changing 好奇/爱好 or an unrelated 好 at either side of a word boundary.
+    if (t.origin === "好" && /^好(?:学习|休息|说话|想想|看看|吃饭|工作|照顾)/u.test(after) &&
+        !/[爱喜嗜]$/u.test(before)) {
+      setReading(t, "hao3");
+      setReading(tokens[i + 1], "hao3");
+    }
+  }
+}
+
+// Word grouping matters: 你好/你好 is 23/23, not 22/23. For a three-syllable word,
+// distinguish 1+2 (纸/老虎) from 2+1 (展览/馆), as Misaki/PaddleSpeech does. ICU is
+// our browser-local segmenter, so this is a conservative subset, not the full frontend.
+function thirdTones(tokens, words) {
+  const segmenter = new Intl.Segmenter("zh", { granularity: "word" });
+  for (const word of words) {
+    const part = tokens.filter((t) => t.isZh && t.start >= word.start && t.end <= word.end);
+    if (part.length === 3 && part.every((t) => t.num === 3)) {
+      const suffix = [...segmenter.segment(word.text.slice(1))];
+      if (suffix.length === 1 && suffix[0].isWordLike) {
+        part[1].num = 2;
+        continue;
+      }
+    }
+    // Four-syllable expressions are grouped as two pairs. Other words change only
+    // adjacent thirds within the word. Work from the original tones, not changed ones.
+    const tones = part.map((t) => t.num);
+    for (let i = 0; i + 1 < part.length; i++)
+      if (tones[i] === 3 && tones[i + 1] === 3 && !(part.length === 4 && i === 1))
+        part[i].num = 2;
+  }
+  // Remaining adjacent thirds at word edges: the next word's internal sandhi has
+  // already happened, so a preceding third stays third before a 23 word (我/很好).
+  const edges = new Set(words.map((w) => w.end));
+  const tones = tokens.map((t) => t.num);
+  for (let i = 0; i + 1 < tokens.length; i++) {
+    const t = tokens[i], next = tokens[i + 1];
+    if (edges.has(t.end) && t.isZh && next.isZh && t.end === next.start && tones[i] === 3 && tones[i + 1] === 3)
+      t.num = 2;
+  }
 }
 
 // A verb and its complement are said as one (看不清, 听懂, 走过来), but the segmenter
@@ -202,31 +267,32 @@ export function mandarinPhonemes(text) {
       "中国語の音声生成は漢字と句読点に対応しています。英単語や数字は、意図した中国語の読み方に編集してください。自動削除はしません。",
     );
   const joins = complementJoins(text);
+  const words = [...new Intl.Segmenter("zh", { granularity: "word" }).segment(text)]
+    .filter((w) => w.isWordLike)
+    .map((w) => ({ start: w.index, end: w.index + w.segment.length, text: w.segment }));
   const boundaries = new Set(
-    [...new Intl.Segmenter("zh", { granularity: "word" }).segment(text)]
-      .filter((w) => w.isWordLike)
-      .map((w) => w.index + w.segment.length)
+    words.map((w) => w.end)
       .filter((offset) => !joins.has(offset)),
   );
-  const tokens = correctReadings(
-    text,
-    pinyin(text, {
-      type: "all",
-      toneType: "num",
-      toneSandhi: { yi: true, bu: true, thirdTone: true },
-    }),
-  );
+  let at = 0;
+  const tokens = pinyin(text, {
+    type: "all",
+    toneType: "num",
+    toneSandhi: { yi: true, bu: true, thirdTone: false },
+  }).map((t) => {
+    const start = at;
+    at += t.origin.length;
+    return { ...t, start, end: at };
+  });
+  correctReadings(text, tokens, words);
+  lexicalReadings(text, tokens, words);
+  thirdTones(tokens, words);
   let offset = 0;
   return tokens
-    .map((t, i) => {
+    .map((t) => {
       offset += t.origin.length;
       if (t.isZh)
-        return (
-          syllable(
-            t.pinyin,
-            t.num === 3 && tokens[i + 1]?.num === 3 ? 2 : t.num,
-          ) + (boundaries.has(offset) ? "/" : "")
-        );
+        return syllable(t.pinyin, t.num) + (boundaries.has(offset) ? "/" : "");
       const mapped = punctuation[t.origin] || t.origin;
       if (!/^[\s;:,.!?/—…“”"()‘’'-]*$/u.test(mapped))
         throw Error(`読み上げに対応しない文字「${t.origin}」があります。`);

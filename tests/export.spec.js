@@ -30,6 +30,16 @@ async function exported(page, kind, pauses = false) {
 }
 const isMp3 = (bytes) => bytes[0] === 0xff && (bytes[1] & 0xe0) === 0xe0;
 
+test("whole MP3 downloads preserve the exact bytes and do not start an encoder", async ({ page }) => {
+  await page.goto("/");
+  await load(page, "tests/fixtures/tone.mp3");
+  await openAdvanced(page);
+  // Re-encoding must not be needed even if an encoder worker cannot load.
+  await page.route("**/mp3-worker.js", (route) => route.abort());
+  const file = await exported(page, "all");
+  expect(file.bytes.equals(await readFile("tests/fixtures/tone.mp3"))).toBe(true);
+});
+
 test("the silence after a sentence is as long as the sentence, from 1 to 8 seconds", () => {
   expect(pauseAfter(0.3)).toBe(1);
   expect(pauseAfter(2.5)).toBe(2.5);

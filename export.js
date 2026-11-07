@@ -120,6 +120,14 @@ function download(blob, filename) {
 /** Writes the material out as MP3 (or a ZIP of MP3s) and starts the download. */
 export async function exportMp3({ file, name, kind, withPauses, sentences, a, b, onProgress }) {
   const base = (name || "audio").replace(/\.[^.]+$/, "");
+  // An unchanged MP3 is already the requested output. Preserve its bytes, original
+  // sample rate and encoder delay instead of decoding and applying lossy compression again.
+  if (kind === "all" && !withPauses && file.type === "audio/mpeg") {
+    const outputName = base + ".mp3";
+    onProgress("MP3を保存しています…");
+    download(file, outputName);
+    return outputName;
+  }
   onProgress("音声を読み込んでいます…");
   const { samples, rate } = await decodeMono(file, RATE);
   const files = planExport({

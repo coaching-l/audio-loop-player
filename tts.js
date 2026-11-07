@@ -105,8 +105,9 @@ export function checkSentence(text, voiceId) {
 
 // How a sentence is read before the model (mandarin.js, english.js). Raise it whenever
 // those rules change, so sentences made under the old rules are made again.
-// 2: Mandarin 地/得/长 readings; 3: a Mandarin verb and its complement read as one.
-export const READING_VERSION = 3;
+// 5: lexical neutral tones, contextual 得 and word-grouped third tones.
+// 4 was previously shipped and reverted; never reuse it for different readings.
+export const READING_VERSION = 5;
 // The same sentence in the same voice, model and reading rules makes the same audio.
 export function clipKey(text, voiceId) {
   const { model } = voiceInfo(voiceId);

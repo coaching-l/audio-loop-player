@@ -128,7 +128,9 @@ test("text becomes audio whose sentences, with their times, are the script", asy
   });
   expect(kept.type).toBe("audio/mpeg");
   // 2.34 s with its pauses: about 112 KB as 16-bit WAV.
-  expect(kept.bytes).toBeLessThan(25000);
+  // 128 kbps, about 37 KB: no longer the old 64 kbps (~19 KB) copy.
+  expect(kept.bytes).toBeGreaterThan(30000);
+  expect(kept.bytes).toBeLessThan(45000);
   expect(Math.abs(kept.onset - kept.start)).toBeLessThan(0.01);
   expect(await calls(page)).toEqual([
     "Hello there.",
@@ -314,8 +316,8 @@ test("Mandarin becomes Kokoro v1.1 reading symbols, with tone changes and punctu
   expect(phones).toContain(",");
   expect(phones.endsWith("?")).toBe(true);
   expect(mandarinPhonemes("今天的进步。")).toContain("ㄐ阴1ㄊ言1");
-  // A run of third tones: pinyin-pro leaves it, the port's own rule changes all but the last.
-  expect(mandarinPhonemes("我很好。")).toBe("我2/ㄏㄣ2ㄏㄠ3.");
+  // A 1+2 grouping: the first third stays third before the word 很好 (23).
+  expect(mandarinPhonemes("我很好。")).toBe("我3/ㄏㄣ2ㄏㄠ3.");
   // Nothing is dropped silently.
   expect(() => mandarinPhonemes("今天练习AI。")).toThrow();
   expect(() => mandarinPhonemes("2026年")).toThrow();
