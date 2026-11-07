@@ -1,5 +1,11 @@
 import { readableAudio } from "./audio-import.js";
-export const MAX_AUDIO_FILES = 10;
+export const MAX_AUDIO_FILES = 20;
+// Thrown when the library already holds MAX_AUDIO_FILES; callers check its name.
+function libraryFull(message) {
+  const error = new Error(message);
+  error.name = "LibraryFullError";
+  return error;
+}
 export function audioKey(file) {
   return JSON.stringify([file.name, file.size, file.lastModified]);
 }
@@ -70,8 +76,8 @@ async function saveRecord(file, data) {
       const count = store.count();
       count.onsuccess = () => {
         if (count.result >= MAX_AUDIO_FILES) {
-          problem = new Error(
-            "登録できる音声は10件までです。不要な音声を削除してから追加してください。",
+          problem = libraryFull(
+            `登録できる音声は${MAX_AUDIO_FILES}件までです。不要な音声を削除してから追加してください。`,
           );
           transaction.abort();
           return;
@@ -120,8 +126,8 @@ async function putBack(record) {
     const count = store.count();
     count.onsuccess = () => {
       if (count.result >= MAX_AUDIO_FILES) {
-        problem = new Error(
-          "登録できる音声が10件に達しているため、元に戻せません。",
+        problem = libraryFull(
+          `登録できる音声が${MAX_AUDIO_FILES}件に達しているため、元に戻せません。`,
         );
         transaction.abort();
         return;

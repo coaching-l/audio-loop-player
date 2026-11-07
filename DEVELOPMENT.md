@@ -30,7 +30,7 @@ JavaScriptモジュールとService Workerを使うため、HTMLをダブルク�
 | `practice.js`              | 練習画面（どの入口からも共通。音声を開くまでは隠す）：再生・A–B・速度・スクリプト（文字起こしと文の時刻の直しを含む）・詳しい設定（録音して聞き比べを含む）・ミニプレーヤー・Media Session・キー操作 |
 | `ui.js`                    | 入口と練習画面で共通のお知らせ・エラー表示と「元に戻す」                                                |
 | `player.js`                | 再生エンジン：A–B・回数・無音、タイマーの破棄、時刻の変換                                               |
-| `audio-library.js`         | IndexedDBへの音声保存（10件まで）、削除と取り消し、保存前の再生確認                                     |
+| `audio-library.js`         | IndexedDBへの音声保存（20件まで、`MAX_AUDIO_FILES`）、削除と取り消し、保存前の再生確認                                     |
 | `audio-import.js`          | 選んだファイルを一度だけ読み取り、MIMEを補う（iOSのファイル提供元への対策）                             |
 | `transcript.js`            | スクリプトの文への区切り（英語・中国語）、波形の無音を使った時刻の対応づけ、文字コードの判別                  |
 | `transcriber.js`           | 文字起こしの準備：モデルの受け取りと確認・保存（Cache Storage）、16kHzへの変換、無音での分割            |
