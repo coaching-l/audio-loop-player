@@ -42,8 +42,8 @@
       content="端末の音声で、繰り返し聴く・声に出す。アップロード不要の語学学習プレーヤー。"
     />
     <title>音声リピートプレーヤー | COACHING-L</title>
-    <link rel="stylesheet" href="./style.css?v=43" />
-    <script type="module" src="./app.js?v=43"></script>
+    <link rel="stylesheet" href="./style.css?v=44" />
+    <script type="module" src="./app.js?v=44"></script>
   </head>
   <body>
     <main>
@@ -130,6 +130,9 @@
             placeholder="ここにテキストを貼り付けます。1文ずつ音声にして、そのままスクリプトになります。"
           ></textarea>
           <div class="text-tools">
+            <button id="tts-join-lines" class="text-button" type="button" hidden>
+              文途中の改行をつなぐ
+            </button>
             <button id="tts-clear" class="text-button" type="button" hidden>
               テキストを消す
             </button>

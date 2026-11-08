@@ -1,7 +1,7 @@
 // English text to the phonemes Kokoro v1.0 reads, for the text-to-speech worker.
 // Ported from kokoro-js 1.2.1 (Apache-2.0, Copyright hexgrad; see vendor/phonemizer and
 // the kokoro-js notice in vendor/README.md): its text normalization and phonemize()
-// unchanged in behavior, with phonemizer (eSpeak NG) loaded from this site.
+// with narrowly scoped number/context corrections. eSpeak NG is loaded locally.
 // Before phonemizer: older Safari cannot iterate the stream it unpacks its data from.
 import "./stream-iterator.js";
 import { phonemize as espeak } from "./vendor/phonemizer/phonemizer.js";
@@ -54,8 +54,57 @@ function pointNumber(text) {
   return `${whole} point ${fraction.split("").join(" ")}`;
 }
 
+// Match amounts as a whole before considering years. Replacement text is never
+// processed again: "$1234" must not become "$12 34" or "12 dollars 34".
+function normalizeNumbers(text) {
+  return text.replace(
+    /[$£]\d+(?:\.\d+)?(?: hundred| thousand| (?:[bm]|tr)illion)*\b|\d*\.\d+|(?<!:)\b(?:[1-9]|1[0-2]):[0-5]\d\b(?!:)|\b\d{4}s?\b/gi,
+    (value, offset, source) => {
+      if (/^[$£]/.test(value)) return flipMoney(value);
+      if (value.includes(".")) return pointNumber(value);
+      if (value.includes(":")) return splitNumber(value);
+      // Keep year-style reading only for clear dates/decades. Quantities and
+      // identifiers go to eSpeak intact (e.g. "2024 books", not "20 24 books").
+      const before = source.slice(0, offset);
+      const after = source.slice(offset + value.length);
+      return /s$/i.test(value) ||
+        (/\b(?:in|since|during|until|before|after|by|year|from|around)\s+$/i.test(before) &&
+         /^\s*(?:[.,;:!?]|$)/.test(after))
+        ? splitNumber(value) : value;
+    },
+  );
+}
+
+// Pronunciation aliases affect only the phonemizer input, never the user's text.
+// Keep the whole phrase in eSpeak so surrounding words retain their context.
+// These deliberately cover clear constructions, not arbitrary English grammar.
+function contextualReadings(text) {
+  return text.replace(/\b(?:read|record)\b/gi, (word, offset, source) => {
+    const before = source.slice(0, offset);
+    const after = source.slice(offset + word.length);
+    if (word.toLowerCase() === "read") {
+      const time = "(?:yesterday|last (?:night|week|month|year))";
+      const subject = "(?:I|you|he|she|we|they)";
+      const object = "(?:it|them|(?:a|an|the|this|that|my|your|his|her|our|their) (?:book|article|letter|email|message|report|story|chapter|page|text|sentence|novel|paper|document))";
+      const pastBefore = new RegExp(`\\b${time},?\\s+${subject}\\s+$`, "i");
+      const pastAfter = new RegExp(`^\\s+(?:${object}\\s+)?${time}(?=[,.!?;:]|$)`, "i");
+      if (pastBefore.test(before) ||
+          (new RegExp(`\\b${subject}\\s+$`, "i").test(before) && pastAfter.test(after)))
+        return "red";
+    } else {
+      const verbCue = /\b(?:please,?|I|you|we|they|to|can|could|will|would|should|must|may|might|shall|don't|didn't)\s+(?:(?:not|also|just|never)\s+)?$/i;
+      const atStart = /(?:^|[.!?]\s*)$/.test(before);
+      const objectFollows = /^\s+(?:a|an|the|this|that|these|those|my|your|our|his|her|their|it|them|me|us|you|him|audio|video|music)\b|^\s*(?:[.!?]|$)/i;
+      // The accent forces the verb's second-syllable stress in en-us and en.
+      // "record sales" and "to record stores" remain untouched.
+      if ((verbCue.test(before) || atStart) && objectFollows.test(after)) return "recórd";
+    }
+    return word;
+  });
+}
+
 function normalize(text) {
-  return text
+  text = text
     .replace(/[‘’]/g, "'")
     .replace(/«/g, "“")
     .replace(/»/g, "”")
@@ -78,16 +127,9 @@ function normalize(text) {
     .replace(/\b(?:Mrs\.|MRS\.(?= [A-Z]))/g, "Mrs")
     .replace(/\betc\.(?! [A-Z])/gi, "etc")
     .replace(/\b(y)eah?\b/gi, "$1e'a")
-    .replace(
-      /\d*\.\d+|\b\d{4}s?\b|(?<!:)\b(?:[1-9]|1[0-2]):[0-5]\d\b(?!:)/g,
-      splitNumber,
-    )
     .replace(/(?<=\d),(?=\d)/g, "")
-    .replace(
-      /[$£]\d+(?:\.\d+)?(?: hundred| thousand| (?:[bm]|tr)illion)*\b|[$£]\d+\.\d\d?\b/gi,
-      flipMoney,
-    )
-    .replace(/\d*\.\d+/g, pointNumber)
+    .trim();
+  return contextualReadings(normalizeNumbers(text))
     .replace(/(?<=\d)-(?=\d)/g, " to ")
     .replace(/(?<=\d)S/g, " S")
     .replace(/(?<=[BCDFGHJ-NP-TV-Z])'?s\b/g, "'S")

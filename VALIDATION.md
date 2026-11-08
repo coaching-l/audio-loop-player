@@ -370,3 +370,15 @@
 - 同梱Whisper baseで新しい英語6ファイルを文字起こしし、全員で原稿の単語に対応する出力を確認（句読点の差あり）。記録は `/tmp/english-preview-asr-results.json`。内容の確認であり、音質の評価には代用しない。
 - `tests/voice-previews.spec.js tests/release.spec.js tests/offline.spec.js` をPC Chromium・Android Chrome相当の2設定で実行：**26 passed (1.2m)**。全10音声の実再生とブラウザで復号した波形の健全性、TTS/モデルの通信なし、試聴の切り替え・排他、オフライン再生と更新を確認。音声の破損・無音・音量超過を検出できる検査だが、声の自然さやざらつきを評価する検査ではない。
 - キャッシュv41、CSS/JSクエリv43。Python構文と `git diff --check` も確認。人による修正後の聞き比べ・実機Safari/Androidのスピーカーやイヤホンでの確認は未実施。解消の判断には利用者の実際の試聴が必要。
+
+## 2026-11-08 英語のテキスト音声化：読みと改行
+
+- 金額・数量の正規化を修正。`$1234` を年号処理で `$12 34` に分けてしまう問題を、金額を一まとまりで扱って解消。`2024 books` は数量として読み、明確な年号・年代では従来の読みを残す。小数・セント・英国の数詞のandも確認した。
+- `read` は昨日・先週などと明確に結びつく限定的な過去形、`record` は明確な依頼・命令等でのみ読みを補正。phonemizerに渡す句の内部でred / recórdという発音用の表記を使い、句全体をeSpeakへ渡す。表示テキストは変更しない。現在形・未来形・名詞・同一文中の別用法を一律に書き換えないことをテスト。任意の英文の時制・品詞や同綴異音語を網羅するものではない。
+- 英語の入力欄に、結合候補がある場合だけ「文途中の改行をつなぐ」を表示。明示操作で編集し、取り消し・入力の保存・再読み込み・生成Workerへ渡る文・スクリプトとの一致を確認。文末・空行・箇条書き・話者ラベル・ハイフンの区切りを保持。中国語はこの操作を表示せず、従来の文区切りを継続。
+- 英語の文キャッシュ版だけを6へ更新。中国語は5のまま、モデル・声・128kbps設定・保存済み教材は変更なし。保存済みMP3は自動変換されず、更新後にテキストから作り直すと新しい読みを使う。
+- 初回のChromium26件は24成功・2失敗。新しいテストの英国数詞のandに関する想定と、取り消しボタンのIDを修正。最終の `english / text-entry / transcript / mandarin / release / offline / voice-previews` の7ファイルをPC Chromium・Android Chrome相当で実行し、**100 passed (2.5m)**。音声生成画面の検証は偽のTTS Workerで、聴感品質の評価ではない。
+- 別途、実ブラウザのmodule Workerで新しい読みを実行し、金額・数量・read・recordの米国/英国8条件を確認。390px幅の画面を目視確認し、横スクロールなし・新しいボタン高さ44px。記録は `/tmp/english-reading-comparison/browser-readings.json` と `mobile.png`。
+- Kokoro-ONNX配布のv1.0 fp32モデルで、同じ声・原稿・速度を固定し、4例×米国Heart/英国Emma×修正前後の**実音声16本**を生成。全音素が語彙内にあり、全波形が有限値、ピーク0.346〜0.592。比較WAVと一覧は `/tmp/english-reading-comparison/`。これはアプリの固定Hugging Face版q8との完全一致や、人間による聞き比べの代用にはならない。
+- `scripts/compare-tts.mjs` を英語にも対応させ、修正前q8・修正後q8・修正後fp32の比較を用意。実行は最初の固定モデル取得で `Failed to fetch` となり未完了。失敗記録は `/tmp/english-reading-comparison/fixed-model-comparison-failed.json`。モデルを高精度版へ全面変更する根拠はまだなく、通常変換はq8を維持した。
+- キャッシュv42、CSS/JSクエリv44。`git diff --check`、比較スクリプトの構文確認、キャッシュハッシュ整合を確認。実機Mac/Safari/Androidと公開先の更新完了は未確認。

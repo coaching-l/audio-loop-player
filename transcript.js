@@ -37,6 +37,23 @@ export function splitSentences(text) {
   return sentences;
 }
 
+// Explicit cleanup for pasted English, never applied automatically. Keep paragraph,
+// sentence, list and dialogue boundaries; do not guess how to join hyphenated words.
+export function joinWrappedEnglishLines(text) {
+  const result = [];
+  const listOrSpeaker = /^\s*(?:[-*•–—]|\d+[.)]\s|[A-Za-z][\w ]{0,24}:\s)/;
+  for (const line of text.replace(/\r\n?/g, "\n").split("\n")) {
+    const previous = result.at(-1);
+    if (previous?.trim() && line.trim() &&
+        /[A-Za-z0-9,]["'”’)]?\s*$/.test(previous) &&
+        /^\s*["'“‘(]?[A-Za-z]/.test(line) &&
+        !listOrSpeaker.test(previous) && !listOrSpeaker.test(line)) {
+      result[result.length - 1] = previous.trimEnd() + " " + line.trimStart();
+    } else result.push(line);
+  }
+  return result.join("\n");
+}
+
 // Rough speaking time of a sentence: a Chinese character takes about as long as
 // three to four Latin letters.
 function weight(text) {

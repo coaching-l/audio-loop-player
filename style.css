@@ -1591,9 +1591,11 @@ label {
   font-size: 0.9375rem;
 }
 
-/* 「テキストを消す」：入力欄の右下に小さく */
+/* 入力欄の補助操作。狭い画面では折り返す。 */
 .text-tools {
   display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
   justify-content: flex-end;
   min-height: 8px;
 }

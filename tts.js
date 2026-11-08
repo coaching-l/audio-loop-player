@@ -108,16 +108,19 @@ export function checkSentence(text, voiceId) {
 // 5: lexical neutral tones, contextual 得 and word-grouped third tones.
 // 4 was previously shipped and reverted; never reuse it for different readings.
 export const READING_VERSION = 5;
+// English-only number and contextual pronunciation fixes. Mandarin cache keys stay
+// at 5: this release does not change its readings or invalidate its saved clips.
+export const ENGLISH_READING_VERSION = 6;
 // The same sentence in the same voice, model and reading rules makes the same audio.
 export function clipKey(text, voiceId) {
-  const { model } = voiceInfo(voiceId);
+  const { model, lang } = voiceInfo(voiceId);
   return JSON.stringify([
     text,
     voiceId,
     model.repo,
     model.revision,
     model.dtype,
-    READING_VERSION,
+    lang === "en" ? ENGLISH_READING_VERSION : READING_VERSION,
   ]);
 }
 

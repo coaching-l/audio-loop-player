@@ -1,7 +1,7 @@
 // The way in from text ("テキストから始める"): the text is made into speech one sentence
 // at a time on this device (tts.js), and the audio and the text, with each sentence's
 // time, go to the shared practice screen as they are.
-import { splitSentences } from "./transcript.js";
+import { splitSentences, joinWrappedEnglishLines } from "./transcript.js";
 import { joinClips, wavBlob } from "./audio-tools.js";
 import { encodeMp3, MP3_DELAY_SAMPLES } from "./export.js";
 import { VOICES, voiceInfo } from "./voices.js";
@@ -205,7 +205,10 @@ async function showData() {
 }
 
 function showClear() {
-  $("tts-clear").hidden = !$("tts-text").value;
+  const text = $("tts-text").value;
+  $("tts-clear").hidden = !text;
+  $("tts-join-lines").hidden = $("tts-lang").value !== "en" ||
+    joinWrappedEnglishLines(text) === text;
 }
 // Empties the text box, with undo. The next audio made is new material: it does not
 // replace the audio made from the text that was cleared.
@@ -249,6 +252,18 @@ export function initTextEntry({ saveMaterial }) {
   $("tts-clear").addEventListener("click", () =>
     clearText("テキストを消しました。"),
   );
+  $("tts-join-lines").addEventListener("click", () => {
+    const original = $("tts-text").value;
+    const text = joinWrappedEnglishLines(original);
+    $("tts-text").value = text;
+    saveDraft({ text });
+    showClear();
+    offerUndo("文途中の改行をつなぎました。内容を確認してから音声を作ってください。", () => {
+      $("tts-text").value = original;
+      saveDraft({ text: original });
+      showClear();
+    });
+  });
   $("tts-voice").addEventListener("change", () =>
     saveDraft({ voice: $("tts-voice").value }),
   );

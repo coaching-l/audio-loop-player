@@ -1,6 +1,6 @@
 // Real-model listening comparison; never uses the test tone worker. Writes only to
 // test-results/. Run on a computer that can download the pinned Hugging Face model.
-// node scripts/compare-tts.mjs ["Chinese text"] [Chinese voice ID from voices.js]
+// node scripts/compare-tts.mjs ["text"] [voice ID from voices.js]
 import { chromium } from "@playwright/test";
 import { createServer } from "node:http";
 import { readFile, mkdir, writeFile } from "node:fs/promises";
@@ -13,15 +13,22 @@ import { VOICES } from "../voices.js";
 const root = resolve(fileURLToPath(new URL("../", import.meta.url)));
 const sourceText = process.argv[2] || "你看得见吗？我得走了，请好好学习。朋友们都来了，他舍不得离开。";
 const voice = process.argv[3] || "zf_001";
-if (!VOICES.some((v) => v.lang === "zh" && v.id === voice)) throw new Error("Unknown Chinese voice.");
-const baselineRef = "de2f4b2a6c21bd309432a2acd44df0ace22a6f9c";
-const baseline = execFileSync("git", ["show", `${baselineRef}:mandarin.js`], { cwd: root, encoding: "utf8" });
+const language = VOICES.find((v) => v.id === voice)?.lang;
+if (!language) throw new Error("Unknown voice.");
+const frontend = language === "en" ? "english.js" : "mandarin.js";
+const baselineRef = language === "en"
+  ? "c3b2d770295dac3d0bb693fe72155e397868043f"
+  : "de2f4b2a6c21bd309432a2acd44df0ace22a6f9c";
+const baseline = execFileSync("git", ["show", `${baselineRef}:${frontend}`], { cwd: root, encoding: "utf8" });
 const workerSource = await readFile(resolve(root, "tts-worker.js"), "utf8");
+const voicesSource = await readFile(resolve(root, "voices.js"), "utf8");
+if (language === "en" && !voicesSource.includes('dtype: "q8"'))
+  throw new Error("English model dtype changed; review the comparison tool.");
 const speedInput = 'speed: new Tensor("float32", [1], [1])';
 if (!workerSource.includes(speedInput)) throw new Error("Worker speed input changed; update this comparison tool.");
 const dir = resolve(root, "test-results", `tts-comparison-${Date.now()}`);
 await mkdir(dir, { recursive: true });
-const manifest = { text: sourceText, voice, baselineRef, status: "running", files: [] };
+const manifest = { text: sourceText, voice, language, baselineRef, status: "running", files: [] };
 const saveManifest = () => writeFile(resolve(dir, "result.json"), JSON.stringify(manifest, null, 2));
 await saveManifest();
 
@@ -47,8 +54,13 @@ try {
   });
   const context = await browser.newContext({ serviceWorkers: "block" });
   let trial;
-  await context.route("**/mandarin.js", (route) => trial.old
+  await context.route(`**/${frontend}`, (route) => trial?.old
     ? route.fulfill({ contentType: "text/javascript", body: baseline }) : route.continue());
+  await context.route("**/voices.js", (route) => route.fulfill({
+    contentType: "text/javascript",
+    body: language === "en" && trial?.dtype === "fp32"
+      ? voicesSource.replace('dtype: "q8"', 'dtype: "fp32"') : voicesSource,
+  }));
   // Change only the in-memory response, never the production worker or its fixed 1x speed.
   await context.route("**/tts-worker.js", (route) => route.fulfill({
     contentType: "text/javascript",
@@ -56,13 +68,19 @@ try {
   }));
   const page = await context.newPage();
   await page.goto(`http://127.0.0.1:${server.address().port}`);
-  for (trial of [
+  const trials = language === "en" ? [
+    { name: "before-q8", old: true, speed: 1, dtype: "q8" },
+    { name: "after-q8", old: false, speed: 1, dtype: "q8" },
+    { name: "after-fp32", old: false, speed: 1, dtype: "fp32" },
+  ] : [
     { name: "before-1.0", old: true, speed: 1 },
     { name: "after-1.0", old: false, speed: 1 },
     { name: "after-0.9", old: false, speed: 0.9 },
     { name: "after-1.1", old: false, speed: 1.1 },
-  ]) {
+  ];
+  for (trial of trials) {
     console.log(`Generating real speech: ${voice} ${trial.name}`);
+    const started = performance.now();
     const result = await page.evaluate(async ({ text, voice }) => {
       const { splitSentences } = await import("./transcript.js");
       const { joinClips, wavBlob } = await import("./audio-tools.js");
@@ -98,14 +116,16 @@ try {
     for (const [key, ext] of [["wav", "wav"], ["mp3_64", "mp3"], ["mp3_128", "mp3"]]) {
       const name = `${trial.name}-${key}.${ext}`;
       await writeFile(resolve(dir, name), Buffer.from(result[key]));
-      manifest.files.push({ name, seconds: result.seconds, bytes: result[key].length });
+      manifest.files.push({ name, seconds: result.seconds, bytes: result[key].length,
+        processingSeconds: (performance.now() - started) / 1000 });
     }
     await saveManifest();
   }
   const escape = (s) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
-  await writeFile(resolve(dir, "index.html"), `<!doctype html><meta charset="utf-8"><title>中国語音声の比較</title>
-    <h1>中国語音声の比較：${voice}</h1><p>${escape(sourceText)}</p>
-    <p>同じ文章・声で、読みの変更前後、生成速度、圧縮形式を比較します。再生速度は1倍のまま聞いてください。</p>
+  const label = language === "en" ? "英語" : "中国語";
+  await writeFile(resolve(dir, "index.html"), `<!doctype html><meta charset="utf-8"><title>${label}音声の比較</title>
+    <h1>${label}音声の比較：${voice}</h1><p>${escape(sourceText)}</p>
+    <p>同じ文章・声で、読みの変更前後、${language === "en" ? "q8 / fp32" : "生成速度"}、圧縮形式を比較します。再生速度は1倍のまま聞いてください。</p>
     ${manifest.files.map((f) => `<p>${f.name} (${f.seconds.toFixed(2)}秒)<br><audio controls src="${f.name}"></audio></p>`).join("\n")}`);
   manifest.status = "generated; listening evaluation pending";
   console.log(`Comparison files: ${dir}/index.html`);

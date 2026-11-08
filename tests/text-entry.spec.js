@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 import { readFileSync } from "node:fs";
 import { mandarinPhonemes, syllable } from "../mandarin.js";
 import { englishPhonemes } from "../english.js";
-import { clipKey, READING_VERSION } from "../tts.js";
+import { clipKey, READING_VERSION, ENGLISH_READING_VERSION } from "../tts.js";
 
 // The service worker would answer for tts-worker.js before the stand-in below can.
 test.use({ serviceWorkers: "block" });
@@ -72,6 +72,32 @@ async function ready(page, label = "made") {
 }
 const sentences = (page) => page.locator("#transcript-sentences .sentence");
 const calls = (page) => page.evaluate(() => window.ttsCalls);
+
+test("English wrapped lines are joined only on request, with undo and saved text", async ({ page }) => {
+  await fakeVoices(page);
+  await page.goto("/");
+  await page.locator("#entry-text").click();
+  const original = "I want to learn\nhow to speak English.\n\nAnother paragraph.";
+  const joined = "I want to learn how to speak English.\n\nAnother paragraph.";
+  const input = page.locator("#tts-text");
+  const button = page.getByRole("button", { name: "文途中の改行をつなぐ" });
+  await input.fill(original);
+  await expect(input).toHaveValue(original);
+  await button.click();
+  await expect(input).toHaveValue(joined);
+  await page.locator("#undo-button").click();
+  await expect(input).toHaveValue(original);
+  await button.click();
+  await page.reload();
+  await expect(input).toHaveValue(joined);
+  await page.locator("#tts-make").click();
+  await ready(page);
+  expect(await calls(page)).toEqual(["I want to learn how to speak English.", "Another paragraph."]);
+  await expect(sentences(page)).toHaveText(["I want to learn how to speak English.", "Another paragraph."]);
+  await page.locator("#tts-lang").selectOption("zh");
+  await input.fill("I want to learn\nhow to speak.");
+  await expect(button).toBeHidden();
+});
 
 test("the first screen offers both ways in and remembers the one chosen", async ({
   page,
@@ -397,7 +423,10 @@ test("English is read by eSpeak NG after Kokoro's normalization", async () => {
 test("a sentence's audio is told apart by its text, voice, pinned model and reading rules", () => {
   expect(clipKey("Hi.", "af_heart")).not.toBe(clipKey("Hi!", "af_heart"));
   // Made under older reading rules, a sentence is made again.
-  expect(JSON.parse(clipKey("Hi.", "af_heart")).at(-1)).toBe(READING_VERSION);
+  expect(JSON.parse(clipKey("Hi.", "af_heart")).at(-1)).toBe(ENGLISH_READING_VERSION);
+  expect(ENGLISH_READING_VERSION).not.toBe(5);
+  expect(JSON.parse(clipKey("你好。", "zf_001")).at(-1)).toBe(READING_VERSION);
+  expect(READING_VERSION).toBe(5);
   expect(clipKey("Hi.", "af_heart")).not.toBe(clipKey("Hi.", "af_bella"));
   expect(clipKey("Hi.", "af_heart")).toContain(
     "1939ad2a8e416c0acfeecc08a694d14ef25f2231",
