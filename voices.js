@@ -33,6 +33,7 @@ export const VOICES = [
   { id: "zf_001", lang: "zh", name: "普通話 001（女性）" },
   { id: "zf_002", lang: "zh", name: "普通話 002（女性）" },
   { id: "zm_010", lang: "zh", name: "普通話 010（男性）" },
+  { id: "zm_011", lang: "zh", name: "普通話 011（男性）" },
 ];
 
 export function voiceInfo(id) {

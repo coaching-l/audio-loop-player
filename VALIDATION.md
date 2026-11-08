@@ -341,3 +341,11 @@
 - `.github/workflows/test.yml` の両ジョブを `ubuntu-latest` から `ubuntu-24.04` に固定。アプリ本体・音声処理・保存データは変更なし。
 - 同梱Playwrightの対応表でUbuntu 24.04向けのChromium/WebKitを確認。`PLAYWRIGHT_HOST_PLATFORM_OVERRIDE=ubuntu24.04-x64 npx playwright install --dry-run chromium webkit` は成功し、両ブラウザの配信先を解決。これは導入計画の確認であり、GitHubの新しい実行や実ブラウザの導入成功を確認したものではない。`git diff --check` 成功。
 - この環境からGitHub Actions APIのログ取得はForbiddenとなるため、変更後のCI完走は未確認。
+
+## 2026-11-08 中国語の男性話者を追加
+
+- `zm_011` を「普通話 011（男性）」として追加。中国語は女性2人・男性2人。既存のモデル・読み規則・生成速度は共通で、声の選択だけを追加した。比較用スクリプトも `voices.js` の一覧から声を検証するようにした。
+- Kokoro-ONNXのv1.1中国語配布データ（https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.1/voices-v1.1-zh.bin）で `zm_011` の存在を確認。声ベクトルはfloat32・510×1×256、全値が有限で、既存の `zm_010` とは異なる。データは調査用に/tmpへ取得し、アプリには同梱しない。
+- アプリが利用する固定版Hugging Faceへの照会は、この環境では403で遮断された。固定版URLからの実ダウンロード・実モデルでの新しい声の試聴は未確認。ブラウザテストは偽のTTS Workerで操作と声IDを検証している。
+- PC Chromium・Android Chrome相当で既存の話者テストとリリーステストを実行：**8 passed (10.4s)**。4話者の表示、新しい男性の選択、`zm_011` が生成Workerへ渡ること、再読み込み後の選択保持を確認。`git diff --check` と比較用スクリプトの構文確認も成功。
+- オフラインキャッシュv39、CSS/JSクエリv41に更新。実機Safari・Androidでの新しい声の確認は未実施。

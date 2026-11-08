@@ -1,6 +1,6 @@
 // Real-model listening comparison; never uses the test tone worker. Writes only to
 // test-results/. Run on a computer that can download the pinned Hugging Face model.
-// node scripts/compare-tts.mjs ["Chinese text"] [zf_001|zf_002|zm_010]
+// node scripts/compare-tts.mjs ["Chinese text"] [Chinese voice ID from voices.js]
 import { chromium } from "@playwright/test";
 import { createServer } from "node:http";
 import { readFile, mkdir, writeFile } from "node:fs/promises";
@@ -8,11 +8,12 @@ import { existsSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { resolve, extname, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import { VOICES } from "../voices.js";
 
 const root = resolve(fileURLToPath(new URL("../", import.meta.url)));
 const sourceText = process.argv[2] || "你看得见吗？我得走了，请好好学习。朋友们都来了，他舍不得离开。";
 const voice = process.argv[3] || "zf_001";
-if (!["zf_001", "zf_002", "zm_010"].includes(voice)) throw new Error("Unknown Chinese voice.");
+if (!VOICES.some((v) => v.lang === "zh" && v.id === voice)) throw new Error("Unknown Chinese voice.");
 const baselineRef = "de2f4b2a6c21bd309432a2acd44df0ace22a6f9c";
 const baseline = execFileSync("git", ["show", `${baselineRef}:mandarin.js`], { cwd: root, encoding: "utf8" });
 const workerSource = await readFile(resolve(root, "tts-worker.js"), "utf8");

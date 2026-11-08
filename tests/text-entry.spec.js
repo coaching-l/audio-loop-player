@@ -23,6 +23,7 @@ async function fakeVoices(page) {
   );
   await page.addInitScript(() => {
     window.ttsCalls = [];
+    window.ttsVoices = [];
     const Native = window.Worker;
     window.Worker = class extends Native {
       constructor(url, options) {
@@ -30,7 +31,10 @@ async function fakeVoices(page) {
         this.speaks = String(url).includes("tts-worker");
       }
       postMessage(message, ...rest) {
-        if (this.speaks) window.ttsCalls.push(message.text);
+        if (this.speaks) {
+          window.ttsCalls.push(message.text);
+          window.ttsVoices.push(message.voice);
+        }
         return super.postMessage(message, ...rest);
       }
     };
@@ -276,7 +280,10 @@ test("each language offers its own voices, and an English voice refuses Chinese 
     "George（英国英語・男性）",
   ]);
   await page.locator("#tts-lang").selectOption("zh");
-  await expect(page.locator("#tts-voice option")).toHaveCount(3);
+  await expect(page.locator("#tts-voice option")).toHaveText([
+    "普通話 001（女性）", "普通話 002（女性）",
+    "普通話 010（男性）", "普通話 011（男性）",
+  ]);
   await expect(page.locator("#tts-voice")).toHaveValue("zf_001");
   await page.locator("#tts-lang").selectOption("en");
   await make(page, "你好。");
@@ -284,6 +291,14 @@ test("each language offers its own voices, and an English voice refuses Chinese 
     timeout: 30000,
   });
   expect(await calls(page)).toEqual([]);
+  await page.locator("#tts-lang").selectOption("zh");
+  await page.locator("#tts-voice").selectOption("zm_011");
+  await make(page, "你好。");
+  await ready(page, "new male voice selected (test tone worker)");
+  expect(await page.evaluate(() => window.ttsVoices)).toEqual(["zm_011"]);
+  await page.reload();
+  await page.locator("#entry-text").click();
+  await expect(page.locator("#tts-voice")).toHaveValue("zm_011");
 });
 
 test("an attempt the page did not finish is pointed out next time", async ({
