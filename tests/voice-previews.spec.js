@@ -32,6 +32,25 @@ test("every real voice MP3 plays with one tap, without TTS or changing the draft
       const clip = manifest.clips.find((c) => c.id === voice.id);
       const bytes = readFileSync("voice-previews/" + clip.file);
       expect(createHash("sha256").update(bytes).digest("hex")).toBe(clip.sha256);
+      // Decode the shipped MP3 itself: playback alone does not detect clipping or silence.
+      // This checks signal integrity, not perceived speech quality.
+      const signal = await page.evaluate(async (file) => {
+        const Audio = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+        const context = new Audio(1, 1, 24000);
+        const data = await (await fetch("./voice-previews/" + file)).arrayBuffer();
+        const buffer = await context.decodeAudioData(data);
+        let peak = 0;
+        let finite = true;
+        for (const sample of buffer.getChannelData(0)) {
+          finite &&= Number.isFinite(sample);
+          peak = Math.max(peak, Math.abs(sample));
+        }
+        return { peak, finite, seconds: buffer.duration };
+      }, clip.file);
+      expect(signal.finite).toBe(true);
+      expect(signal.peak).toBeGreaterThan(0.01);
+      expect(signal.peak).toBeLessThan(0.98);
+      expect(Math.abs(signal.seconds - clip.seconds)).toBeLessThan(0.15);
     }
   }
   expect(modelRequests).toEqual([]);

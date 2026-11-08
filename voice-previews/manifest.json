@@ -5,8 +5,8 @@
   "sources": {
     "en": [
       {
-        "url": "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.1/kokoro-v1.0.int8.onnx",
-        "sha256": "ae315a79b623f244700e4afb9246c46a26066782e049ba174bf3ba433970ee9c"
+        "url": "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.1/kokoro-v1.0.onnx",
+        "sha256": "beb0d1848dee9a49da392cc3df26958d46cfa35d321edf434f52949153f0df3a"
       },
       {
         "url": "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.1/voices-v1.0.bin",
@@ -34,7 +34,9 @@
       "seconds": 5.15,
       "file": "af_heart.mp3",
       "bytes": 83756,
-      "sha256": "07252369971803017adc2a0b3a676d63706871af425ba5ea142da6ef1927e86d"
+      "sha256": "494f1907fd9f5d21b156e49cfc595ecf0025205555cf509ffe37875ed22ada95",
+      "sourcePeak": 0.39665281772613525,
+      "encodedPeak": 0.37869614362716675
     },
     {
       "id": "af_bella",
@@ -42,10 +44,12 @@
       "name": "Bella（米国英語・女性）",
       "text": "Hello. Let's practice together, one sentence at a time, and enjoy learning.",
       "phonemes": "həlˈoʊ. lˈɛts pɹˈæktɪs təɡˈɛðɚ, wˈʌn sˈɛntəns æɾə tˈaɪm, ænd ɛndʒˈɔɪ lˈɜːnɪŋ.",
-      "seconds": 5.525,
+      "seconds": 5.55,
       "file": "af_bella.mp3",
-      "bytes": 89900,
-      "sha256": "d682f0ed00f8175f241ce104846573babea0ac73feb71824054a33b8c54c25c2"
+      "bytes": 90284,
+      "sha256": "b98c7409f5900bd9a98efd5acfb572fefa23cd348d3a386adfec7d98397ec50c",
+      "sourcePeak": 0.5624089241027832,
+      "encodedPeak": 0.5340721011161804
     },
     {
       "id": "am_michael",
@@ -53,10 +57,12 @@
       "name": "Michael（米国英語・男性）",
       "text": "Hello. Let's practice together, one sentence at a time, and enjoy learning.",
       "phonemes": "həlˈoʊ. lˈɛts pɹˈæktɪs təɡˈɛðɚ, wˈʌn sˈɛntəns æɾə tˈaɪm, ænd ɛndʒˈɔɪ lˈɜːnɪŋ.",
-      "seconds": 5.625,
+      "seconds": 5.575,
       "file": "am_michael.mp3",
-      "bytes": 91436,
-      "sha256": "6c58d20211b656b7a08e694a0b606af2087d51d19642e90c41ad0d0f3e5df63f"
+      "bytes": 90668,
+      "sha256": "f2655c2aad9a50adc5aaf59c612a4ce17dcc9f70e86438f51da9693b8f985af6",
+      "sourcePeak": 0.3386096954345703,
+      "encodedPeak": 0.3213304281234741
     },
     {
       "id": "bf_emma",
@@ -67,7 +73,9 @@
       "seconds": 5.075,
       "file": "bf_emma.mp3",
       "bytes": 82604,
-      "sha256": "7ff003f6d8a8eddbdea79a598bf20d14ba96aa517806fd558e62aa64f0389e6a"
+      "sha256": "2b6a80d0379035c0dd771a5471c08ab99d4c8d8a6cd0c8077e44482d8b105a05",
+      "sourcePeak": 0.4982277452945709,
+      "encodedPeak": 0.4744914174079895
     },
     {
       "id": "bf_isabella",
@@ -75,10 +83,12 @@
       "name": "Isabella（英国英語・女性）",
       "text": "Hello. Let's practice together, one sentence at a time, and enjoy learning.",
       "phonemes": "həlˈəʊ. lˈɛts pɹˈaktɪs təɡˈɛðə, wˈɒn sˈɛntəns atə tˈaɪm, and ɛndʒˈɔɪ lˈɜːnɪŋ.",
-      "seconds": 5.125,
+      "seconds": 5.175,
       "file": "bf_isabella.mp3",
-      "bytes": 83372,
-      "sha256": "e899484419a30769fa32932e35bc8f685698f8fc5c67d0e79798e2127ea45e31"
+      "bytes": 84140,
+      "sha256": "99f89c309357401e510de9551c102ec907946e477ffb6c902af749a3069719d6",
+      "sourcePeak": 0.5588109493255615,
+      "encodedPeak": 0.5292578339576721
     },
     {
       "id": "bm_george",
@@ -86,10 +96,12 @@
       "name": "George（英国英語・男性）",
       "text": "Hello. Let's practice together, one sentence at a time, and enjoy learning.",
       "phonemes": "həlˈəʊ. lˈɛts pɹˈaktɪs təɡˈɛðə, wˈɒn sˈɛntəns atə tˈaɪm, and ɛndʒˈɔɪ lˈɜːnɪŋ.",
-      "seconds": 5.625,
+      "seconds": 5.7,
       "file": "bm_george.mp3",
-      "bytes": 91436,
-      "sha256": "6f3a4bb1383a8bd3f755b478bc1f3c55f6435502c2a838df25b1f29743d7ecd0"
+      "bytes": 92588,
+      "sha256": "ea2a96687e344c392a0b952198e783aff5c36bfc0a52c560d40b29cad2da7b7a",
+      "sourcePeak": 0.36696505546569824,
+      "encodedPeak": 0.34823930263519287
     },
     {
       "id": "zf_001",
