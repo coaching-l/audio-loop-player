@@ -1089,6 +1089,17 @@ function stopCompare() {
   if (!voice.paused) voice.pause();
   if (recordingURL && !recorder.recording) recordStatus("録音あり");
 }
+window.addEventListener("voice-preview-start", (event) => {
+  if (recorder.recording) {
+    event.preventDefault();
+    return;
+  }
+  stopCompare();
+  if (engine) {
+    engine.pause();
+    persist();
+  }
+});
 if (!recordingSupported()) recordError("このブラウザでは録音できません。");
 $("record").addEventListener("click", async () => {
   recordError("");

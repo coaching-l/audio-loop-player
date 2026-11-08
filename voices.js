@@ -3,6 +3,10 @@
 // with each model pinned to a revision so a change upstream cannot silently replace it.
 
 export const SAMPLE_RATE = 24000;
+export const PREVIEW_TEXT = {
+  en: "Hello. Let's practice together, one sentence at a time, and enjoy learning.",
+  zh: "你好，让我们每天练习，一起进步，享受学习的乐趣。",
+};
 // Kokoro reads at most 512 tokens at a time; longer text is refused, never cut.
 export const MAX_TOKENS = 512;
 export const MAX_SENTENCE_CHARS = 400;

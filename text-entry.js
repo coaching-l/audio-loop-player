@@ -18,6 +18,7 @@ import {
 } from "./tts.js";
 import { openPractice } from "./practice.js";
 import { $, notice, offerUndo } from "./ui.js";
+import { initVoicePreviews } from "./voice-previews.js";
 
 const draftKey = "kotonoha.textdraft.v1";
 const MAX_TEXT = 50000;
@@ -236,6 +237,7 @@ export function initTextEntry({ saveMaterial }) {
   const lang = voiceInfo(voice).lang;
   $("tts-lang").value = lang;
   fillVoices(lang, voice);
+  initVoicePreviews();
   if (typeof draft.text === "string") $("tts-text").value = draft.text;
   showClear();
   // Text in one language is not read in the other: switching starts with an empty box.

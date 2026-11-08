@@ -1,0 +1,145 @@
+{
+  "sampleRate": 24000,
+  "speed": 1,
+  "kbps": 128,
+  "sources": {
+    "en": [
+      {
+        "url": "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.1/kokoro-v1.0.int8.onnx",
+        "sha256": "ae315a79b623f244700e4afb9246c46a26066782e049ba174bf3ba433970ee9c"
+      },
+      {
+        "url": "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.1/voices-v1.0.bin",
+        "sha256": "bca610b8308e8d99f32e6fe4197e7ec01679264efed0cac9140fe9c29f1fbf7d"
+      }
+    ],
+    "zh": [
+      {
+        "url": "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.1/kokoro-v1.1-zh.onnx",
+        "sha256": "859f9ded9f53be16c24857cdab3254a45da53c3afd5ba6ef134c7de3f822e326"
+      },
+      {
+        "url": "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.1/voices-v1.1-zh.bin",
+        "sha256": "14cb6186c99e4f6016871405f62046c5df863ae27465cbdc4ee08be7dd703acd"
+      }
+    ]
+  },
+  "clips": [
+    {
+      "id": "af_heart",
+      "lang": "en",
+      "name": "Heart（米国英語・女性）",
+      "text": "Hello. Let's practice together, one sentence at a time, and enjoy learning.",
+      "phonemes": "həlˈoʊ. lˈɛts pɹˈæktɪs təɡˈɛðɚ, wˈʌn sˈɛntəns æɾə tˈaɪm, ænd ɛndʒˈɔɪ lˈɜːnɪŋ.",
+      "seconds": 5.15,
+      "file": "af_heart.mp3",
+      "bytes": 83756,
+      "sha256": "07252369971803017adc2a0b3a676d63706871af425ba5ea142da6ef1927e86d"
+    },
+    {
+      "id": "af_bella",
+      "lang": "en",
+      "name": "Bella（米国英語・女性）",
+      "text": "Hello. Let's practice together, one sentence at a time, and enjoy learning.",
+      "phonemes": "həlˈoʊ. lˈɛts pɹˈæktɪs təɡˈɛðɚ, wˈʌn sˈɛntəns æɾə tˈaɪm, ænd ɛndʒˈɔɪ lˈɜːnɪŋ.",
+      "seconds": 5.525,
+      "file": "af_bella.mp3",
+      "bytes": 89900,
+      "sha256": "d682f0ed00f8175f241ce104846573babea0ac73feb71824054a33b8c54c25c2"
+    },
+    {
+      "id": "am_michael",
+      "lang": "en",
+      "name": "Michael（米国英語・男性）",
+      "text": "Hello. Let's practice together, one sentence at a time, and enjoy learning.",
+      "phonemes": "həlˈoʊ. lˈɛts pɹˈæktɪs təɡˈɛðɚ, wˈʌn sˈɛntəns æɾə tˈaɪm, ænd ɛndʒˈɔɪ lˈɜːnɪŋ.",
+      "seconds": 5.625,
+      "file": "am_michael.mp3",
+      "bytes": 91436,
+      "sha256": "6c58d20211b656b7a08e694a0b606af2087d51d19642e90c41ad0d0f3e5df63f"
+    },
+    {
+      "id": "bf_emma",
+      "lang": "en",
+      "name": "Emma（英国英語・女性）",
+      "text": "Hello. Let's practice together, one sentence at a time, and enjoy learning.",
+      "phonemes": "həlˈəʊ. lˈɛts pɹˈaktɪs təɡˈɛðə, wˈɒn sˈɛntəns atə tˈaɪm, and ɛndʒˈɔɪ lˈɜːnɪŋ.",
+      "seconds": 5.075,
+      "file": "bf_emma.mp3",
+      "bytes": 82604,
+      "sha256": "7ff003f6d8a8eddbdea79a598bf20d14ba96aa517806fd558e62aa64f0389e6a"
+    },
+    {
+      "id": "bf_isabella",
+      "lang": "en",
+      "name": "Isabella（英国英語・女性）",
+      "text": "Hello. Let's practice together, one sentence at a time, and enjoy learning.",
+      "phonemes": "həlˈəʊ. lˈɛts pɹˈaktɪs təɡˈɛðə, wˈɒn sˈɛntəns atə tˈaɪm, and ɛndʒˈɔɪ lˈɜːnɪŋ.",
+      "seconds": 5.125,
+      "file": "bf_isabella.mp3",
+      "bytes": 83372,
+      "sha256": "e899484419a30769fa32932e35bc8f685698f8fc5c67d0e79798e2127ea45e31"
+    },
+    {
+      "id": "bm_george",
+      "lang": "en",
+      "name": "George（英国英語・男性）",
+      "text": "Hello. Let's practice together, one sentence at a time, and enjoy learning.",
+      "phonemes": "həlˈəʊ. lˈɛts pɹˈaktɪs təɡˈɛðə, wˈɒn sˈɛntəns atə tˈaɪm, and ɛndʒˈɔɪ lˈɜːnɪŋ.",
+      "seconds": 5.625,
+      "file": "bm_george.mp3",
+      "bytes": 91436,
+      "sha256": "6f3a4bb1383a8bd3f755b478bc1f3c55f6435502c2a838df25b1f29743d7ecd0"
+    },
+    {
+      "id": "zf_001",
+      "lang": "zh",
+      "name": "普通話 001（女性）",
+      "text": "你好，让我们每天练习，一起进步，享受学习的乐趣。",
+      "phonemes": "ㄋㄧ2ㄏㄠ3,ㄖㄤ4/我3ㄇㄣ5/ㄇㄟ3ㄊ言1/ㄌ言4ㄒㄧ2,ㄧ4ㄑㄧ3/ㄐ阴4ㄅㄨ4,ㄒ阳3ㄕㄡ4/ㄒ月2ㄒㄧ2/ㄉㄜ5/ㄌㄜ4ㄑㄩ4.",
+      "seconds": 5.225,
+      "file": "zf_001.mp3",
+      "bytes": 84908,
+      "sha256": "ef06ccb97bdfa9319e0efac1cf6942955d6251b8610dd9ab02f8093608f77bfc"
+    },
+    {
+      "id": "zf_002",
+      "lang": "zh",
+      "name": "普通話 002（女性）",
+      "text": "你好，让我们每天练习，一起进步，享受学习的乐趣。",
+      "phonemes": "ㄋㄧ2ㄏㄠ3,ㄖㄤ4/我3ㄇㄣ5/ㄇㄟ3ㄊ言1/ㄌ言4ㄒㄧ2,ㄧ4ㄑㄧ3/ㄐ阴4ㄅㄨ4,ㄒ阳3ㄕㄡ4/ㄒ月2ㄒㄧ2/ㄉㄜ5/ㄌㄜ4ㄑㄩ4.",
+      "seconds": 5.75,
+      "file": "zf_002.mp3",
+      "bytes": 93356,
+      "sha256": "c922d02ee93b761ebbf6f757e9241b8e5eaa108cd23f4d966813a420d32cbcc4"
+    },
+    {
+      "id": "zm_010",
+      "lang": "zh",
+      "name": "普通話 010（男性）",
+      "text": "你好，让我们每天练习，一起进步，享受学习的乐趣。",
+      "phonemes": "ㄋㄧ2ㄏㄠ3,ㄖㄤ4/我3ㄇㄣ5/ㄇㄟ3ㄊ言1/ㄌ言4ㄒㄧ2,ㄧ4ㄑㄧ3/ㄐ阴4ㄅㄨ4,ㄒ阳3ㄕㄡ4/ㄒ月2ㄒㄧ2/ㄉㄜ5/ㄌㄜ4ㄑㄩ4.",
+      "seconds": 5.2,
+      "file": "zm_010.mp3",
+      "bytes": 84524,
+      "sha256": "8bd93aa5e6008d72ea2ac8e5c888eb0ef03a4918aca2f5c4d0bba6f527b2cde9"
+    },
+    {
+      "id": "zm_011",
+      "lang": "zh",
+      "name": "普通話 011（男性）",
+      "text": "你好，让我们每天练习，一起进步，享受学习的乐趣。",
+      "phonemes": "ㄋㄧ2ㄏㄠ3,ㄖㄤ4/我3ㄇㄣ5/ㄇㄟ3ㄊ言1/ㄌ言4ㄒㄧ2,ㄧ4ㄑㄧ3/ㄐ阴4ㄅㄨ4,ㄒ阳3ㄕㄡ4/ㄒ月2ㄒㄧ2/ㄉㄜ5/ㄌㄜ4ㄑㄩ4.",
+      "seconds": 5.3,
+      "file": "zm_011.mp3",
+      "bytes": 86060,
+      "sha256": "1c8dfafc6aca42de427e624daf9d99a093917594b62eac90275851f8d2d285ef"
+    }
+  ],
+  "frontendHashes": {
+    "english.js": "2027a53ed957276ff1e3fb4b3146b8220615ad4022230cd93988729b3051a6ee",
+    "mandarin.js": "71e05080e5ea87df11efdc4f74b836e2bcc25936de9d0b23f07b91c31dda961a",
+    "mandarin-lexicon.js": "5d4058c87bcac70cd8604d9b7dcb535f43341a20f2a6e1b98d9957a9e1b67a92",
+    "voices.js": "2077272b7d57613d75888756465dbacfea5b6c2053e47efc5f19e2f23412f1fb"
+  }
+}

@@ -44,6 +44,8 @@ async function server() {
         );
       const type = file.endsWith(".js")
         ? "text/javascript"
+        : file.endsWith(".mp3")
+          ? "audio/mpeg"
         : file.endsWith(".css")
           ? "text/css"
           : file.endsWith(".png")
@@ -116,6 +118,25 @@ for (const prefix of ["/", "/audio-loop-player/"])
       await expect(offline.locator("#repeat-progress")).toHaveText(
         "完了 2 / 2 回",
       );
+      // Samples never played online are still immediately available in the app shell.
+      await offline.locator("#entry-text").click();
+      await offline.locator("#voice-previews summary").click();
+      await offline.locator('[data-voice="af_heart"]').click();
+      await expect.poll(() => offline.locator("#voice-preview-audio").evaluate((a) => a.currentTime)).toBeGreaterThan(0);
+      await offline.locator("#tts-lang").selectOption("zh");
+      await offline.locator('[data-voice="zm_011"]').click();
+      await expect.poll(() => offline.locator("#voice-preview-audio").evaluate((a) => a.currentTime)).toBeGreaterThan(0);
+      const range = await offline.evaluate(async () => {
+        const url = "./voice-previews/zm_011.mp3";
+        const full = new Uint8Array(await (await fetch(url)).arrayBuffer());
+        const part = await fetch(url, { headers: { Range: "bytes=0-1" } });
+        const invalid = await fetch(url, { headers: { Range: "bytes=99999999-" } });
+        return { status: part.status, bytes: [...new Uint8Array(await part.arrayBuffer())],
+          first: [...full.slice(0, 2)], invalid: invalid.status };
+      });
+      expect(range.status).toBe(206);
+      expect(range.bytes).toEqual(range.first);
+      expect(range.invalid).toBe(416);
       await offline.reload();
       await offline
         .getByRole("button", { name: "tone.wavを開く", exact: true })
