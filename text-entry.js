@@ -3,7 +3,7 @@
 // time, go to the shared practice screen as they are.
 import { splitSentences, joinWrappedEnglishLines } from "./transcript.js";
 import { joinClips, wavBlob } from "./audio-tools.js";
-import { encodeMp3, MP3_DELAY_SAMPLES } from "./export.js";
+import { Mp3StreamEncoder, MP3_DELAY_SAMPLES } from "./export.js";
 import { VOICES, voiceInfo } from "./voices.js";
 import {
   SpeechEngine,
@@ -25,6 +25,45 @@ const MAX_TEXT = 50000;
 const engine = new SpeechEngine();
 let running = null; // AbortController of the audio being made
 let save = async () => null;
+let previewURL = null;
+let previewGeneration = 0;
+
+function stopPreview(clear = false) {
+  previewGeneration++;
+  const audio = $("tts-preview-audio");
+  audio.pause();
+  audio.currentTime = 0;
+  $("tts-preview").textContent = "▶ 冒頭を先に聴く";
+  $("tts-preview").setAttribute("aria-pressed", "false");
+  if (clear) {
+    audio.removeAttribute("src");
+    audio.load();
+    if (previewURL) URL.revokeObjectURL(previewURL);
+    previewURL = null;
+    $("tts-preview").hidden = true;
+    $("tts-preview-status").textContent = "";
+  }
+}
+
+async function playPreview() {
+  const audio = $("tts-preview-audio");
+  if (!audio.paused) { stopPreview(); return; }
+  if (!previewURL) return;
+  if (!window.dispatchEvent(new Event("voice-preview-start", { cancelable: true }))) {
+    $("tts-preview-status").textContent = "録音を止めてから聴いてください。";
+    return;
+  }
+  const current = ++previewGeneration;
+  $("tts-preview-status").textContent = "";
+  $("tts-preview").textContent = "■ 試聴を停止";
+  $("tts-preview").setAttribute("aria-pressed", "true");
+  try { await audio.play(); }
+  catch {
+    if (current !== previewGeneration) return;
+    stopPreview();
+    $("tts-preview-status").textContent = "もう一度タップしてお試しください。";
+  }
+}
 
 function readDraft() {
   try {
@@ -86,17 +125,18 @@ const LINE_PAUSE = 0.6;
 const KBPS = 128;
 // The audio to keep: MP3, with each sentence's time moved by the MP3's delay. Should the
 // encoder fail, the same audio as WAV, so what was made is not lost.
-async function audioFile(joined, name) {
+async function audioFile(joined, name, encoder) {
   const { samples, rate, spans } = joined;
   const lastModified = Date.now();
   try {
-    const blob = await encodeMp3(samples, rate, KBPS);
+    const blob = await encoder.finish();
     const shift = MP3_DELAY_SAMPLES / rate;
     return {
       file: new File([blob], name, { type: "audio/mpeg", lastModified }),
       spans: spans.map((s) => ({ start: s.start + shift, end: s.end + shift })),
     };
-  } catch {
+  } catch (error) {
+    if (error.name === "AbortError") throw error;
     const wav = name.replace(/\.mp3$/, ".wav");
     return {
       file: new File([wavBlob(samples, rate)], wav, {
@@ -125,7 +165,10 @@ async function make() {
     return;
   }
   const controller = new AbortController();
+  let encoder;
+  controller.signal.addEventListener("abort", () => encoder?.cancel(), { once: true });
   running = controller;
+  stopPreview(true);
   busy(true);
   try {
     progress(`音声づくりの準備をしています…`, null);
@@ -141,6 +184,21 @@ async function make() {
     const result = await synthesize(texts, voice, {
       engine,
       signal: controller.signal,
+      onClip: async (clip, index) => {
+        encoder ??= new Mp3StreamEncoder(clip.rate, KBPS);
+        await encoder.drain();
+        if (controller.signal.aborted) throw new DOMException("中止しました。", "AbortError");
+        if (index > 0) {
+          const pause = sentences[index - 1].lineEnd ? LINE_PAUSE : SENTENCE_PAUSE;
+          encoder.append(new Float32Array(Math.round(pause * clip.rate)));
+        }
+        encoder.append(clip.samples);
+        if (index === 0) {
+          previewURL = URL.createObjectURL(wavBlob(clip.samples, clip.rate));
+          $("tts-preview-audio").src = previewURL;
+          $("tts-preview").hidden = false;
+        }
+      },
       onProgress: ({ index, total, download }) =>
         download
           ? progress(
@@ -164,7 +222,7 @@ async function make() {
       sentences.map((s) => (s.lineEnd ? LINE_PAUSE : SENTENCE_PAUSE)),
     );
     progress("MP3にしています…", null);
-    const { file, spans } = await audioFile(joined, title(texts));
+    const { file, spans } = await audioFile(joined, title(texts), encoder);
     if (controller.signal.aborted)
       throw new DOMException("中止しました。", "AbortError");
     const name = file.name;
@@ -188,6 +246,8 @@ async function make() {
     if (error.name !== "AbortError") failed(error.message);
     else notice("音声づくりを中止しました。できた文は、次に作るときに使います。");
   } finally {
+    encoder?.cancel();
+    stopPreview(true);
     running = null;
     busy(false);
     void showData();
@@ -272,12 +332,28 @@ export function initTextEntry({ saveMaterial }) {
     showClear();
   });
   $("tts-make").addEventListener("click", () => void make());
+  $("tts-preview").addEventListener("click", () => void playPreview());
+  $("tts-preview-audio").addEventListener("ended", () => stopPreview());
+  $("tts-preview-audio").addEventListener("error", () => {
+    if (!previewURL) return;
+    stopPreview();
+    $("tts-preview-status").textContent = "冒頭を再生できませんでした。音声づくりは続いています。";
+  });
+  document.addEventListener("play", (event) => {
+    if (event.target !== $("tts-preview-audio")) stopPreview();
+  }, true);
+  for (const id of ["record", "compare", "entry-audio"])
+    $(id).addEventListener("click", () => stopPreview(), true);
+  document.addEventListener("visibilitychange", () => { if (document.hidden) stopPreview(); });
+  window.addEventListener("pagehide", () => stopPreview());
+  window.addEventListener("offline-update", () => stopPreview());
   $("tts-cancel").addEventListener("click", () => {
     running?.abort();
     engine.cancel();
   });
   $("tts-data-delete").addEventListener("click", async () => {
     if (running) return;
+    engine.cancel();
     await deleteTtsData();
     await showData();
     notice(

@@ -20,7 +20,7 @@ JavaScriptモジュールとService Workerを使うため、HTMLをダブルク�
 | `index.html` / `style.css` | 画面と見た目。CSPは `index.html` の `<meta>` にあります                                                 |
 | `app.js`                   | 最初の画面：2つの入口の切り替え、「音源から始める」（追加・ドラッグ＆ドロップ）、「保存した教材」の一覧（空のうちは隠す）・削除と取り消し、保存容量が残り少ないときの知らせ |
 | `text-entry.js`            | 入口「テキストから始める」：言語・声・テキスト、音声づくりの進み具合と中止、止まった文の表示、作った音声とスクリプトを練習画面へ |
-| `tts.js`                   | 音声づくり：Workerの管理（3分進まなければ中止）、出力の確認、文ごとの音声の保存（IndexedDB、今のテキストの分だけ）、20分の確認、途中で止まったことの記録 |
+| `tts.js`                   | 音声づくり：Workerの管理（3分進まなければ中止）、出力の確認、文ごとの音声の保存（IndexedDB、最近使った最大48MiB・256文）、20分の確認、途中で止まったことの記録 |
 | `tts-worker.js`            | Workerの中でKokoroを動かし、1文を24kHzの音声にする                                                      |
 | `voices.js`                | 声とモデルの一覧（版を固定）                                                                            |
 | `english.js` / `mandarin.js` | 英語（kokoro-jsの正規化＋eSpeak NG）と中国語（pinyin-pro＋Kokoro v1.1の記号）の読み                   |
@@ -42,7 +42,7 @@ JavaScriptモジュールとService Workerを使うため、HTMLをダブルク�
 | `scripts/serve.mjs`        | 開発用の静的サーバー                                                                                    |
 | `scripts/bump-shell.mjs`   | キャッシュの版を上げるリリース用スクリプト                                                              |
 
-保存先：音声はIndexedDB（`coaching-l-audio-library`）、設定と再生位置はlocalStorage（`kotonoha.audio.v1`、以前の版との互換のため名前はそのまま）。スクリプトは素材ごとに `kotonoha.transcript.v1:<素材のキー>`、文字起こしの言語は `kotonoha.prefs.v1`、選んだ入口は `kotonoha.entry.v1`、「テキストから始める」の入力中のテキスト・声・前回作った音声のキーは `kotonoha.textdraft.v1` です。テキストから作った音声も、音源と同じIndexedDBに保存します。文ごとの音声は `coaching-l-tts-clips`（IndexedDB）に、今のテキストの分だけ16ビットで置きます。以前の版が保存した練習区間（`segments`）は、画面では使いませんが、保存したまま残します。練習のしかたは設定の `practice`（`shadowing` か `repeating`）で、無音の長さ（`gap`・`gapRatio`）はシャドーイングの間も選んだまま保存し、プレーヤーにはリピーティングのときだけ渡します。`practice` のない以前の設定は、無音があるか「文ごとに止める」（`sentencePause`）がONなら `repeating` として開きます。無音を選んでいない設定は、リピーティングにすると文（区間）の1.5倍になります。旧版の「音声全体」（mode: all）のくり返しと速度の段階アップの設定は、区間リピートOFF・元の速度として開きます。新しい全文リピート（mode: whole）はシャドーイング時だけ復元します。
+保存先：音声はIndexedDB（`coaching-l-audio-library`）、設定と再生位置はlocalStorage（`kotonoha.audio.v1`、以前の版との互換のため名前はそのまま）。スクリプトは素材ごとに `kotonoha.transcript.v1:<素材のキー>`、文字起こしの言語は `kotonoha.prefs.v1`、選んだ入口は `kotonoha.entry.v1`、「テキストから始める」の入力中のテキスト・声・前回作った音声のキーは `kotonoha.textdraft.v1` です。テキストから作った音声も、音源と同じIndexedDBに保存します。文ごとの音声は `coaching-l-tts-clips`（IndexedDB）に、最近使った文を16ビットで置きます（最大48MiB・256文、最終使用時刻順に削除）。以前の版が保存した練習区間（`segments`）は、画面では使いませんが、保存したまま残します。練習のしかたは設定の `practice`（`shadowing` か `repeating`）で、無音の長さ（`gap`・`gapRatio`）はシャドーイングの間も選んだまま保存し、プレーヤーにはリピーティングのときだけ渡します。`practice` のない以前の設定は、無音があるか「文ごとに止める」（`sentencePause`）がONなら `repeating` として開きます。無音を選んでいない設定は、リピーティングにすると文（区間）の1.5倍になります。旧版の「音声全体」（mode: all）のくり返しと速度の段階アップの設定は、区間リピートOFF・元の速度として開きます。新しい全文リピート（mode: whole）はシャドーイング時だけ復元します。
 
 ## テキストからの音声づくり
 
@@ -51,7 +51,7 @@ COACHING-L シャドーイング（`coaching-l/shadowing`）の音声化機能�
 - 実行は `tts-worker.js`。Transformers.js と ONNX Runtime（WASM・1スレッド）は文字起こしと同じ `vendor/` のものです。kokoro-js は使わず、英語の読み（正規化と eSpeak NG）を `english.js` に移しました（移植後に下記の英語の読み補正を追加）。512トークンの上限は、kokoro-js の内部に頼らず自分で数えます。phonemizer はデータを `for await` で `ReadableStream` から取り出しますが、古いSafari（CIのWebKitを含む）はこれに対応しておらず、エラーも出さずに止まり続けていました。`stream-iterator.js` がその機能を補います（phonemizer より先に読み込む）。
 - モデルと声のデータだけは Hugging Face から受け取ります（中国語のモデルは339MBで、GitHubに置ける1ファイル100MBを超えるため）。`voices.js` で版（コミット）を固定し、文ごとの音声のキーにも版を入れています。Transformers.js が Cache Storage（`transformers-cache`）に、声は `coaching-l-tts-voices` に保存するので、2回目からは通信なしで作れます。テキストは送りません。Workerにはページの CSP がかからないため、CSP は変えていません。
 - Workerが使うこのサイトのファイル（Transformers.js・ONNX Runtime・phonemizer・pinyin-pro）は、`tts.js` の `RUNTIME_FILES` にサイズとSHA-256があり、初めて作るときに `model-files.js` が確かめて保存します。文字起こしで保存済みのファイルは写して使います。
-- 移植元の確認で挙がった点への対応：3分の制限はモデルの受け取りが進むたびに数え直す。古い版の文の音声は残さない（今のテキストの文だけ残す）。20分の確認は1か所（`audio-tools.js`）で、作った音声・書き出す音声の実際の長さで行う。第三声は pinyin-pro 側では変えず、読みの修正後に `mandarin.js` が語のまとまりに沿って一度だけ変えます（`tests/mandarin.spec.js`）。
+- 移植元の確認で挙がった点への対応：3分の制限はモデルの受け取りが進むたびに数え直す。文のキャッシュはモデル・読み規則の版をキーに含め、最近使った最大48MiB・256文に制限する。20分の確認は1か所（`audio-tools.js`）で、作った音声・書き出す音声の実際の長さで行う。第三声は pinyin-pro 側では変えず、読みの修正後に `mandarin.js` が語のまとまりに沿って一度だけ変えます（`tests/mandarin.spec.js`）。
 - 文の区切りはスクリプトと同じ `transcript.js` の `splitSentences` なので、練習画面でスクリプトを直しても、直していない文の時刻は残ります。
 - 作った音声は、MP3（モノラル・24kHz・128kbps、1分で約1MB）にして保存します（WAVでは1分で約2.9MB）。MP3は書き出しと同じ `mp3-worker.js`（lamejs）で作ります。MP3の再生は、元の音より1,105サンプル（エンコーダー576＋デコーダー529、24kHzで約46ミリ秒）遅れて始まります。lamejsはこれを飛ばすための情報を書かないため、文の時刻をその分うしろへずらします（`export.js` の `MP3_DELAY_SAMPLES`）。MP3にできなかったときは、同じ音声をWAVで保存します。`mp3-worker.js` は読み込めたら最初に知らせ、10秒たっても知らせがないとき（モジュールのWorkerは、読み込めなくてもエラーにならないことがある）は、MP3にできなかったとみなします。
 - 文の音声は、間を空けてつなぎます（文と文の間0.3秒、改行のところ0.6秒。`text-entry.js`）。スクリプトの文の時刻には、この間を含めません。
@@ -190,3 +190,14 @@ WebKitのジョブは失敗してもPRを止めない設定です。Linux版WebK
 `LoopPlayer` の `whole` は、A・Bを変更せず0〜durationを繰り返します。区間の終端をポーリングする `ab` と異なり、音声の `ended` イベントから既存の回数・再開処理へ進みます。`practice.js` の `playerSettings` がリピーティングへの変更（無音設定の変更も含む）時に `whole` を `off` に戻し、シャドーイング中は無音を0にします。
 
 全文と区間のリピートは排他です。再生完了後の全文ONは直接のクリック操作内で先頭から再生します。終了時には既存の再生処理につながる「全文をもう一度」も表示します。途中でONにした場合は現在位置から続け、OFFは現在の再生を続けて最後で止まります。初回を含む回数設定は区間リピートと共通です。教材ごとに設定を保存しますが、教材を開いた直後に自動再生はしません。タイマーの破棄・古い教材のdispose・バックグラウンド制限は従来どおりです。
+
+
+## 音声づくりの待ち時間の短縮
+
+- `synthesize` は新規生成・キャッシュ復元のどちらでも、長さを検証した文を `onClip(clip, index)` に渡す。`text-entry.js` は最初の文をWAVで試聴可能にし、全文の保存・練習画面は完成後に従来どおり開く。自動再生はせず、クリック内で再生する。中止・完了時はURLを解放し、録音・ほかの再生・入口切り替え・非表示で試聴を止める。
+- `Mp3StreamEncoder` は1つのlamejsエンコーダーへ文と文間の無音を順に渡す。Workerは1152サンプル未満の端数を次の文へ持ち越し、最後に一度だけflushする。同じPCMなら従来の一括変換とバイト単位で一致する。文ごとのMP3を連結する方式ではない。MP3の遅延補正・128kbps・読み規則・モデルは変更しない。
+- 次の文を生成する間にMP3を変換し、次の文ができた時点で前の変換完了を待つ。キャッシュを高速に読める場合も長文全体のPCMをWorkerの待ち行列に積まない。中止でWorkerを破棄し、変換失敗・開始10秒／処理停止3分のタイムアウトはWAVに戻す。
+- 文のキャッシュは `coaching-l-tts-clips` v2。`clips` のPCMと別の `usage` ストアにサイズ・最終使用時刻を置き、音声全体を読み出さずに削除対象を決める。旧v1の生成済み文は移行する。他タブで旧DBが開かれている場合はキャッシュなしで生成を続ける。設定のデータ削除は両ストアと生成Workerを解放する。容量上限はPCM部分で、キー・管理情報の分は別途使用する。
+- この改善は、MP3変換を最後にまとめて待つ時間と、同じ文の再計算を減らす。未生成の文に対するKokoroの推論時間自体を短縮したものではない。WASMは引き続き1スレッド。端末実機での処理速度は別途確認する。
+
+MP3処理だけを測る再現用スクリプトは、`npm start` の後に `node scripts/benchmark-tts-encoding.mjs` で実行します。既存の英語・中国語の実音声を各20回使い、一括変換時間と、一定間隔で文の音声を渡した場合の最終変換待ち時間を記録します。結果は `test-results/tts-encoding-benchmark.json`。TTSモデルの推論時間や実機での総所要時間を測るスクリプトではありません。

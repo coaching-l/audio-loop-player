@@ -5,8 +5,8 @@
 //   so a slow first download does not fail (it is a limit on silence, not on size);
 // - the models are pinned to a revision (voices.js), and the clip key names it;
 // - the 512-token limit is checked by the worker itself, not inside kokoro-js;
-// - the saved sentences are kept for the current text only, so remaking audio does
-//   not pile up old versions;
+// - a bounded recent-sentence cache avoids regenerating text after switching voices
+//   or materials; old entries are evicted automatically;
 // - the 20-minute limit is checked once, on all sentences (audio-tools.js).
 import { MODELS, MAX_SENTENCE_CHARS, SAMPLE_RATE, voiceInfo } from "./voices.js";
 import { MODEL_FILES } from "./transcriber.js";
@@ -266,76 +266,109 @@ export class SpeechEngine {
   }
 }
 
-// The sentences already made, so remaking audio after changing a few sentences only
-// makes those again. Kept as 16-bit samples for the current text only.
+// Keep recent sentences across texts and voices without unbounded storage growth.
+// Metadata lives separately so eviction never reads every stored audio buffer.
+export const CLIP_CACHE_BYTES = 48 * 1024 * 1024;
+export const CLIP_CACHE_COUNT = 256;
 let connection;
 function openClips() {
   connection ??= new Promise((resolve, reject) => {
-    const request = indexedDB.open("coaching-l-tts-clips", 1);
-    request.onupgradeneeded = () =>
-      request.result.createObjectStore("clips", { keyPath: "key" });
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => {
-      connection = null;
-      reject(request.error);
+    const request = indexedDB.open("coaching-l-tts-clips", 2);
+    let blocked = false;
+    request.onblocked = () => {
+      // An older tab may still hold version 1 open. Generation must keep working
+      // without the optional sentence cache until that tab is closed.
+      blocked = true;
+      reject(new Error("文の音声キャッシュは別のタブで使用中です。"));
     };
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      const clips = db.objectStoreNames.contains("clips")
+        ? request.transaction.objectStore("clips")
+        : db.createObjectStore("clips", { keyPath: "key" });
+      const usage = db.createObjectStore("usage", { keyPath: "key" });
+      const migrated = [];
+      let migratedBytes = 0;
+      // Preserve sentences made by the previous version, including interrupted work.
+      clips.openCursor().onsuccess = ({ target }) => {
+        const cursor = target.result;
+        if (!cursor) return;
+        const entry = { key: cursor.key, bytes: cursor.value.samples.byteLength, used: 0 };
+        usage.put(entry);
+        migrated.push(entry);
+        migratedBytes += entry.bytes;
+        while (migratedBytes > CLIP_CACHE_BYTES || migrated.length > CLIP_CACHE_COUNT) {
+          const oldest = migrated.shift();
+          clips.delete(oldest.key);
+          usage.delete(oldest.key);
+          migratedBytes -= oldest.bytes;
+        }
+        cursor.continue();
+      };
+    };
+    request.onsuccess = () => {
+      const db = request.result;
+      if (blocked) { db.close(); connection = null; return; }
+      db.onversionchange = () => { db.close(); connection = null; };
+      resolve(db);
+    };
+    request.onerror = () => { connection = null; reject(request.error); };
   });
   return connection;
 }
 function transaction(mode, work) {
-  return openClips().then(
-    (db) =>
-      new Promise((resolve, reject) => {
-        const tx = db.transaction("clips", mode);
-        const request = work(tx.objectStore("clips"));
-        tx.oncomplete = () =>
-          resolve(request instanceof IDBRequest ? request.result : undefined);
-        tx.onabort = () => reject(tx.error);
-        tx.onerror = () => {};
-      }),
-  );
+  return openClips().then((db) => new Promise((resolve, reject) => {
+    const tx = db.transaction(["clips", "usage"], mode);
+    const request = work(tx.objectStore("clips"), tx.objectStore("usage"));
+    tx.oncomplete = () => resolve(request instanceof IDBRequest ? request.result : undefined);
+    tx.onabort = () => reject(tx.error);
+    tx.onerror = () => {};
+  }));
 }
 async function getClip(key) {
   try {
-    const saved = await transaction("readonly", (store) => store.get(key));
+    const saved = await transaction("readwrite", (store, usage) => {
+      const request = store.get(key);
+      request.onsuccess = () => {
+        if (request.result) usage.put({ key, bytes: request.result.samples.byteLength, used: Date.now() });
+      };
+      return request;
+    });
     if (!saved) return null;
     const samples = new Float32Array(saved.samples.length);
-    for (let i = 0; i < samples.length; i++)
-      samples[i] = saved.samples[i] / 32767;
+    for (let i = 0; i < samples.length; i++) samples[i] = saved.samples[i] / 32767;
     return { samples, rate: saved.rate };
-  } catch {
-    return null;
-  }
+  } catch { return null; }
 }
 async function putClip(key, { samples, rate }) {
   const pcm = new Int16Array(samples.length);
   for (let i = 0; i < pcm.length; i++)
     pcm[i] = Math.round(Math.max(-1, Math.min(1, samples[i])) * 32767);
+  if (pcm.byteLength > CLIP_CACHE_BYTES) return;
   try {
-    await transaction("readwrite", (store) =>
-      store.put({ key, samples: pcm, rate }),
-    );
-  } catch {
-    /* Without storage, a remake makes every sentence again. */
-  }
-}
-async function keepClips(keys) {
-  try {
-    const keep = new Set(keys);
-    const all = await transaction("readonly", (store) => store.getAllKeys());
-    await transaction("readwrite", (store) => {
-      for (const key of all) if (!keep.has(key)) store.delete(key);
+    await transaction("readwrite", (store, usage) => {
+      const request = usage.getAll();
+      request.onsuccess = () => {
+        const entries = request.result.filter((e) => e.key !== key).sort((a, b) => a.used - b.used);
+        let bytes = entries.reduce((sum, e) => sum + e.bytes, pcm.byteLength);
+        let count = entries.length + 1;
+        for (const entry of entries) {
+          if (bytes <= CLIP_CACHE_BYTES && count <= CLIP_CACHE_COUNT) break;
+          store.delete(entry.key);
+          usage.delete(entry.key);
+          bytes -= entry.bytes;
+          count--;
+        }
+        store.put({ key, samples: pcm, rate });
+        usage.put({ key, bytes: pcm.byteLength, used: Date.now() });
+      };
     });
-  } catch {
-    /* Old sentences only take space. */
-  }
+  } catch { /* A full storage must not prevent speech generation. */ }
 }
 async function clearClips() {
   try {
-    await transaction("readwrite", (store) => store.clear());
-  } catch {
-    /* Nothing saved. */
-  }
+    await transaction("readwrite", (store, usage) => { store.clear(); usage.clear(); });
+  } catch { /* Nothing saved. */ }
 }
 
 /**
@@ -344,11 +377,10 @@ async function clearClips() {
  * can fix it and make the rest; the sentences before it stay saved.
  * Returns { clips } or { clips, failed: { index, message } }.
  */
-export async function synthesize(sentences, voiceId, { engine, onProgress, signal }) {
+export async function synthesize(sentences, voiceId, { engine, onProgress, onClip, signal }) {
   const clips = [];
   let seconds = 0;
   const keys = sentences.map((text) => clipKey(text, voiceId));
-  await keepClips(keys);
   for (let i = 0; i < sentences.length; i++) {
     if (signal?.aborted) throw new DOMException("中止しました。", "AbortError");
     onProgress?.({ index: i, total: sentences.length });
@@ -370,7 +402,9 @@ export async function synthesize(sentences, voiceId, { engine, onProgress, signa
     } catch (error) {
       return { clips, failed: { index: i, message: error.message } };
     }
+    if (signal?.aborted) throw new DOMException("中止しました。", "AbortError");
     clips.push({ text: sentences[i], ...clip });
+    await onClip?.(clip, i);
   }
   return { clips };
 }

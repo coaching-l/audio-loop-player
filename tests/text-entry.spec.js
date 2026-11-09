@@ -227,7 +227,9 @@ test("if the MP3 encoder never loads, the audio is kept as WAV instead of waitin
   await page.goto("/");
   await page.locator("#entry-text").click();
   await make(page, "First line. Second line.");
-  await expect(page.locator("#tts-status")).toHaveText("MP3にしています…");
+  // Streaming may discover the missing encoder during the second sentence, before
+  // the final MP3 stage. Allow its existing 10-second startup timeout to elapse.
+  await expect(page.locator("#tts-status")).toHaveText("MP3にしています…", { timeout: 15000 });
   await ready(page);
   await expect(page.locator("#file-name")).toHaveText("First line.wav");
   await expect(sentences(page)).toHaveCount(2);

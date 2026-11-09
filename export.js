@@ -72,6 +72,85 @@ export function renderPieces(samples, rate, pieces) {
 // A worker that has not said it loaded by then is taken as one that never will (a
 // browser can fail to load a module worker without an error event).
 const WORKER_START_MS = 10000;
+// Encode each completed sentence while Kokoro makes the next one. A single encoder
+// and a retained partial frame preserve the exact whole-file MP3 framing/delay.
+export class Mp3StreamEncoder {
+  constructor(rate, kbps = 128) {
+    this.closed = false;
+    this.appends = new Map();
+    this.nextId = 0;
+    this.result = new Promise((resolve, reject) => {
+      this.resolve = resolve;
+      this.reject = reject;
+    });
+    // Encoding can fail while synthesis continues; audioFile uses the WAV fallback.
+    this.result.catch(() => {});
+    try {
+      this.worker = new Worker(new URL("./mp3-worker.js", import.meta.url), { type: "module" });
+      this.timer = setTimeout(() => this.cancel(new Error("MP3変換の準備ができませんでした。")), WORKER_START_MS);
+      this.worker.onerror = () => this.cancel(new Error("MP3に変換できませんでした。"));
+      this.worker.onmessage = ({ data }) => {
+        if (data?.ready) { clearTimeout(this.timer); return; }
+        if (data?.appended !== undefined) {
+          this.appends.get(data.appended)?.resolve();
+          this.appends.delete(data.appended);
+          this.watch();
+          return;
+        }
+        if (data?.blob instanceof Blob) {
+          this.resolve(data.blob);
+          this.close();
+        } else this.cancel(new Error(data?.error || "MP3に変換できませんでした。"));
+      };
+      this.worker.postMessage({ type: "start", rate, kbps });
+    } catch (error) { this.cancel(error); }
+  }
+  append(samples) {
+    if (this.closed) return;
+    // The caller keeps its samples for retry/WAV fallback; only this copy is moved.
+    const copy = samples.slice();
+    const id = this.nextId++;
+    let resolve;
+    const promise = new Promise((done) => { resolve = done; });
+    this.appends.set(id, { promise, resolve });
+    this.watch();
+    try { this.worker.postMessage({ type: "append", id, samples: copy }, [copy.buffer]); }
+    catch (error) { this.cancel(error); }
+  }
+  // Called only after the next sentence has been synthesized: overlap the work,
+  // but never queue an entire long text's PCM when every sentence is cached.
+  drain() { return Promise.all([...this.appends.values()].map((entry) => entry.promise)); }
+  watch() {
+    clearTimeout(this.workTimer);
+    if (this.appends.size || this.finishing)
+      this.workTimer = setTimeout(() => this.cancel(new Error("MP3変換が3分以上進みませんでした。")), 180000);
+  }
+  finish() {
+    if (!this.closed && !this.finishing) {
+      this.finishing = true;
+      this.watch();
+      try { this.worker.postMessage({ type: "finish" }); }
+      catch (error) { this.cancel(error); }
+    }
+    return this.result;
+  }
+  close() {
+    this.closed = true;
+    for (const entry of this.appends.values()) entry.resolve();
+    this.appends.clear();
+    clearTimeout(this.timer);
+    clearTimeout(this.workTimer);
+    if (this.worker) {
+      this.worker.onmessage = this.worker.onerror = null;
+      this.worker.terminate();
+      this.worker = null;
+    }
+  }
+  cancel(error = new DOMException("中止しました。", "AbortError")) {
+    this.reject(error);
+    this.close();
+  }
+}
 export function encodeMp3(samples, rate, kbps = 128) {
   const worker = new Worker(new URL("./mp3-worker.js", import.meta.url), {
     type: "module",

@@ -42,8 +42,8 @@
       content="端末の音声で、繰り返し聴く・声に出す。アップロード不要の語学学習プレーヤー。"
     />
     <title>音声リピートプレーヤー | COACHING-L</title>
-    <link rel="stylesheet" href="./style.css?v=45" />
-    <script type="module" src="./app.js?v=45"></script>
+    <link rel="stylesheet" href="./style.css?v=48" />
+    <script type="module" src="./app.js?v=48"></script>
   </head>
   <body>
     <main>
@@ -152,10 +152,15 @@
             aria-labelledby="tts-status"
           ></progress>
           <div class="transcript-actions">
+            <button id="tts-preview" class="button secondary" type="button" aria-pressed="false" hidden>
+              ▶ 冒頭を先に聴く
+            </button>
             <button id="tts-cancel" class="button secondary" type="button">
               音声づくりを中止
             </button>
           </div>
+          <audio id="tts-preview-audio" preload="none" hidden></audio>
+          <p id="tts-preview-status" class="small" role="status"></p>
         </div>
         <p id="tts-failed" class="error" role="alert" hidden></p>
         <p id="tts-first-note" class="small tts-note">
