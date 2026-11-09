@@ -105,6 +105,7 @@ function playerSettings(changes = {}) {
     ...silence,
     ...changes,
   };
+  if (practiceMode === "repeating" && s.mode === "whole") s.mode = "off";
   return practiceMode === "repeating" ? s : { ...s, gap: 0, gapRatio: 0 };
 }
 function persist() {
@@ -123,12 +124,12 @@ function persist() {
     );
   }
 }
-// Settings saved by earlier versions may say "all" (whole audio) or carry a speed ramp;
-// neither exists any more, so they open with interval repeat off at the base speed.
+// Legacy "all" and speed ramps stay disabled. The new explicit "whole" setting is
+// restored only for shadowing, so old preferences do not unexpectedly start looping.
 function savedSettings(s, duration) {
   const valid =
     s &&
-    ["off", "ab", "all"].includes(s.mode) &&
+    ["off", "ab", "all", "whole"].includes(s.mode) &&
     Number.isFinite(s.a) &&
     Number.isFinite(s.b) &&
     s.a >= 0 &&
@@ -154,7 +155,7 @@ function savedSettings(s, duration) {
       ? "repeating"
       : "shadowing";
   return {
-    mode: s.mode === "ab" ? "ab" : "off",
+    mode: s.mode === "ab" ? "ab" : s.mode === "whole" && practice === "shadowing" ? "whole" : "off",
     a: s.a,
     b: s.b,
     limit: s.limit,
@@ -183,6 +184,14 @@ function syncFields() {
     practiceMode === "repeating"
       ? `文（区間）のあとに、${silenceText()}の無音が入ります。その間に声に出して言います。`
       : "音声のすぐあとを追いかけて、声に出して言います。";
+  $("whole-repeat-controls").hidden = practiceMode !== "shadowing";
+  $("toggle-whole").setAttribute("aria-pressed", String(engine.mode === "whole"));
+  $("toggle-whole").querySelector(".switch-state").textContent =
+    engine.mode === "whole" ? "ON" : "OFF";
+  $("whole-repeat-help").textContent = engine.mode === "whole" && engine.limit
+    ? `全文を${engine.limit}回再生します。回数は「詳しい設定」で変えられます。`
+    : "ONにすると、最後まで再生したあと先頭に戻ります。";
+  syncReplay();
   $("speed").value = String(engine.baseRate);
   $("speed-value").textContent = engine.baseRate.toFixed(2) + "×";
   for (const choice of document.querySelectorAll(".speed-choice"))
@@ -224,6 +233,7 @@ function drawPlayer(player) {
   }
   highlightSentence(player.audio.currentTime, player.active);
   const active = player.active;
+  syncReplay();
   $("play").dataset.state = active ? "playing" : "paused";
   $("play").setAttribute("aria-label", active ? "一時停止" : "再生");
   const statuses = {
@@ -252,6 +262,10 @@ function drawPlayer(player) {
       : `完了 ${player.completed} / ${player.limit || "∞"} 回`;
   if ($("repeat-progress").textContent !== progress)
     $("repeat-progress").textContent = progress;
+}
+function syncReplay() {
+  $("replay-whole").hidden = !ready || practiceMode !== "shadowing" ||
+    engine.mode === "ab" || engine.phase !== "done";
 }
 function enable(value) {
   for (const id of ["player-controls", "repeat-controls", "transcript-controls"])
@@ -518,6 +532,25 @@ function skip(seconds) {
 }
 $("play").addEventListener("click", togglePlay);
 $("mini-play").addEventListener("click", togglePlay);
+$("replay-whole").addEventListener("click", () => {
+  if (ready && engine.phase === "done" && engine.mode !== "ab") togglePlay();
+});
+$("toggle-whole").addEventListener("click", () => {
+  if (!ready || practiceMode !== "shadowing") return;
+  const on = engine.mode !== "whole";
+  const ended = engine.phase === "done" || engine.audio.ended;
+  // Use committed A–B values: enabling whole repeat must neither overwrite the
+  // learner's interval nor be blocked by an unfinished edit in detailed settings.
+  engine.configure(playerSettings({ mode: on ? "whole" : "off" }));
+  syncStops();
+  rangeError("");
+  syncFields();
+  persist();
+  if (on && ended) {
+    engine.seek(0);
+    togglePlay();
+  }
+});
 $("back").addEventListener("click", () => skip(-5));
 $("mini-back").addEventListener("click", () => skip(-5));
 $("forward").addEventListener("click", () => skip(5));

@@ -1,8 +1,8 @@
 // All repeat delays use wall-clock milliseconds, independently of playbackRate.
 // A relative gap (gapRatio) lasts as long as the interval took to play at the current speed.
 export const GAP_RATIOS = [0, 1, 1.5, 2];
-// "off" plays through once; "ab" repeats the interval from A to B.
-export const MODES = ["off", "ab"];
+// "off" plays through once; "ab" repeats A–B; "whole" repeats the whole audio.
+export const MODES = ["off", "ab", "whole"];
 // While playing through ("off"), the player can stop after each sentence for as long as
 // `pauseFor(seconds the sentence took)` says, then go on from where it stopped.
 export class LoopPlayer {
@@ -168,6 +168,8 @@ export class LoopPlayer {
       if (this.audio.currentTime >= this.end) this.boundary();
       return;
     }
+    // Whole-audio shadowing uses the native ended event, with no sentence pauses.
+    if (this.mode === "whole") return;
     const stop = this.stops[this.stopIndex];
     if (stop && this.audio.currentTime >= stop.end) this.sentenceEnd(stop);
   }

@@ -42,8 +42,8 @@
       content="端末の音声で、繰り返し聴く・声に出す。アップロード不要の語学学習プレーヤー。"
     />
     <title>音声リピートプレーヤー | COACHING-L</title>
-    <link rel="stylesheet" href="./style.css?v=44" />
-    <script type="module" src="./app.js?v=44"></script>
+    <link rel="stylesheet" href="./style.css?v=45" />
+    <script type="module" src="./app.js?v=45"></script>
   </head>
   <body>
     <main>
@@ -387,6 +387,19 @@
               <p id="practice-mode-help" class="small">
                 音声のすぐあとを追いかけて、声に出して言います。
               </p>
+              <div id="whole-repeat-controls" class="whole-repeat-controls">
+                <button id="toggle-whole" class="repeat-switch" type="button"
+                  aria-pressed="false" aria-describedby="whole-repeat-help">
+                  全文リピート<span class="switch-track" aria-hidden="true"
+                    ><span class="switch-state">OFF</span></span>
+                </button>
+                <p id="whole-repeat-help" class="small">
+                  ONにすると、最後まで再生したあと先頭に戻ります。
+                </p>
+                <button id="replay-whole" class="button secondary" type="button" hidden>
+                  ↻ 全文をもう一度
+                </button>
+              </div>
             </div>
             <div class="speed-section">
               <div class="label-row">
@@ -784,6 +797,9 @@
             </p>
             <p>
               「練習のしかた」で「リピーティング」を選ぶと、文のあとに無音が入り、その間に声に出して言えます。区間リピートがONなら区間のあとに、OFFなら1文ごとに入ります（スクリプトがないときは、波形の無音で区切ります）。無音の長さは、初めは文（区間）の1.5倍です。
+            </p>
+            <p>
+              シャドーイングでは「全文リピート」をONにすると、最後まで再生したあと先頭に戻ります。区間リピートとは切り替えて使います。再生完了後は「全文をもう一度」でも先頭から再生できます。回数は「詳しい設定」で選べます（初めは無制限）。
             </p>
             <p>
               くり返す回数とリピーティングの無音の長さ、ゲージの拡大、A・Bの時刻の入力、細かい速度、録音して聞き比べ、MP3の書き出しは「詳しい設定」にあります。区間・速度・再生位置は、音声ごとに自動で記録されます。

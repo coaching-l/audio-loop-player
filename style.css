@@ -1495,6 +1495,18 @@ label {
   background: var(--accent);
   color: var(--accent-contrast);
 }
+.whole-repeat-controls {
+  margin-top: 14px;
+}
+.whole-repeat-controls .repeat-switch {
+  min-height: 44px;
+}
+.whole-repeat-controls .small {
+  margin: 4px 0 10px;
+}
+#replay-whole {
+  width: 100%;
+}
 
 /* 再生速度：よく使う4つだけをボタンで（細かい速度は「詳しい設定」） */
 .speed-choices {

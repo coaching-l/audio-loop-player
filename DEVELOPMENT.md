@@ -42,7 +42,7 @@ JavaScriptモジュールとService Workerを使うため、HTMLをダブルク�
 | `scripts/serve.mjs`        | 開発用の静的サーバー                                                                                    |
 | `scripts/bump-shell.mjs`   | キャッシュの版を上げるリリース用スクリプト                                                              |
 
-保存先：音声はIndexedDB（`coaching-l-audio-library`）、設定と再生位置はlocalStorage（`kotonoha.audio.v1`、以前の版との互換のため名前はそのまま）。スクリプトは素材ごとに `kotonoha.transcript.v1:<素材のキー>`、文字起こしの言語は `kotonoha.prefs.v1`、選んだ入口は `kotonoha.entry.v1`、「テキストから始める」の入力中のテキスト・声・前回作った音声のキーは `kotonoha.textdraft.v1` です。テキストから作った音声も、音源と同じIndexedDBに保存します。文ごとの音声は `coaching-l-tts-clips`（IndexedDB）に、今のテキストの分だけ16ビットで置きます。以前の版が保存した練習区間（`segments`）は、画面では使いませんが、保存したまま残します。練習のしかたは設定の `practice`（`shadowing` か `repeating`）で、無音の長さ（`gap`・`gapRatio`）はシャドーイングの間も選んだまま保存し、プレーヤーにはリピーティングのときだけ渡します。`practice` のない以前の設定は、無音があるか「文ごとに止める」（`sentencePause`）がONなら `repeating` として開きます。無音を選んでいない設定は、リピーティングにすると文（区間）の1.5倍になります。「音声全体」のくり返しと速度の段階アップの設定は、区間リピートOFF・元の速度として開きます。
+保存先：音声はIndexedDB（`coaching-l-audio-library`）、設定と再生位置はlocalStorage（`kotonoha.audio.v1`、以前の版との互換のため名前はそのまま）。スクリプトは素材ごとに `kotonoha.transcript.v1:<素材のキー>`、文字起こしの言語は `kotonoha.prefs.v1`、選んだ入口は `kotonoha.entry.v1`、「テキストから始める」の入力中のテキスト・声・前回作った音声のキーは `kotonoha.textdraft.v1` です。テキストから作った音声も、音源と同じIndexedDBに保存します。文ごとの音声は `coaching-l-tts-clips`（IndexedDB）に、今のテキストの分だけ16ビットで置きます。以前の版が保存した練習区間（`segments`）は、画面では使いませんが、保存したまま残します。練習のしかたは設定の `practice`（`shadowing` か `repeating`）で、無音の長さ（`gap`・`gapRatio`）はシャドーイングの間も選んだまま保存し、プレーヤーにはリピーティングのときだけ渡します。`practice` のない以前の設定は、無音があるか「文ごとに止める」（`sentencePause`）がONなら `repeating` として開きます。無音を選んでいない設定は、リピーティングにすると文（区間）の1.5倍になります。旧版の「音声全体」（mode: all）のくり返しと速度の段階アップの設定は、区間リピートOFF・元の速度として開きます。新しい全文リピート（mode: whole）はシャドーイング時だけ復元します。
 
 ## テキストからの音声づくり
 
@@ -183,3 +183,10 @@ WebKitのジョブは失敗してもPRを止めない設定です。Linux版WebK
 サンプルはアプリ本体と一緒にキャッシュします。Service Workerは試聴MP3に限り単一のRange要求にも206で応答し、Safariなどが行う先頭バイトの確認をオフラインでも扱えます。モデルのキャッシュとは別なので、音声生成用データを削除しても試聴できます。
 
 サンプルの出所、生成条件、再作成方法は `voice-previews/README.md`、ハッシュは同ディレクトリの `manifest.json` に記録しています。今回はアプリと同世代・同話者の別ONNX配布版から生成しており、アプリのHugging Face固定版との波形の完全一致は確認していません。
+
+
+## シャドーイングの全文リピート
+
+`LoopPlayer` の `whole` は、A・Bを変更せず0〜durationを繰り返します。区間の終端をポーリングする `ab` と異なり、音声の `ended` イベントから既存の回数・再開処理へ進みます。`practice.js` の `playerSettings` がリピーティングへの変更（無音設定の変更も含む）時に `whole` を `off` に戻し、シャドーイング中は無音を0にします。
+
+全文と区間のリピートは排他です。再生完了後の全文ONは直接のクリック操作内で先頭から再生します。終了時には既存の再生処理につながる「全文をもう一度」も表示します。途中でONにした場合は現在位置から続け、OFFは現在の再生を続けて最後で止まります。初回を含む回数設定は区間リピートと共通です。教材ごとに設定を保存しますが、教材を開いた直後に自動再生はしません。タイマーの破棄・古い教材のdispose・バックグラウンド制限は従来どおりです。
