@@ -11,7 +11,7 @@ test("usage guide is collapsed at the bottom and explains storage and practice",
   await expect(page.locator("#advanced")).not.toHaveAttribute("open", "");
   await expect(page.locator("#transcribe-start")).toBeHidden();
   await expect(page.locator("#transcribe-setup")).toContainText(
-    "精度はそこそこです。必要に応じて手直ししてください。",
+    "音声の状態や内容によって、文字起こしに誤りが含まれる場合があります。必要に応じて編集してください。",
   );
   expect(
     await page.evaluate(

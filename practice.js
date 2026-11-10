@@ -1535,7 +1535,7 @@ async function startTranscription() {
     editingTranscript = false;
     saveTranscript(key, transcript);
     notice(
-      `音声から${result.sentences.length}文を書き起こしました。精度はそこそこです。必要に応じて「スクリプトを直す」で手直ししてください。`,
+      `音声から${result.sentences.length}文を書き起こしました。音声の状態や内容によって、文字起こしに誤りが含まれる場合があります。必要に応じて編集してください。`,
     );
   } catch (e) {
     // A stop (button or another file) has already updated the screen.

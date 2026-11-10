@@ -389,7 +389,7 @@ test("speech is transcribed into sentences timed to the waveform's pauses", asyn
   ]);
   await expect(page.locator("#transcript-status")).toHaveText("3文");
   await expect(page.locator("#notice")).toContainText("3文を書き起こしました");
-  await expect(page.locator("#notice")).toContainText("精度はそこそこです");
+  await expect(page.locator("#notice")).toContainText("音声の状態や内容によって、文字起こしに誤りが含まれる場合があります。必要に応じて編集してください。");
   const calls = await page.evaluate(() => window.transcribeCalls);
   expect(calls).toHaveLength(1);
   expect(calls[0].language).toBe("en");
