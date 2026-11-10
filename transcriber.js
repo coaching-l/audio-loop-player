@@ -10,6 +10,7 @@ import {
   deleteFiles,
   saveFiles,
 } from "./model-files.js";
+import { speechMono } from "./speech-input.js";
 
 const BASE = new URL("./", import.meta.url);
 // All versions of the speech-to-text files share this start of their cache name.
@@ -127,12 +128,7 @@ async function decodeSpeech(file) {
     } catch {
       continue;
     }
-    const mono = new Float32Array(buffer.length);
-    for (let c = 0; c < buffer.numberOfChannels; c++) {
-      const data = buffer.getChannelData(c);
-      for (let i = 0; i < data.length; i++)
-        mono[i] += data[i] / buffer.numberOfChannels;
-    }
+    const mono = speechMono(buffer);
     if (buffer.sampleRate === RATE) return mono;
     const ratio = buffer.sampleRate / RATE;
     const out = new Float32Array(Math.floor(mono.length / ratio));

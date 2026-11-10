@@ -2,6 +2,7 @@
 // segments (a phrase or a sentence each) with their times. Everything is loaded from
 // this site; nothing is sent anywhere.
 import { pipeline, env } from "./vendor/transformers/transformers.min.js";
+import { normalizeQuietSpeech } from "./speech-input.js";
 
 const here = (path) => new URL(path, import.meta.url).href;
 env.allowRemoteModels = false;
@@ -45,7 +46,7 @@ self.onmessage = async ({ data }) => {
     const segments = [];
     for (const [index, pass] of windows.entries()) {
       self.postMessage({ type: "progress", done: index });
-      const output = await recognize(audio.subarray(pass.start, pass.end), {
+      const output = await recognize(normalizeQuietSpeech(audio.slice(pass.start, pass.end)), {
         language,
         task: "transcribe",
         return_timestamps: true,

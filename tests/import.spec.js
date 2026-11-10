@@ -150,8 +150,8 @@ test("after one deferred probe, a batch does not wait the full probe time per fi
       buffer: makeWav(1, 300 + n * 40),
     })),
   );
-  // 8 s for the first file, then about 1 s each (it used to be 8 s each: over 30 s).
+  // 1.5 s for the first deferred probe, then 0.25 s each: do not spend 8 s per file.
   await expect(page.locator(".audio-item")).toHaveCount(4, { timeout: 20000 });
   await expect(page.locator("#library-status")).not.toContainText("保存中");
-  expect(Date.now() - started).toBeLessThan(16000);
+  expect(Date.now() - started).toBeLessThan(8000);
 });

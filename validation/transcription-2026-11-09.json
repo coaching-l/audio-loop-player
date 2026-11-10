@@ -1,0 +1,247 @@
+{
+  "baseline": "334e4ee",
+  "model": "whisper-base q8 (bundled)",
+  "scope": "Four fixed recordings; quiet means gain 0.001, opposite-phase means an inverted second channel. Not a general accuracy guarantee.",
+  "results": [
+    {
+      "version": "before",
+      "id": "jfk",
+      "condition": "normal",
+      "text": " And so my fellow Americans ask not what your country can do for you, ask what you can do for your country.",
+      "metric": "WER",
+      "errors": 0,
+      "units": 22,
+      "rate": 0
+    },
+    {
+      "version": "before",
+      "id": "jfk",
+      "condition": "quiet",
+      "text": " And so my fellow Americans ask not what your country can do for you and what you can do for your country.",
+      "metric": "WER",
+      "errors": 1,
+      "units": 22,
+      "rate": 0.045454545454545456
+    },
+    {
+      "version": "before",
+      "id": "jfk",
+      "condition": "opposite-phase",
+      "text": "",
+      "metric": "WER",
+      "errors": 22,
+      "units": 22,
+      "rate": 1
+    },
+    {
+      "version": "before",
+      "id": "heart",
+      "condition": "normal",
+      "text": " Hello, let's practice together, one sentence at a time and enjoy learning.",
+      "metric": "WER",
+      "errors": 0,
+      "units": 12,
+      "rate": 0
+    },
+    {
+      "version": "before",
+      "id": "heart",
+      "condition": "quiet",
+      "text": " Hello, let's practice together. One sentence at a time and enjoy learning.",
+      "metric": "WER",
+      "errors": 0,
+      "units": 12,
+      "rate": 0
+    },
+    {
+      "version": "before",
+      "id": "heart",
+      "condition": "opposite-phase",
+      "text": "",
+      "metric": "WER",
+      "errors": 12,
+      "units": 12,
+      "rate": 1
+    },
+    {
+      "version": "before",
+      "id": "mandarin-preview",
+      "condition": "normal",
+      "text": "你好让我们每天练习 一起进步享受学习的乐趣",
+      "metric": "CER",
+      "errors": 0,
+      "units": 20,
+      "rate": 0
+    },
+    {
+      "version": "before",
+      "id": "mandarin-preview",
+      "condition": "quiet",
+      "text": "你好让我们每天练习一起进步享受学习的乐趣",
+      "metric": "CER",
+      "errors": 0,
+      "units": 20,
+      "rate": 0
+    },
+    {
+      "version": "before",
+      "id": "mandarin-preview",
+      "condition": "opposite-phase",
+      "text": "",
+      "metric": "CER",
+      "errors": 20,
+      "units": 20,
+      "rate": 1
+    },
+    {
+      "version": "before",
+      "id": "mandarin-human",
+      "condition": "normal",
+      "text": "欢迎大家来体验打模院推出的语音识别模型",
+      "metric": "CER",
+      "errors": 2,
+      "units": 19,
+      "rate": 0.10526315789473684
+    },
+    {
+      "version": "before",
+      "id": "mandarin-human",
+      "condition": "quiet",
+      "text": "欢迎大家来体验答案莫愿推出的已经识别模型",
+      "metric": "CER",
+      "errors": 6,
+      "units": 19,
+      "rate": 0.3157894736842105
+    },
+    {
+      "version": "before",
+      "id": "mandarin-human",
+      "condition": "opposite-phase",
+      "text": "",
+      "metric": "CER",
+      "errors": 19,
+      "units": 19,
+      "rate": 1
+    },
+    {
+      "version": "after",
+      "id": "jfk",
+      "condition": "normal",
+      "text": " And so my fellow Americans ask not what your country can do for you, ask what you can do for your country.",
+      "metric": "WER",
+      "errors": 0,
+      "units": 22,
+      "rate": 0
+    },
+    {
+      "version": "after",
+      "id": "jfk",
+      "condition": "quiet",
+      "text": " And so my fellow Americans ask not what your country can do for you, ask what you can do for your country.",
+      "metric": "WER",
+      "errors": 0,
+      "units": 22,
+      "rate": 0
+    },
+    {
+      "version": "after",
+      "id": "jfk",
+      "condition": "opposite-phase",
+      "text": " And so my fellow Americans ask not what your country can do for you, ask what you can do for your country.",
+      "metric": "WER",
+      "errors": 0,
+      "units": 22,
+      "rate": 0
+    },
+    {
+      "version": "after",
+      "id": "heart",
+      "condition": "normal",
+      "text": " Hello, let's practice together, one sentence at a time and enjoy learning.",
+      "metric": "WER",
+      "errors": 0,
+      "units": 12,
+      "rate": 0
+    },
+    {
+      "version": "after",
+      "id": "heart",
+      "condition": "quiet",
+      "text": " Hello, let's practice together, one sentence at a time and enjoy learning.",
+      "metric": "WER",
+      "errors": 0,
+      "units": 12,
+      "rate": 0
+    },
+    {
+      "version": "after",
+      "id": "heart",
+      "condition": "opposite-phase",
+      "text": " Hello, let's practice together, one sentence at a time and enjoy learning.",
+      "metric": "WER",
+      "errors": 0,
+      "units": 12,
+      "rate": 0
+    },
+    {
+      "version": "after",
+      "id": "mandarin-preview",
+      "condition": "normal",
+      "text": "你好让我们每天练习 一起进步享受学习的乐趣",
+      "metric": "CER",
+      "errors": 0,
+      "units": 20,
+      "rate": 0
+    },
+    {
+      "version": "after",
+      "id": "mandarin-preview",
+      "condition": "quiet",
+      "text": "你好让我们每天练习 一起进步享受学习的乐趣",
+      "metric": "CER",
+      "errors": 0,
+      "units": 20,
+      "rate": 0
+    },
+    {
+      "version": "after",
+      "id": "mandarin-preview",
+      "condition": "opposite-phase",
+      "text": "你好让我们每天练习 一起进步享受学习的乐趣",
+      "metric": "CER",
+      "errors": 0,
+      "units": 20,
+      "rate": 0
+    },
+    {
+      "version": "after",
+      "id": "mandarin-human",
+      "condition": "normal",
+      "text": "欢迎大家来体验打模院推出的语音识别模型",
+      "metric": "CER",
+      "errors": 2,
+      "units": 19,
+      "rate": 0.10526315789473684
+    },
+    {
+      "version": "after",
+      "id": "mandarin-human",
+      "condition": "quiet",
+      "text": "欢迎大家来体验打模拯推出的语音识别模型",
+      "metric": "CER",
+      "errors": 3,
+      "units": 19,
+      "rate": 0.15789473684210525
+    },
+    {
+      "version": "after",
+      "id": "mandarin-human",
+      "condition": "opposite-phase",
+      "text": "欢迎大家来体验打模院推出的语音识别模型",
+      "metric": "CER",
+      "errors": 2,
+      "units": 19,
+      "rate": 0.10526315789473684
+    }
+  ]
+}

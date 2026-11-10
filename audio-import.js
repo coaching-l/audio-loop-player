@@ -1,6 +1,24 @@
 // iOS file providers may supply a File whose bytes are not yet local/readable.
 // Read once and share the owned, memory-backed File between playback and storage.
 const prepared = new WeakMap();
+const types = {
+  mp3: "audio/mpeg", m4a: "audio/mp4", wav: "audio/wav", aac: "audio/aac",
+  ogg: "audio/ogg", opus: "audio/ogg", flac: "audio/flac", webm: "audio/webm",
+};
+// A Blob-backed File can be streamed by the media element without first copying
+// every byte into JavaScript. External file providers still use readableAudio for
+// durable storage, and playback falls back to it if the direct load fails/stalls.
+export function playbackAudio(file) {
+  const type = types[file.name.split(".").pop().toLowerCase()] || file.type;
+  return file.type === type ? file : new File([file], file.name, {
+    type, lastModified: file.lastModified,
+  });
+}
+// Only for Files constructed from bytes/Blobs already owned by this app (e.g. IDB).
+export function ownedAudio(file) {
+  prepared.set(file, Promise.resolve(file));
+  return file;
+}
 function importError(name, message) {
   const error = new Error(message);
   error.name = name;
@@ -31,24 +49,12 @@ export function readableAudio(file) {
             "AudioReadError",
             "ファイルの中身が空です。元のファイルを確認してください。",
           );
-        const extension = file.name.split(".").pop().toLowerCase();
-        const types = {
-          mp3: "audio/mpeg",
-          m4a: "audio/mp4",
-          wav: "audio/wav",
-          aac: "audio/aac",
-          ogg: "audio/ogg",
-          opus: "audio/ogg",
-          flac: "audio/flac",
-          webm: "audio/webm",
-        };
-        const type = types[extension] || file.type;
+        const type = types[file.name.split(".").pop().toLowerCase()] || file.type;
         const copy = new File([bytes], file.name, {
           type,
           lastModified: file.lastModified,
         });
-        prepared.set(copy, Promise.resolve(copy));
-        return copy;
+        return ownedAudio(copy);
       } catch (error) {
         if (["AudioReadTimeout", "AudioReadError"].includes(error.name))
           throw error;

@@ -1,7 +1,7 @@
 // The practice screen: one screen for every way in. An entry (audio files today, text
 // later) prepares the material and calls openPractice; everything after that is shared:
 // playback, the A–B interval, speed, the script and the detailed settings.
-import { readableAudio } from "./audio-import.js";
+import { readableAudio, playbackAudio } from "./audio-import.js";
 import { audioKey } from "./audio-library.js";
 import { LoopPlayer, GAP_RATIOS, parseTime, formatTime } from "./player.js";
 import { analyzeAudio, drawWaveform } from "./waveform.js";
@@ -364,6 +364,8 @@ export async function openPractice({ file, key, name, script } = {}) {
   $("audio-container").replaceChildren(audio);
   engine = new LoopPlayer(audio, render, error);
   const currentEngine = engine;
+  let usingOwned = false;
+  const formatError = "この音声を読み込めません。形式がブラウザに対応していないか、ファイルが壊れています。MP3・M4A・WAVなど、別のファイルをお試しください。";
   function fail(message) {
     if (generation !== loadGeneration) return;
     clearTimeout(loadTimeout);
@@ -374,11 +376,33 @@ export async function openPractice({ file, key, name, script } = {}) {
     error(message);
     $("play-status").textContent = "読み込めませんでした";
   }
-  audio.addEventListener("error", () =>
-    fail(
-      "この音声を読み込めません。形式がブラウザに対応していないか、ファイルが壊れています。MP3・M4A・WAVなど、別のファイルをお試しください。",
-    ),
-  );
+  function attach(source) {
+    if (generation !== loadGeneration) return;
+    if (objectURL) URL.revokeObjectURL(objectURL);
+    objectURL = URL.createObjectURL(source);
+    audio.src = objectURL;
+    audio.load();
+  }
+  async function loadOwned() {
+    if (generation !== loadGeneration || ready || usingOwned) return;
+    usingOwned = true;
+    clearTimeout(loadTimeout);
+    try {
+      const copy = await readableAudio(file);
+      if (generation !== loadGeneration || ready) return;
+      attach(copy);
+      loadTimeout = setTimeout(() => {
+        if (generation !== loadGeneration || ready) return;
+        $("play-status").textContent = "読み込みを待っています";
+        notice("ブラウザが読み込みを止めています。「音声の読み込みを始める」を押してください。クラウド上のファイルは、端末へのダウンロードを済ませてから選び直してください。");
+      }, 15000);
+    } catch (e) { fail(e.message); }
+  }
+  audio.addEventListener("error", () => {
+    if (generation !== loadGeneration) return;
+    if (usingOwned || ready) fail(formatError);
+    else void loadOwned();
+  });
   audio.addEventListener(
     "loadedmetadata",
     async () => {
@@ -429,23 +453,15 @@ export async function openPractice({ file, key, name, script } = {}) {
   );
   notice("音声を端末から読み込み中です。");
   try {
-    const copy = await readableAudio(file);
-    if (generation !== loadGeneration) return;
-    objectURL = URL.createObjectURL(copy);
     notice(
       "読み込みが始まらないときは「音声の読み込みを始める」を押してください。",
     );
-    loadTimeout = setTimeout(() => {
-      if (generation !== loadGeneration || ready) return;
-      $("play-status").textContent = "読み込みを待っています";
-      notice(
-        "ブラウザが読み込みを止めています。「音声の読み込みを始める」を押してください。クラウド上のファイルは、端末へのダウンロードを済ませてから選び直してください。",
-      );
-    }, 15000);
-    audio.src = objectURL;
-    audio.load();
+    // Start while still handling the file-selection gesture. Playback no longer
+    // waits for the full file read needed by durable storage or waveform analysis.
+    loadTimeout = setTimeout(() => void loadOwned(), 1500);
+    attach(playbackAudio(file));
   } catch (e) {
-    fail(e.message);
+    void loadOwned();
   }
 }
 
@@ -652,6 +668,8 @@ $("load-audio").addEventListener("click", () => {
     return;
   }
   // Called directly by the gesture, not after an await: Safari may require this.
+  // Do not replace/revoke the source while the user's explicit load is starting.
+  clearTimeout(loadTimeout);
   const player = engine;
   player.audio.play().catch((error) => {
     if (player !== engine || error.name === "AbortError") return;

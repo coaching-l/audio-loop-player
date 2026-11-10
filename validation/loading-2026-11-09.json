@@ -1,0 +1,60 @@
+{
+  "baseline": "334e4ee",
+  "scope": "10 minute generated MP3, 14,401,453 bytes; local Chromium, five reopens of File backed by a Blob read from IndexedDB. Excludes initial import/save and device/cloud download.",
+  "results": [
+    {
+      "version": "before",
+      "bytes": 14401453,
+      "trials": [
+        {
+          "ms": 94.60000002384186,
+          "readsBeforeReady": 1
+        },
+        {
+          "ms": 78.90000003576279,
+          "readsBeforeReady": 1
+        },
+        {
+          "ms": 201.79999995231628,
+          "readsBeforeReady": 1
+        },
+        {
+          "ms": 81.39999997615814,
+          "readsBeforeReady": 1
+        },
+        {
+          "ms": 74.89999997615814,
+          "readsBeforeReady": 1
+        }
+      ],
+      "medianMs": 81.39999997615814
+    },
+    {
+      "version": "after",
+      "bytes": 14401453,
+      "trials": [
+        {
+          "ms": 36.19999998807907,
+          "readsBeforeReady": 0
+        },
+        {
+          "ms": 26.5,
+          "readsBeforeReady": 0
+        },
+        {
+          "ms": 29.30000001192093,
+          "readsBeforeReady": 0
+        },
+        {
+          "ms": 25,
+          "readsBeforeReady": 0
+        },
+        {
+          "ms": 28.100000023841858,
+          "readsBeforeReady": 0
+        }
+      ],
+      "medianMs": 28.100000023841858
+    }
+  ]
+}

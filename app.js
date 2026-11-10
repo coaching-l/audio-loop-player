@@ -267,13 +267,14 @@ function importFiles(files) {
       );
       let saved = 0;
       let deferred = 0;
-      // iOS defers metadata for every file alike; after the first, do not wait 8 s per file.
-      let probeWait = 8000;
+      // A slow metadata probe is not corruption. Save the owned bytes and let the
+      // learner confirm playback, rather than delaying a whole batch of imports.
+      let probeWait = 1500;
       const problems = [];
       for (const file of files) {
         try {
           const validation = await validateAudio(file, probeWait);
-          if (validation.metadataDeferred) probeWait = 1000;
+          if (validation.metadataDeferred) probeWait = 250;
           const record = await addAudio(file);
           if (validation.metadataDeferred) deferred++;
           if (!audioItems.some((item) => item.id === record.id))

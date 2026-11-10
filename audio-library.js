@@ -1,4 +1,4 @@
-import { readableAudio } from "./audio-import.js";
+import { readableAudio, ownedAudio } from "./audio-import.js";
 export const MAX_AUDIO_FILES = 20;
 // Thrown when the library already holds MAX_AUDIO_FILES; callers check its name.
 function libraryFull(message) {
@@ -179,15 +179,15 @@ export async function renameAudio(id, title) {
   });
 }
 export function storedFile(record) {
-  return new File([record.blob], record.name, {
+  return ownedAudio(new File([record.blob], record.name, {
     type: record.type,
     lastModified: record.lastModified,
-  });
+  }));
 }
 // Explicitly load the probe. Mobile browsers may still defer metadata until a tap.
 // A timeout is not proof of corrupt bytes: preserve the file and request playback confirmation.
 // `wait` shortens the probe once a batch has shown that this browser defers metadata.
-export async function validateAudio(file, wait = 8000) {
+export async function validateAudio(file, wait = 1500) {
   file = await readableAudio(file);
   return new Promise((resolve, reject) => {
     const audio = document.createElement("audio");
