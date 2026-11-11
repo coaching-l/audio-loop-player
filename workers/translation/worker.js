@@ -34,22 +34,24 @@ export default {
       typeof source !== "string" || !source.trim() || [...source].length > 1500 ||
       typeof before !== "string" || [...before].length > 1500 ||
       typeof after !== "string" || [...after].length > 1500) return reply(400);
+    if (typeof env.DEEPL_API_KEY !== "string" || !/^[\x21-\x7e]+$/.test(env.DEEPL_API_KEY.trim()))
+      return reply(502, { error: "key_format" });
     const context = `${domain === "coaching" ? "This is a coaching dialogue." : ""}\n${before}\n${after}`;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 12000);
     try {
       const response = await fetch("https://api-free.deepl.com/v2/translate", {
-        method: "POST", redirect: "error", signal: controller.signal,
-        headers: { "Authorization": `DeepL-Auth-Key ${env.DEEPL_API_KEY}`, "Content-Type": "application/json" },
+        method: "POST", redirect: "manual", signal: controller.signal,
+        headers: { "Authorization": `DeepL-Auth-Key ${env.DEEPL_API_KEY.trim()}`, "Content-Type": "application/json" },
         body: JSON.stringify({ text: [source], source_lang: language === "en" ? "EN" : "ZH", target_lang: "JA", context }),
       });
       if ([429, 456].includes(response.status)) return reply(response.status);
-      if (!response.ok) return reply(502);
+      if (!response.ok) return reply(502, { error: "upstream_rejected", status: response.status });
       const result = await response.json();
       const text = result.translations?.[0]?.text;
       if (typeof text !== "string" || !text.trim() || text.length > 10000) return reply(502);
       return reply(200, { provider: PROVIDER, translation: text });
-    } catch { return reply(502); }
+    } catch (error) { return reply(502, { error: "upstream_connection", kind: controller.signal.aborted ? "timeout" : /header|ByteString|character/i.test(String(error.message)) ? "headers" : "network" }); }
     finally { clearTimeout(timer); }
   },
 };

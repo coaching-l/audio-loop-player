@@ -1,0 +1,21 @@
+{
+  "endpoint": "https://coaching-l-translation.hitch1126.workers.dev/translate",
+  "method": "curl through public Worker; actual DeepL responses",
+  "testedAt": "2026-11-11",
+  "results": [
+    {
+      "id": "en-put-a-finger",
+      "response": {
+        "provider": "deepl-context-v1",
+        "translation": "その体験が具体的にどのようなものか、具体的に説明していただけますか？"
+      }
+    },
+    {
+      "id": "zh-cannot-let-go",
+      "response": {
+        "provider": "deepl-context-v1",
+        "translation": "あなたが「引きずっている」とおっしゃっていますが、具体的にはどのようなことを指しているのでしょうか？"
+      }
+    }
+  ]
+}

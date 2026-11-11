@@ -26,7 +26,7 @@ test("only free endpoint receives key, context is separate, errors never leak or
     globalThis.fetch = async (url, options) => {
       count++;
       assert.equal(url, "https://api-free.deepl.com/v2/translate");
-      assert.equal(options.redirect, "error");
+      assert.equal(options.redirect, "manual");
       const sent = JSON.parse(options.body);
       assert.deepEqual(sent.text, [body.source]); assert.match(sent.context, /A new possibility/);
       return Response.json({ translations: [{ text: "どう受け止めていますか？" }] });
@@ -34,12 +34,12 @@ test("only free endpoint receives key, context is separate, errors never leak or
     const result = await worker.fetch(req(), env);
     assert.equal(result.status, 200); assert.equal((await result.json()).translation, "どう受け止めていますか？");
     assert.equal(count, 1);
-    for (const status of [456, 429, 403]) {
+    for (const status of [456, 429, 403, 302]) {
       globalThis.fetch = async () => { count++; return new Response("private upstream details test-secret", { status }); };
       const result = await worker.fetch(req(), env);
-      assert.equal(result.status, status === 403 ? 502 : status);
-      assert.equal(await result.text(), "{}");
+      assert.equal(result.status, [403, 302].includes(status) ? 502 : status);
+      assert.deepEqual(await result.json(), [403, 302].includes(status) ? { error: "upstream_rejected", status } : {});
     }
-    assert.equal(count, 4);
+    assert.equal(count, 5);
   } finally { globalThis.fetch = original; }
 });

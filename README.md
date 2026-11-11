@@ -91,4 +91,4 @@ MP3の「全体」を無音追加なしで書き出すときは、そのまま�
 - 利用規約・データの取り扱い：https://www.deepl.com/privacy
 - アプリの接続先：`https://coaching-l-translation.hitch1126.workers.dev/translate`
 
-文脈付きDeepL翻訳の配置準備・検証結果は [Workerの手順](workers/translation/README.md) にあります。接続URLの設定とWorkerへのキー登録は完了。公開版への切り替えは、実接続の確認後に行います。
+文脈付きDeepL翻訳の配置準備・検証結果は [Workerの手順](workers/translation/README.md) にあります。接続URLの設定とWorkerへのキー登録は完了。英語・中国語の公開Worker経由の実接続を確認しています。

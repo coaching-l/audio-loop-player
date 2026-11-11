@@ -12,7 +12,7 @@
 4. `ENABLED=true` に変更し、公開元から `/translate` の正常応答と上限時の停止を確認する。
 5. ルートの `translation-config.js` の `CONTEXT_TRANSLATION_URL` に正確なWorkerのHTTPS URL（末尾 `/translate`）を設定。`index.html` のCSP `connect-src` にそのホストだけを追加する。`npm run bump-shell` と翻訳・リリーステストの後にアプリを公開する。
 
-未設定時は従来のMyMemoryを使う。有効化後の失敗時にMyMemoryや有料APIへ自動で切り替えない。Workerは無効状態で配置済み。DeepLキーと公開接続URLは未設定。
+未設定時は従来のMyMemoryを使う。有効化後の失敗時にMyMemoryや有料APIへ自動で切り替えない。Workerは有効化済み。DeepLキー登録・公開接続URL設定・英語中国語の実接続を確認済み。
 
 ## 動作とデータ
 
@@ -24,10 +24,10 @@
 
 検証：`node --test tests/context-translation.node.mjs`、`npx playwright test tests/translation.spec.js tests/release.spec.js --project=chromium`。実APIで精度を評価した結果と、モックによる実装テストは区別する。
 
-## 今回の検証・配置状況（2026-11-11）
+## 検証・配置状況（2026-11-11）
 
-Nodeの3テスト、Chromiumの既存翻訳・リリース14テスト、新しい文脈付き翻訳のChromium・Android画面エミュレーション各1テストが成功。Android実機・Safari実機は今回未確認。
+Workerは `https://coaching-l-translation.hitch1126.workers.dev/translate` で有効。キーを保持したまま更新し、公開URLから英語・中国語の実翻訳を確認した。証拠は `validation/deepl-worker-2026-11-11.json`。残量消費を抑えるため、公開Workerの実翻訳確認は各言語1例とした。
 
-無効状態のWorkerをCloudflare APIで配置しようとしたが、HTTP 403（No access to the specified resource）で失敗。現在のトークンでWorker一覧の取得は可能だが、スクリプトの配置はできない。対象アカウントのWorkers Scripts編集権限が必要。その後ユーザーがトークンのWorkers Scripts編集権限を追加し、再配置に成功。ENABLED=false、許可元、レート制限バインディングを読み戻して確認済み。DeepLキーは未登録、workers.devのアカウントサブドメインも未作成（API 404）。Workers & Pagesを初めて開くと自動作成される旨をCloudflare APIが案内している。公開サイトの接続先は切り替えていない。
+Workersのfetchはredirect:errorを受け付けないため、redirect:manualで3xxをエラーとして扱い、キーを別ホストへ転送しない。公開エラーは固定コードとHTTPステータスのみで、APIの本文・秘密値を含めない。前後の空白を除去してキーを使う。
 
-最新状況：DEEPL_API_KEYのsecret_text登録と `hitch1126.workers.dev` の作成を確認。アプリの接続URL・CSPは準備済み。環境の通信許可に新しいWorker URLがなくプロキシが403で拒否したため、Workerと公開サイトのホストを設定案へ追加した。Workerは引き続きENABLED=false、公開アプリへの切り替えは実接続確認後。
+Nodeのサーバー検証と、PC・Android想定のChromiumで翻訳・オフライン再表示・更新ファイルの整合性を検証。ブラウザテストのAPI応答はモック、公開Workerの実接続はcurlで別途確認。Safari・Android実機は今回未確認。wrangler設定のENABLED=falseは、再配置時に明示的な有効化を要求するための既定値。
