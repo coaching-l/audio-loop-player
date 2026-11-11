@@ -12,7 +12,7 @@
 4. `ENABLED=true` に変更し、公開元から `/translate` の正常応答と上限時の停止を確認する。
 5. ルートの `translation-config.js` の `CONTEXT_TRANSLATION_URL` に正確なWorkerのHTTPS URL（末尾 `/translate`）を設定。`index.html` のCSP `connect-src` にそのホストだけを追加する。`npm run bump-shell` と翻訳・リリーステストの後にアプリを公開する。
 
-未設定時は従来のMyMemoryを使う。有効化後の失敗時にMyMemoryや有料APIへ自動で切り替えない。現時点ではWorker未配置・接続URL未設定。
+未設定時は従来のMyMemoryを使う。有効化後の失敗時にMyMemoryや有料APIへ自動で切り替えない。Workerは無効状態で配置済み。DeepLキーと公開接続URLは未設定。
 
 ## 動作とデータ
 
@@ -28,4 +28,4 @@
 
 Nodeの3テスト、Chromiumの既存翻訳・リリース14テスト、新しい文脈付き翻訳のChromium・Android画面エミュレーション各1テストが成功。Android実機・Safari実機は今回未確認。
 
-無効状態のWorkerをCloudflare APIで配置しようとしたが、HTTP 403（No access to the specified resource）で失敗。現在のトークンでWorker一覧の取得は可能だが、スクリプトの配置はできない。対象アカウントのWorkers Scripts編集権限が必要。Worker自体も未配置。公開サイトの接続先は切り替えていない。
+無効状態のWorkerをCloudflare APIで配置しようとしたが、HTTP 403（No access to the specified resource）で失敗。現在のトークンでWorker一覧の取得は可能だが、スクリプトの配置はできない。対象アカウントのWorkers Scripts編集権限が必要。その後ユーザーがトークンのWorkers Scripts編集権限を追加し、再配置に成功。ENABLED=false、許可元、レート制限バインディングを読み戻して確認済み。DeepLキーは未登録、workers.devのアカウントサブドメインも未作成（API 404）。Workers & Pagesを初めて開くと自動作成される旨をCloudflare APIが案内している。公開サイトの接続先は切り替えていない。
