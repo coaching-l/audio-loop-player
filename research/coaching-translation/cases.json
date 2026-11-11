@@ -1,0 +1,90 @@
+[
+  {
+    "id": "en-sit-with-you",
+    "language": "en",
+    "domain": "coaching",
+    "target": "How does that sit with you right now?",
+    "before": "We have just explored a possibility you had not considered before.",
+    "after": "",
+    "source": "利用者の画像にある原文。前の文は比較用に作成した仮の文脈。",
+    "reference": "今、そのことをどう受け止めていますか？",
+    "checks": ["受け止め方や感覚を尋ねる", "物理的に座る・当てはまるとしない", "同意や不安を決めつけない"]
+  },
+  {
+    "id": "en-put-a-finger",
+    "language": "en",
+    "domain": "coaching",
+    "target": "Can you put a finger on what that experience is?",
+    "before": "You mentioned a feeling that is hard to describe.",
+    "after": "",
+    "source": "利用者の画像にある原文。前の文は比較用に作成した仮の文脈。",
+    "reference": "その感覚を、具体的に言葉にできますか？",
+    "checks": ["体験・感覚の具体化を促す", "指を置く・指摘すると直訳しない", "感情の種類を創作しない"]
+  },
+  {
+    "id": "en-session-takeaway",
+    "language": "en",
+    "domain": "coaching",
+    "target": "What would you like to take away from this session?",
+    "before": "We have some time today to explore what matters to you.",
+    "after": "",
+    "source": "既存の翻訳確認で使った原文。前の文は比較用に作成。",
+    "reference": "このセッションで、どんなことを得たいですか？",
+    "checks": ["セッションで得たいものを尋ねる", "学びや結論だけに狭めすぎない", "物を持ち去る意味にしない"]
+  },
+  {
+    "id": "en-moving-forward",
+    "language": "en",
+    "domain": "coaching",
+    "target": "What would moving forward look like for you?",
+    "before": "You said you would like things to change at work.",
+    "after": "",
+    "source": "比較用に作成した例文と文脈。",
+    "reference": "あなたにとって、前に進むとは具体的にどんなことでしょうか？",
+    "checks": ["本人にとっての前進の具体像を尋ねる", "転職や退職など特定の行動を付け加えない"]
+  },
+  {
+    "id": "zh-session-exchange",
+    "language": "zh-CN",
+    "domain": "coaching",
+    "target": "你想从这次交流中获得什么？",
+    "before": "这是一次关于职业发展的教练对话。",
+    "after": "",
+    "source": "既存の文脈比較に使った例文。前の文は比較用に作成。",
+    "reference": "今回の対話を通して、どんなことを得たいですか？",
+    "checks": ["交流を対話・話し合いの意味で訳す", "物の交換の意味にしない"]
+  },
+  {
+    "id": "zh-meaning",
+    "language": "zh-CN",
+    "domain": "coaching",
+    "target": "这件事对你意味着什么？",
+    "before": "你刚才提到，完成这个项目对你很重要。",
+    "after": "",
+    "source": "比較用に作成した例文と文脈。",
+    "reference": "そのことは、あなたにとってどんな意味がありますか？",
+    "checks": ["本人にとっての意味を尋ねる", "成功・承認・安心などを決めつけない"]
+  },
+  {
+    "id": "zh-cannot-let-go",
+    "language": "zh-CN",
+    "domain": "coaching",
+    "target": "你说的“放不下”，具体指的是什么？",
+    "before": "你一直在想着上次项目中发生的失误。",
+    "after": "",
+    "source": "比較用に作成した例文と文脈。",
+    "reference": "「気持ちを切り替えられない」というのは、具体的にはどんなことでしょうか？",
+    "checks": ["放不下を心に引っかかる・手放せない等と訳す", "物理的に置けない意味にしない", "恋愛など原文にない背景を足さない"]
+  },
+  {
+    "id": "zh-should-and-want",
+    "language": "zh-CN",
+    "domain": "coaching",
+    "target": "如果暂时放下“应该”，你真正想要的是什么？",
+    "before": "你说你应该接受新的职位，但还没有决定。",
+    "after": "",
+    "source": "比較用に作成した例文と文脈。",
+    "reference": "「こうすべき」をいったん脇に置くと、あなたは本当は何を望んでいますか？",
+    "checks": ["すべきという考えと本人の望みを区別する", "役職を断るべきだと誘導しない", "仮定の問いを命令にしない"]
+  }
+]

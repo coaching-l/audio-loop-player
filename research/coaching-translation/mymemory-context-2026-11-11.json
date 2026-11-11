@@ -1,0 +1,62 @@
+[
+  {
+    "language": "en",
+    "target": "Can you put a finger on what that experience is?",
+    "context": "In our coaching session, you mentioned a feeling that is hard to describe. Can you put a finger on what that experience is?",
+    "targetResult": {
+      "text": "あなたはその経験が何であるかを指摘することができますか？",
+      "status": 200,
+      "quotaFinished": false
+    },
+    "contextResult": {
+      "text": "コーチングセッションでは、説明するのが難しい気持ちについてお話しいただきました。あなたはその経験が何であるかを指摘することができますか？",
+      "status": 200,
+      "quotaFinished": false
+    }
+  },
+  {
+    "language": "en",
+    "target": "I could not put my finger on it.",
+    "context": "Something felt wrong during the conversation, but I could not explain why. I could not put my finger on it.",
+    "targetResult": {
+      "text": "私はそれに指を入れることができませんでした。",
+      "status": 200,
+      "quotaFinished": false
+    },
+    "contextResult": {
+      "text": "会話中に何かおかしいと感じましたが、その理由を説明できませんでした。私はそれに指を入れることができませんでした。",
+      "status": 200,
+      "quotaFinished": false
+    }
+  },
+  {
+    "language": "zh-CN",
+    "target": "你想从这次交流中获得什么？",
+    "context": "这是一次关于职业发展的教练对话。你想从这次交流中获得什么？",
+    "targetResult": {
+      "text": "この交換で何が欲しいのですか？",
+      "status": 200,
+      "quotaFinished": false
+    },
+    "contextResult": {
+      "text": "これは、キャリア開発に関するコーチングの会話です。この交換で何が欲しいのですか？",
+      "status": 200,
+      "quotaFinished": false
+    }
+  },
+  {
+    "language": "zh-CN",
+    "target": "我放不下。",
+    "context": "这段感情已经结束了，但我仍然每天想着她。我放不下。",
+    "targetResult": {
+      "text": "私はそれを置くことができません。",
+      "status": 200,
+      "quotaFinished": false
+    },
+    "contextResult": {
+      "text": "関係は終わりましたが、私はまだ毎日彼女のことを考えています。私はそれを置くことができません。",
+      "status": 200,
+      "quotaFinished": false
+    }
+  }
+]
