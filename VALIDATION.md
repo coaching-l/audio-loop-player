@@ -417,3 +417,13 @@
 - 手動の読み込みタップを遅延させるケースを含む `loading-speed / import` は最終変更後に **16 passed (1.0m)**。WebKit起動は実行したが、`webkit-2248/pw_run.sh` が未導入のため起動不可。Safari・実機Android/Macでの今回の変更は未確認。
 - 2026-11-10 最終確認：`loading-speed / speech-input / import / library / player / transcribe / offline / release` をPC Chromium・Android Chrome相当で実行し、**138 passed, 3 skipped, 1 failed (8.9m)**。失敗は実行環境が停止気味になった際の `unreadable provider` のページ移動タイムアウトで、テスト本体の開始前。コードを変更せず単独で再実行し **1 passed (2.9s)** を確認した。スキップはモバイル設定のドラッグ＆ドロップと、PC設定で実施する実モデル認識の重複2件。実音声の認識・再生、保存、オフライン更新を含む。
 - 共通の音声読み込み処理を使うテキスト音声化の画面も `text-entry` を両設定で確認し、**38 passed (1.3m)**。こちらのTTS生成は代替Workerを使用し、生成モデルの聴感評価ではない。キャッシュv48、CSS/JSクエリv50。構文と `git diff --check` も確認。これらは実機AndroidやSafariの確認を意味しない。
+
+## 2026-11-11 スクリプトの日本語訳（公開前・接続確認待ち）
+
+- 利用者が、英語・中国語の文を長押しして日本語訳を表示する機能と、翻訳時のみ外部へテキストを送信する方式を承認。無料条件の確認とオンライン利用の注意書きが必須。音声化・文字起こし・再生は端末内のまま。
+- 長押し550ms、通常タップとの排他、スクロール時の中止、PCの右クリック・Shift＋Enter・日本語訳ボタンを実装。訳は教材内に最近取得した200件まで保存し、完全一致する原文・言語・プロバイダー版でだけ再利用。編集・教材変更・ダイアログ終了時の古い応答を排除。新規翻訳はオンライン限定、保存済みはオフライン閲覧可能と画面に明記。
+- MyMemoryのキー不要エンドポイントを候補として実装。500 UTF-8バイト単位で原文を欠損なく分割し、1文5000バイト超は送らない。15秒のタイムアウト、上限・失敗の案内、有料への切り替えなし、自動リトライなし。翻訳結果はHTMLとして解釈しない。CSPはこのAPIの単一ホストだけ追加。
+- 最初のテストはCSPにAPI接続先を追加する前に走らせてしまい、翻訳取得のケースが失敗して中断。CSPとテストのライブラリ選択子を修正し、初回の最終16件は **16 passed (29.9s)**。その後、モバイル設定ではCDPから実際のタッチイベントを送るようにし、未完了の複数区間・タイムアウト・ダイアログを開いたままの教材変更の検証を追加。最終 `translation` はPC Chromium・Android Chrome相当で **22 passed (42.7s)**。
+- 既存の `transcript / guide / release / offline` は同じ2設定で **36 passed (1.3m)**。キャッシュv51、CSS/JSクエリv53。`git diff --check` とJS構文も確認。
+- 390px幅のChromiumでダイアログを目視確認。横スクロールなし、幅352px。画像は `/tmp/japanese-translation-mobile.png`。翻訳文はテスト用の固定応答。実機Safari・Androidの動作や、実翻訳の品質を検証したものではない。
+- **公開前の未完了事項**：`https://mymemory.translated.net/doc/usagelimits.php` は開発環境のプロキシでCONNECT 403。公式の現行無料条件、実APIの英語→日本語・中国語→日本語、CORS・実応答の確認が必要。環境設定の変更案へ `mymemory.translated.net` と `api.mymemory.translated.net` を追加し保存済み（既存のPlaywright用2ホストを保持）。実行環境への適用は未確認。実サービス確認までmainへのpushと公開を行わず、ローカルの専用ブランチに保存する。

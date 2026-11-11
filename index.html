@@ -2,10 +2,10 @@
 <html lang="ja">
   <head>
     <meta charset="UTF-8" />
-    <!-- Only this site's own files may load; audio and recordings stay as local blob: URLs. -->
+    <!-- App assets and audio stay local; explicit sentence translation may contact MyMemory. -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'"
+      content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self' https://api.mymemory.translated.net; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'"
     />
     <meta
       name="viewport"
@@ -42,8 +42,8 @@
       content="端末の音声で、繰り返し聴く・声に出す。アップロード不要の語学学習プレーヤー。"
     />
     <title>音声リピートプレーヤー | COACHING-L</title>
-    <link rel="stylesheet" href="./style.css?v=51" />
-    <script type="module" src="./app.js?v=51"></script>
+    <link rel="stylesheet" href="./style.css?v=53" />
+    <script type="module" src="./app.js?v=53"></script>
   </head>
   <body>
     <main>
@@ -565,8 +565,10 @@
                 class="transcript-sentences"
                 aria-label="スクリプト。文を押すと、その文をA–B区間にします"
               ></div>
-              <p class="small">文を押すと、その文をA–B区間にします。</p>
+              <p class="small">文を押すと、その文をA–B区間にします。長押しすると日本語訳を表示します。</p>
+              <p class="small translation-note">日本語翻訳機能はオンラインのときに利用できます。保存済みの訳はオフラインでも確認できます。翻訳する文だけをMyMemoryへ送信します。</p>
               <div class="transcript-links">
+                <button id="transcript-translate" class="text-button" type="button">日本語訳</button>
                 <button id="transcript-edit" class="text-button" type="button">
                   スクリプトを直す</button
                 ><button
@@ -847,7 +849,7 @@
             <p class="privacy-note">
               <strong
                 >個人情報（氏名・住所・電話番号・メールアドレスなど）や、人に知られたくない内容を含む音声・スクリプトは、登録しないでください。</strong
-              >このアプリは音声やスクリプトを外部へ送りませんが、同じ端末やブラウザを使う人には見えます。
+              >音声は外部へ送りません。日本語訳を表示するときだけ、対象の文を翻訳サービスMyMemoryへ送信します。端末内の教材は、同じ端末やブラウザを使う人にも見えます。
             </p>
             <p>
               音声と設定は、いま使っている端末・ブラウザ内に保存します。ほかの端末やブラウザには引き継がれません。音声をサーバーへ送ることもありません。
@@ -902,6 +904,7 @@
             <p>
               画面をロックしたり別のアプリに切り替えたりすると、再生やくり返しのタイミングがずれることがあります。練習は画面を開いたまま行ってください。
             </p>
+            <p>日本語翻訳機能はオンラインのときに利用できます。翻訳する文だけをMyMemoryへ送信し、取得した訳は教材ごとにこの端末へ保存します（最近の200件まで）。保存済みの訳はオフラインでも確認できます。翻訳には誤りが含まれる場合があります。</p>
             <section
               class="offline-card"
               aria-label="オフライン利用の準備"
@@ -989,6 +992,24 @@
           </svg>
         </button>
       </div>
+      <dialog id="translation-dialog" class="translation-dialog" aria-labelledby="translation-heading">
+        <div class="section-heading">
+          <h2 id="translation-heading">日本語訳</h2>
+          <button id="translation-close" class="text-button" type="button" autofocus>閉じる</button>
+        </div>
+        <p id="translation-original" class="translation-original"></p>
+        <label for="translation-language">原文の言語</label>
+        <select id="translation-language">
+          <option value="en">英語</option>
+          <option value="zh-CN">中国語</option>
+        </select>
+        <p id="translation-status" class="small" role="status"></p>
+        <p id="translation-result" class="translation-result" lang="ja"></p>
+        <button id="translation-retry" class="button secondary" type="button" hidden>もう一度翻訳する</button>
+        <p class="small">日本語翻訳機能はオンラインのときに利用できます。保存済みの訳はオフラインでも確認できます。</p>
+        <p class="small">翻訳する文だけをMyMemoryへ送信します。音声は送信しません。翻訳には誤りが含まれる場合があります。</p>
+        <p class="small">翻訳：<a href="https://mymemory.translated.net/" target="_blank" rel="noopener noreferrer">MyMemory</a>（無料枠・利用上限あり）</p>
+      </dialog>
     </main>
   </body>
 </html>

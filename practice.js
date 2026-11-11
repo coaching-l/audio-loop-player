@@ -1,6 +1,7 @@
 // The practice screen: one screen for every way in. An entry (audio files today, text
 // later) prepares the material and calls openPractice; everything after that is shared:
 // playback, the A–B interval, speed, the script and the detailed settings.
+import { setupTranslation } from "./translation-ui.js";
 import { readableAudio, playbackAudio } from "./audio-import.js";
 import { audioKey } from "./audio-library.js";
 import { LoopPlayer, GAP_RATIOS, parseTime, formatTime } from "./player.js";
@@ -1226,6 +1227,10 @@ const canTranscribe = transcriptionSupported();
 let transcribing = null; // the AbortController of the running transcription
 let currentSentence = -1;
 let selectedSentence = -1;
+const sentenceTranslation = setupTranslation({
+  context: () => ready && transcript && !editingTranscript ? { key: materialKey, transcript } : null,
+  save: saveTranscript,
+});
 function loadTranscript(key) {
   try {
     const value = JSON.parse(localStorage.getItem(transcriptPrefix + key));
@@ -1239,10 +1244,12 @@ function saveTranscript(key, value) {
     if (value)
       localStorage.setItem(transcriptPrefix + key, JSON.stringify(value));
     else localStorage.removeItem(transcriptPrefix + key);
+    return true;
   } catch {
     notice(
       "スクリプトを保存できません。保存容量やプライベートブラウズの設定を確認してください。このページを開いている間は使えます。",
     );
+    return false;
   }
 }
 function openTranscript() {
@@ -1310,6 +1317,7 @@ function realignTranscript() {
   renderTranscript();
 }
 function renderTranscript() {
+  sentenceTranslation.sync();
   const has = Boolean(ready && transcript);
   // The tag says only what is there; with no script the card's own text says so.
   const status = !ready
@@ -1344,6 +1352,8 @@ function renderTranscript() {
       button.type = "button";
       button.className = "sentence";
       button.dataset.index = index;
+      button.setAttribute("aria-keyshortcuts", "Shift+Enter");
+      button.title = "タップで区間を選択・長押しで日本語訳（Shift＋Enterでも表示）";
       button.textContent = sentence.text;
       if (index === selectedSentence) button.classList.add("is-selected");
       list.append(button);
