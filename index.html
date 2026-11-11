@@ -42,8 +42,8 @@
       content="端末の音声で、繰り返し聴く・声に出す。アップロード不要の語学学習プレーヤー。"
     />
     <title>音声リピートプレーヤー | COACHING-L</title>
-    <link rel="stylesheet" href="./style.css?v=54" />
-    <script type="module" src="./app.js?v=54"></script>
+    <link rel="stylesheet" href="./style.css?v=55" />
+    <script type="module" src="./app.js?v=55"></script>
   </head>
   <body>
     <main>
@@ -566,7 +566,7 @@
                 aria-label="スクリプト。文を押すと、その文をA–B区間にします"
               ></div>
               <p class="small">文を押すと、その文をA–B区間にします。長押しすると日本語訳を表示します。</p>
-              <p class="small translation-note">日本語翻訳機能はオンラインのときに利用できます。保存済みの訳はオフラインでも確認できます。翻訳する文だけをMyMemoryへ送信します。</p>
+              <p class="small translation-note">日本語翻訳機能はオンラインのときに利用できます。保存済みの訳はオフラインでも確認できます。送信先・送信内容は翻訳画面に表示します。</p>
               <div class="transcript-links">
                 <button id="transcript-translate" class="text-button" type="button">日本語訳</button>
                 <button id="transcript-edit" class="text-button" type="button">
@@ -849,7 +849,7 @@
             <p class="privacy-note">
               <strong
                 >個人情報（氏名・住所・電話番号・メールアドレスなど）や、人に知られたくない内容を含む音声・スクリプトは、登録しないでください。</strong
-              >音声は外部へ送りません。日本語訳を表示するときだけ、対象の文を翻訳サービスMyMemoryへ送信します。端末内の教材は、同じ端末やブラウザを使う人にも見えます。
+              >音声は外部へ送りません。日本語訳を表示するときだけ、対象の文など、翻訳画面に表示した内容を翻訳サービスへ送信します。端末内の教材は、同じ端末やブラウザを使う人にも見えます。
             </p>
             <p>
               音声と設定は、いま使っている端末・ブラウザ内に保存します。ほかの端末やブラウザには引き継がれません。音声をサーバーへ送ることもありません。
@@ -904,7 +904,7 @@
             <p>
               画面をロックしたり別のアプリに切り替えたりすると、再生やくり返しのタイミングがずれることがあります。練習は画面を開いたまま行ってください。
             </p>
-            <p>日本語翻訳機能はオンラインのときに利用できます。翻訳する文だけをMyMemoryへ送信し、取得した訳は教材ごとにこの端末へ保存します（最近の200件まで）。保存済みの訳はオフラインでも確認できます。翻訳には誤りが含まれる場合があります。</p>
+            <p>日本語翻訳機能はオンラインのときに利用できます。翻訳画面に表示した内容を翻訳サービスへ送信し、取得した訳は教材ごとにこの端末へ保存します（最近の200件まで）。保存済みの訳はオフラインでも確認できます。翻訳には誤りが含まれる場合があります。</p>
             <section
               class="offline-card"
               aria-label="オフライン利用の準備"
@@ -1003,12 +1003,16 @@
           <option value="en">英語</option>
           <option value="zh-CN">中国語</option>
         </select>
+        <div id="translation-domain-field" hidden>
+          <label for="translation-domain">文章の文脈</label>
+          <select id="translation-domain"><option value="coaching">コーチング</option><option value="general">一般</option></select>
+        </div>
         <p id="translation-status" class="small" role="status"></p>
         <p id="translation-result" class="translation-result" lang="ja"></p>
         <button id="translation-retry" class="button secondary" type="button" hidden>もう一度翻訳する</button>
         <p class="small">日本語翻訳機能はオンラインのときに利用できます。保存済みの訳はオフラインでも確認できます。</p>
-        <p class="small">翻訳する文だけをMyMemoryへ送信します。送信した文はサービス側に保存されるため、個人情報や機密情報を含む文は翻訳しないでください。翻訳には誤りが含まれる場合があります。</p>
-        <p class="small">翻訳：<a href="https://mymemory.translated.net/" target="_blank" rel="noopener noreferrer">MyMemory</a>（無料枠：1日5,000文字まで）</p>
+        <p class="small translation-service-note">翻訳する文だけをMyMemoryへ送信します。送信した文はサービス側に保存されるため、個人情報や機密情報を含む文は翻訳しないでください。翻訳には誤りが含まれる場合があります。</p>
+        <p id="translation-provider-note" class="small">翻訳：<a href="https://mymemory.translated.net/" target="_blank" rel="noopener noreferrer">MyMemory</a>（無料枠：1日5,000文字まで）</p>
       </dialog>
     </main>
   </body>

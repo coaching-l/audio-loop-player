@@ -1,0 +1,63 @@
+{
+  "provider": "deepl",
+  "endpoint": "api-free.deepl.com",
+  "usageBefore": {
+    "character_count": 0,
+    "character_limit": 1000000
+  },
+  "qualityAssessment": "Improvement observed in this eight-case review; not a general accuracy guarantee. Some wording remains redundant or interpretive.",
+  "results": [
+    {
+      "id": "en-sit-with-you",
+      "source": "How does that sit with you right now?",
+      "translation": "今の時点で、それについてどう感じられますか？",
+      "seconds": 0.43
+    },
+    {
+      "id": "en-put-a-finger",
+      "source": "Can you put a finger on what that experience is?",
+      "translation": "その体験が具体的にどのようなものか、具体的に説明していただけますか？",
+      "seconds": 0.38
+    },
+    {
+      "id": "en-session-takeaway",
+      "source": "What would you like to take away from this session?",
+      "translation": "このセッションを通じて、どのようなことを得たいですか？",
+      "seconds": 0.47
+    },
+    {
+      "id": "en-moving-forward",
+      "source": "What would moving forward look like for you?",
+      "translation": "あなたにとって、今後どう進んでいくことが理想でしょうか？",
+      "seconds": 0.38
+    },
+    {
+      "id": "zh-session-exchange",
+      "source": "你想从这次交流中获得什么？",
+      "translation": "この対話から何を得たいですか？",
+      "seconds": 0.39
+    },
+    {
+      "id": "zh-meaning",
+      "source": "这件事对你意味着什么？",
+      "translation": "このことは、あなたにとってどのような意味を持っていますか？",
+      "seconds": 0.35
+    },
+    {
+      "id": "zh-cannot-let-go",
+      "source": "你说的“放不下”，具体指的是什么？",
+      "translation": "あなたが「引きずっている」とおっしゃっていますが、具体的にはどのようなことを指しているのでしょうか？",
+      "seconds": 0.4
+    },
+    {
+      "id": "zh-should-and-want",
+      "source": "如果暂时放下“应该”，你真正想要的是什么？",
+      "translation": "ひとまず「～すべき」という考えを脇に置いて、あなたが本当に望んでいることは何ですか？",
+      "seconds": 0.36
+    }
+  ],
+  "usageAfter": {
+    "character_count": 242,
+    "character_limit": 1000000
+  }
+}

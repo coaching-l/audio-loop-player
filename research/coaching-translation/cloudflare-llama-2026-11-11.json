@@ -1,0 +1,112 @@
+{
+  "provider": "cloudflare",
+  "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+  "promptSha256": "df05e90994b74c90ea285beb1a337578d85a2ccb9fe13787243df4c597c7fc74",
+  "casesSha256": "f0b0addd483906dc2607cfee00b84f0eb22190bd53c092cd014c550077cb0342",
+  "evaluatedAtUtc": "2026-11-11T06:22:56Z",
+  "qualityAssessment": "not-adopted: semantic errors remain; see evaluation-2026-11-11.md",
+  "results": [
+    {
+      "id": "en-sit-with-you",
+      "source": "How does that sit with you right now?",
+      "reference": "今、そのことをどう受け止めていますか？",
+      "checks": [
+        "受け止め方や感覚を尋ねる",
+        "物理的に座る・当てはまるとしない",
+        "同意や不安を決めつけない"
+      ],
+      "translation": "今、その感じはどうですか？",
+      "status": "received-not-graded",
+      "elapsedSeconds": 0.56
+    },
+    {
+      "id": "en-put-a-finger",
+      "source": "Can you put a finger on what that experience is?",
+      "reference": "その感覚を、具体的に言葉にできますか？",
+      "checks": [
+        "体験・感覚の具体化を促す",
+        "指を置く・指摘すると直訳しない",
+        "感情の種類を創作しない"
+      ],
+      "translation": "その経験が何なのか、具体的に指摘できるか",
+      "status": "received-not-graded",
+      "elapsedSeconds": 0.72
+    },
+    {
+      "id": "en-session-takeaway",
+      "source": "What would you like to take away from this session?",
+      "reference": "このセッションで、どんなことを得たいですか？",
+      "checks": [
+        "セッションで得たいものを尋ねる",
+        "学びや結論だけに狭めすぎない",
+        "物を持ち去る意味にしない"
+      ],
+      "translation": "このセッションから何を持ち帰りたいですか？",
+      "status": "received-not-graded",
+      "elapsedSeconds": 0.6
+    },
+    {
+      "id": "en-moving-forward",
+      "source": "What would moving forward look like for you?",
+      "reference": "あなたにとって、前に進むとは具体的にどんなことでしょうか？",
+      "checks": [
+        "本人にとっての前進の具体像を尋ねる",
+        "転職や退職など特定の行動を付け加えない"
+      ],
+      "translation": "あなたにとって、先に進むというのはどういうことになるでしょうか？",
+      "status": "received-not-graded",
+      "elapsedSeconds": 0.85
+    },
+    {
+      "id": "zh-session-exchange",
+      "source": "你想从这次交流中获得什么？",
+      "reference": "今回の対話を通して、どんなことを得たいですか？",
+      "checks": [
+        "交流を対話・話し合いの意味で訳す",
+        "物の交換の意味にしない"
+      ],
+      "translation": "あなたはこのコミュニケーションから何を得たいと思っていますか？",
+      "status": "received-not-graded",
+      "elapsedSeconds": 5.39
+    },
+    {
+      "id": "zh-meaning",
+      "source": "这件事对你意味着什么？",
+      "reference": "そのことは、あなたにとってどんな意味がありますか？",
+      "checks": [
+        "本人にとっての意味を尋ねる",
+        "成功・承認・安心などを決めつけない"
+      ],
+      "translation": "これはあなたにとって何を意味するのですか？",
+      "status": "received-not-graded",
+      "elapsedSeconds": 0.72
+    },
+    {
+      "id": "zh-cannot-let-go",
+      "source": "你说的“放不下”，具体指的是什么？",
+      "reference": "「気持ちを切り替えられない」というのは、具体的にはどんなことでしょうか？",
+      "checks": [
+        "放不下を心に引っかかる・手放せない等と訳す",
+        "物理的に置けない意味にしない",
+        "恋愛など原文にない背景を足さない"
+      ],
+      "translation": "「放不下」ということ、具体的に何を指しているのですか？",
+      "status": "received-not-graded",
+      "elapsedSeconds": 0.99
+    },
+    {
+      "id": "zh-should-and-want",
+      "source": "如果暂时放下“应该”，你真正想要的是什么？",
+      "reference": "「こうすべき」をいったん脇に置くと、あなたは本当は何を望んでいますか？",
+      "checks": [
+        "すべきという考えと本人の望みを区別する",
+        "役職を断るべきだと誘導しない",
+        "仮定の問いを命令にしない"
+      ],
+      "translation": "「べき」ということを一時的に脇に置いて、本当に何が欲しいのか？",
+      "status": "received-not-graded",
+      "elapsedSeconds": 16.32
+    }
+  ],
+  "deeplCustomInstructions": false
+}

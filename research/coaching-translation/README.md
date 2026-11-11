@@ -50,7 +50,7 @@ PYTHONDONTWRITEBYTECODE=1 python -m unittest discover -s tests -p test_coaching_
 
 ## 実比較に必要な設定
 
-現在はCloudflare・DeepLとも認証情報がなく、AIモデルの実比較は未実施。
+Cloudflareの接続設定を確認し、2026-11-11にQwen・Llamaの実比較を実施した。意味の変化や未翻訳が残ったため、今回はどちらも採用しない。詳しくは [比較結果](evaluation-2026-11-11.md) を参照。DeepLはその後の8例で改善を確認。実応答は `deepl-context-2026-11-11.json`。今回登録したDeveloperプランは1回限り100万文字であり、旧API Freeの月50万文字という説明をこの契約には適用しない。
 
 最初はCloudflareの **Workers Free** を使う。運営者が無料アカウントを1つ用意すればよく、アプリ利用者のログインは不要。Cloudflare管理画面の **Workers AI → Use REST API → Create a Workers AI API Token** から対象アカウントに限定したトークンを作る。公式テンプレートを使う（手動指定の場合Workers AI Read・Edit）。運営者のアカウントIDも必要。
 
@@ -60,7 +60,7 @@ PYTHONDONTWRITEBYTECODE=1 python -m unittest discover -s tests -p test_coaching_
 
 `--confirmed-workers-free` は運営者がFreeプランを確認したことを表すフラグで、APIによるプランの自動検証ではない。Paidプランのアカウントでは実行しない。無料枠の残量不足・サービス停止では比較を中断し、別の有料モデルへ切り替えない。
 
-DeepLを追加比較する場合は、`CONTEXT_DEEPL_API_KEY` を `api-free.deepl.com` 宛てのシークレットとして別途用意する。スクリプトは `:fx` で終わるFreeのキーだけを受け付け、Proのエンドポイントを使わない。
+DeepLを追加比較する場合は、`CONTEXT_DEEPL_API_KEY` を `api-free.deepl.com` 宛てのシークレットとして別途用意する。キーはプロキシによって代替値になる場合があるため、末尾でプランを判定しない。接続先は `api-free.deepl.com` に固定し、Proのエンドポイントを使わない。契約内容・残量は別途確認する。
 
 **キーをチャットやリポジトリへ貼り付けない。** 環境設定のシークレット欄で安全に登録する。
 

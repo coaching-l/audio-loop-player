@@ -91,3 +91,5 @@ MP3の「全体」を無音追加なしで書き出すときは、そのまま�
 - API仕様：https://mymemory.translated.net/doc/spec.php
 - 利用規約・データの取り扱い：https://mymemory.translated.net/terms-and-conditions
 - API接続先：`https://api.mymemory.translated.net/get`
+
+文脈付きDeepL翻訳の配置準備・検証結果は [Workerの手順](workers/translation/README.md) にあります。接続URLの設定とWorkerへのキー登録が完了するまでは、公開アプリの翻訳サービスは従来のままです。

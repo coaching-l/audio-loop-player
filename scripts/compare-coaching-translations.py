@@ -57,8 +57,8 @@ def configuration(args):
         return f"https://api.cloudflare.com/client/v4/accounts/{account}/ai/v1/chat/completions", {"Authorization": "Bearer " + key}
     if args.provider == "deepl":
         key = os.environ.get("CONTEXT_DEEPL_API_KEY", "")
-        if not key.endswith(":fx"):
-            raise ValueError("DeepL API Freeのキーを CONTEXT_DEEPL_API_KEY に設定してください。Proのキーは使いません。")
+        if not key:
+            raise ValueError("DeepLの無料プランのキーを CONTEXT_DEEPL_API_KEY に設定してください。接続先は無料用APIに固定します。")
         return "https://api-free.deepl.com/v2/translate", {"Authorization": "DeepL-Auth-Key " + key}
     return "https://api.mymemory.translated.net/get", {}
 

@@ -37,11 +37,11 @@ class ComparisonHarnessTests(unittest.TestCase):
             self.assertNotIn("test-placeholder", url)
             self.assertEqual(headers["Authorization"], "Bearer test-placeholder")
 
-    def test_deepl_never_uses_pro_endpoint_or_key(self):
+    def test_deepl_requires_key_and_always_uses_free_endpoint(self):
         args = argparse.Namespace(provider="deepl")
-        with patch.dict(compare.os.environ, {"CONTEXT_DEEPL_API_KEY": "pro-key"}, clear=True):
+        with patch.dict(compare.os.environ, {"CONTEXT_DEEPL_API_KEY": ""}, clear=True):
             with self.assertRaises(ValueError): compare.configuration(args)
-        with patch.dict(compare.os.environ, {"CONTEXT_DEEPL_API_KEY": "test:fx"}, clear=True):
+        with patch.dict(compare.os.environ, {"CONTEXT_DEEPL_API_KEY": "opaque-proxy-placeholder"}, clear=True):
             self.assertEqual(compare.configuration(args)[0], "https://api-free.deepl.com/v2/translate")
 
     def test_generation_must_be_complete_and_follow_the_output_contract(self):
