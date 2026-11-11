@@ -29,3 +29,5 @@
 Nodeの3テスト、Chromiumの既存翻訳・リリース14テスト、新しい文脈付き翻訳のChromium・Android画面エミュレーション各1テストが成功。Android実機・Safari実機は今回未確認。
 
 無効状態のWorkerをCloudflare APIで配置しようとしたが、HTTP 403（No access to the specified resource）で失敗。現在のトークンでWorker一覧の取得は可能だが、スクリプトの配置はできない。対象アカウントのWorkers Scripts編集権限が必要。その後ユーザーがトークンのWorkers Scripts編集権限を追加し、再配置に成功。ENABLED=false、許可元、レート制限バインディングを読み戻して確認済み。DeepLキーは未登録、workers.devのアカウントサブドメインも未作成（API 404）。Workers & Pagesを初めて開くと自動作成される旨をCloudflare APIが案内している。公開サイトの接続先は切り替えていない。
+
+最新状況：DEEPL_API_KEYのsecret_text登録と `hitch1126.workers.dev` の作成を確認。アプリの接続URL・CSPは準備済み。環境の通信許可に新しいWorker URLがなくプロキシが403で拒否したため、Workerと公開サイトのホストを設定案へ追加した。Workerは引き続きENABLED=false、公開アプリへの切り替えは実接続確認後。

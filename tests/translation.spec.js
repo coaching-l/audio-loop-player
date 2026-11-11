@@ -2,6 +2,16 @@ import { test, expect } from "@playwright/test";
 import { translationParts } from "../translation.js";
 import { makeWav } from "./fixtures/make-audio.mjs";
 
+test.use({ serviceWorkers: "block" });
+
+// Legacy provider coverage remains explicit while production uses DeepL.
+test.beforeEach(async ({ page }) => {
+  await page.route("**/translation-config.js", route => route.fulfill({ contentType: "text/javascript", body: 'export const CONTEXT_TRANSLATION_URL = "";' }));
+  await page.route("**/", async route => {
+    const response = await route.fetch();
+    await route.fulfill({ response, body: (await response.text()).replace("connect-src 'self'", "connect-src 'self' https://api.mymemory.translated.net") });
+  });
+});
 const endpoint = "https://api.mymemory.translated.net/get**";
 async function prepare(page, text = "Hello there. How are you?") {
   await page.goto("/");
@@ -61,7 +71,7 @@ test("a tap still selects a sentence; long press translates only that sentence w
   await expect(page.locator(".sentence").nth(1)).toHaveClass(/is-selected/);
   expect(requests).toEqual([{ text: "Hello there.", pair: "en|ja" }]);
   await expect(page.locator("#translation-dialog")).toContainText("オンライン");
-  await expect(page.locator("#translation-dialog")).toContainText("無料枠");
+  await expect(page.locator("#translation-dialog")).toContainText("無料");
 });
 
 test("moving a touch to scroll cancels translation; keyboard and button can open it", async ({ page }) => {

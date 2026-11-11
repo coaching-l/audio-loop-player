@@ -2,10 +2,10 @@
 <html lang="ja">
   <head>
     <meta charset="UTF-8" />
-    <!-- App assets and audio stay local; explicit sentence translation may contact MyMemory. -->
+    <!-- App assets and audio stay local; explicit sentence translation contacts the translation Worker. -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self' https://api.mymemory.translated.net; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'"
+      content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self' https://coaching-l-translation.hitch1126.workers.dev; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'"
     />
     <meta
       name="viewport"
@@ -42,8 +42,8 @@
       content="端末の音声で、繰り返し聴く・声に出す。アップロード不要の語学学習プレーヤー。"
     />
     <title>音声リピートプレーヤー | COACHING-L</title>
-    <link rel="stylesheet" href="./style.css?v=55" />
-    <script type="module" src="./app.js?v=55"></script>
+    <link rel="stylesheet" href="./style.css?v=56" />
+    <script type="module" src="./app.js?v=56"></script>
   </head>
   <body>
     <main>
@@ -1011,8 +1011,8 @@
         <p id="translation-result" class="translation-result" lang="ja"></p>
         <button id="translation-retry" class="button secondary" type="button" hidden>もう一度翻訳する</button>
         <p class="small">日本語翻訳機能はオンラインのときに利用できます。保存済みの訳はオフラインでも確認できます。</p>
-        <p class="small translation-service-note">翻訳する文だけをMyMemoryへ送信します。送信した文はサービス側に保存されるため、個人情報や機密情報を含む文は翻訳しないでください。翻訳には誤りが含まれる場合があります。</p>
-        <p id="translation-provider-note" class="small">翻訳：<a href="https://mymemory.translated.net/" target="_blank" rel="noopener noreferrer">MyMemory</a>（無料枠：1日5,000文字まで）</p>
+        <p class="small translation-service-note">翻訳する文と前後各1文・文脈の指定をCloudflare経由でDeepLへ送信します。個人情報や機密情報を含む文は翻訳しないでください。翻訳には誤りが含まれる場合があります。</p>
+        <p id="translation-provider-note" class="small">翻訳：<a href="https://www.deepl.com/" target="_blank" rel="noopener noreferrer">DeepL</a>（無料クレジットの上限に達すると、新しい翻訳は停止します）</p>
       </dialog>
     </main>
   </body>

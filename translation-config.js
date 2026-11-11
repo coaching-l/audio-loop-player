@@ -1,3 +1,2 @@
-// Set the deployed Worker URL only after its DeepL secret and limits are configured.
-// Never put an API key in this file or any browser asset.
-export const CONTEXT_TRANSLATION_URL = "";
+// Public translation Worker URL. Never put an API key in browser assets.
+export const CONTEXT_TRANSLATION_URL = "https://coaching-l-translation.hitch1126.workers.dev/translate";
