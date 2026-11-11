@@ -1,5 +1,5 @@
 // MyMemory's public, keyless endpoint. No accounts, paid keys or automatic retries.
-// Confirm the current service terms and live CORS before publishing this integration.
+// Official free anonymous allowance: 5,000 characters/day (checked 2026-11-11).
 export const TRANSLATION_PROVIDER = "mymemory-v1";
 const encoder = new TextEncoder();
 export const ONLINE_NOTE = "日本語翻訳機能はオンラインのときに利用できます。保存済みの訳はオフラインでも確認できます。";

@@ -1,0 +1,54 @@
+{
+  "checkedDate": "2026-11-11",
+  "provider": "MyMemory",
+  "usageLimitsUrl": "https://mymemory.translated.net/doc/usagelimits.php",
+  "freeAllowanceQuote": "Free, anonymous usage is limited to 5000 chars/day.",
+  "specUrl": "https://mymemory.translated.net/doc/spec.php",
+  "maxQueryBytes": 500,
+  "termsUrl": "https://mymemory.translated.net/terms-and-conditions",
+  "credentials": "No API key, email address, account or payment information supplied.",
+  "transport": "Python urllib through the configured environment proxy, with certificate verification enabled.",
+  "checks": [
+    {
+      "sourceLanguage": "en",
+      "source": "What would you like to take away from this session?",
+      "httpStatus": 200,
+      "corsAllowOrigin": "*",
+      "responseStatus": 200,
+      "quotaFinished": false,
+      "translation": "このセッションから何を学びたいですか？"
+    },
+    {
+      "sourceLanguage": "en",
+      "source": "Can you put a finger on what that experience is?",
+      "httpStatus": 200,
+      "corsAllowOrigin": "*",
+      "responseStatus": 200,
+      "quotaFinished": false,
+      "translation": "あなたはその経験が何であるかを指摘することができますか？"
+    },
+    {
+      "sourceLanguage": "zh-CN",
+      "source": "今天我们一起练习中文。",
+      "httpStatus": 200,
+      "corsAllowOrigin": "*",
+      "responseStatus": 200,
+      "quotaFinished": false,
+      "translation": "今日は中国語の練習をしましょう。"
+    },
+    {
+      "sourceLanguage": "zh-CN",
+      "source": "你想从这次交流中获得什么？",
+      "httpStatus": 200,
+      "corsAllowOrigin": "*",
+      "responseStatus": 200,
+      "quotaFinished": false,
+      "translation": "この交換で何が欲しいのですか？"
+    }
+  ],
+  "limitations": [
+    "Four short sample sentences; no general translation-quality guarantee.",
+    "Quota exhaustion is tested with simulated responses, not by consuming the daily allowance.",
+    "CORS response header was observed on actual HTTPS responses. Browser direct-connection and device verification are recorded separately in VALIDATION.md."
+  ]
+}

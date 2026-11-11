@@ -25,7 +25,8 @@ async function hold(page, index = 0) {
   const sentence = page.locator(".sentence").nth(index);
   await sentence.scrollIntoViewIfNeeded();
   const box = await sentence.boundingBox();
-  if (await page.evaluate(() => navigator.maxTouchPoints > 0)) {
+  if (page.context().browser().browserType().name() === "chromium" &&
+      await page.evaluate(() => navigator.maxTouchPoints > 0)) {
     const session = await page.context().newCDPSession(page);
     await session.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: box.x + 25, y: box.y + box.height / 2 }] });
     await expect(page.locator("#translation-dialog")).toBeVisible();

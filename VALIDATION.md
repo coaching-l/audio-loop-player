@@ -427,3 +427,13 @@
 - 既存の `transcript / guide / release / offline` は同じ2設定で **36 passed (1.3m)**。キャッシュv51、CSS/JSクエリv53。`git diff --check` とJS構文も確認。
 - 390px幅のChromiumでダイアログを目視確認。横スクロールなし、幅352px。画像は `/tmp/japanese-translation-mobile.png`。翻訳文はテスト用の固定応答。実機Safari・Androidの動作や、実翻訳の品質を検証したものではない。
 - **公開前の未完了事項**：`https://mymemory.translated.net/doc/usagelimits.php` は開発環境のプロキシでCONNECT 403。公式の現行無料条件、実APIの英語→日本語・中国語→日本語、CORS・実応答の確認が必要。環境設定の変更案へ `mymemory.translated.net` と `api.mymemory.translated.net` を追加し保存済み（既存のPlaywright用2ホストを保持）。実行環境への適用は未確認。実サービス確認までmainへのpushと公開を行わず、ローカルの専用ブランチに保存する。
+
+## 2026-11-11 日本語訳の無料条件・実API確認とリリース
+
+- 利用者の環境設定操作後、実行環境のネットワーク状態が `enforced`、追加許可ドメインにMyMemoryの2ホストが含まれることを確認。公式サイトと実APIへのHTTPS接続が成功した。
+- 公式の利用上限（https://mymemory.translated.net/doc/usagelimits.php）に `Free, anonymous usage is limited to 5000 chars/day.` と記載。API仕様（https://mymemory.translated.net/doc/spec.php）でキー任意・UTF-8で1要求500バイトまでを確認。本アプリはキー・アカウント・メールアドレス・支払い情報を使わず、無料枠を超えたときの課金や有料サービスへの自動切り替えはない。画面にも1日5,000文字の上限を表示。
+- 公式規約（https://mymemory.translated.net/terms-and-conditions）は機械的なAPIアクセスを許可する一方、クロール、上限回避、複数段落をまとめた翻訳等を禁止している。本実装は明示的に選んだ1文だけを翻訳し、全文の先読みや自動送信を行わない。送信した文章の長期保存やサービス改善への利用が記載されているため、画面・READMEに文章がサービス側へ保存されることと、個人情報・機密情報を翻訳しない案内を追加。
+- Python urllibで環境の既存プロキシ・CA設定を使い、TLS検証を有効にしたまま英語2文・中国語2文を実APIへ送信。全4件でHTTP 200、responseStatus 200、quotaFinished false、日本語訳の取得と `Access-Control-Allow-Origin: *` を確認。結果は [実接続記録](validation/translation-2026-11-11.json)。中国語「交流」が「交換」と訳されるなど直訳調の例があり、翻訳品質を保証するものではない。無料枠を意図的に使い切らず、上限時の案内は模擬応答で検証した。
+- ローカルChromiumから実APIへの直接接続は `net::ERR_CERT_AUTHORITY_INVALID` で失敗。curl/Pythonは既存CA設定で検証に成功している。環境に配布されたプロキシCAをChromiumの永続的な信頼ストアへ追加する操作は、自動承認審査で「ブラウザ全体のTLS信頼境界を変える操作への明確な承認がない」と拒否された。証明書の追加や検証無効化は行わず、実APIの接続確認とブラウザの操作検証を分けた。ブラウザからの実API直接接続を確認済みとは扱わない。
+- WebKitのブラウザ本体は `/tmp/translation-browsers` へ導入したが、GTK4、Graphene、harfbuzz-icu、manette、hyphen、woff、GLESv2が不足し起動条件を満たせなかった。通常ユーザーでのapt-get downloadも、パッケージ一覧がなく該当パッケージを取得できず、WebKit検証は未実施。テストのCDPタッチ送信をChromiumに限定し、WebKitでは通常のマウス操作を使うように修正した。実機Safari・Androidの動作も未確認。
+- 最終の `translation / transcript / guide / release / offline` をPC Chromium・Android Chrome相当で実行し **58 passed (1.2m)**。長押し（モバイル設定ではタッチイベント）、通常タップ・スクロールとの両立、言語切り替え、再読み込み後の訳の保存・オフライン表示、教材切り替え・編集・閉じる操作での古い応答排除、部分翻訳失敗、上限・タイムアウト、既存の区間選択・スクリプト編集・オフライン起動を確認。翻訳応答はこのブラウザテストでは模擬応答。キャッシュv52、CSS/JSクエリv54。`git diff --check` と構文も確認。
