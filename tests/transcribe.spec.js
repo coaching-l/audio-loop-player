@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { makePhrasesWav } from "./fixtures/make-audio.mjs";
-import { setRepeat } from "./helpers.mjs";
+import { setRepeat, expectLinuxWebKitFailure } from "./helpers.mjs";
 import {
   splitSentences,
   alignSentences,
@@ -596,10 +596,15 @@ test("Whisper itself transcribes real speech, also offline once saved", async ({
   page,
   context,
   isMobile,
+  browserName,
 }) => {
   test.skip(
     isMobile,
     "Same engine as the desktop run; once per engine is enough.",
+  );
+  expectLinuxWebKitFailure(
+    browserName,
+    "Linux WebKit: offline, the saved audio Blob cannot be read again (NotReadableError; see DEVELOPMENT.md)",
   );
   test.setTimeout(300000);
   const problems = [];
