@@ -1,5 +1,6 @@
 import { createServer } from "node:http";
 import { readFile, stat } from "node:fs/promises";
+import { realpathSync } from "node:fs";
 import { resolve, extname, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 const root = resolve(import.meta.dirname, "..");
@@ -45,7 +46,11 @@ export async function serveFile(req, res) {
     res.writeHead(404).end("Not found");
   }
 }
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url))
+// Listen only when run directly (npm start), also through a symbolic link to this file.
+const runDirectly =
+  process.argv[1] &&
+  realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url));
+if (runDirectly)
   createServer(serveFile).listen(Number(process.env.PORT || 4173), "0.0.0.0", () =>
     console.log("Audio Loop Player server on port " + (process.env.PORT || 4173)),
   );
