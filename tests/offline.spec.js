@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { openAdvanced, setRepeat } from "./helpers.mjs";
+import { openAdvanced, setRepeat, expectLinuxWebKitFailure } from "./helpers.mjs";
 import { createServer } from "node:http";
 import { readFile, mkdtemp, rm } from "node:fs/promises";
 import { shellFiles, shellVersion } from "../scripts/bump-shell.mjs";
@@ -89,7 +89,9 @@ for (const prefix of ["/", "/audio-loop-player/"])
   test(`offline new-tab launch, reload and practice at ${prefix}`, async ({
     page,
     context,
+    browserName,
   }) => {
+    expectLinuxWebKitFailure(browserName, "Linux WebKit: internal error when loading offline (see DEVELOPMENT.md)");
     const host = await server();
     try {
       await page.goto(host.url + prefix);
@@ -171,7 +173,9 @@ test("failed preparation does not claim readiness and retry recovers", async ({
 test("failed update keeps the old offline app; successful update preserves audio and sibling caches", async ({
   page,
   context,
+  browserName,
 }) => {
+  expectLinuxWebKitFailure(browserName, "Linux WebKit: internal error when loading offline (see DEVELOPMENT.md)");
   const host = await server();
   try {
     await page.goto(host.url + "/audio-loop-player/");
@@ -245,7 +249,9 @@ test("failed update keeps the old offline app; successful update preserves audio
 test("missing shell cache is detected and can be prepared again", async ({
   page,
   context,
+  browserName,
 }) => {
+  expectLinuxWebKitFailure(browserName, "Linux WebKit: internal error when loading offline (see DEVELOPMENT.md)");
   const host = await server();
   try {
     await page.goto(host.url + "/audio-loop-player/");
@@ -276,7 +282,12 @@ test("missing shell cache is detected and can be prepared again", async ({
 });
 test("cold browser restart can open the saved app and audio offline", async ({
   browser,
+  browserName,
 }, testInfo) => {
+  expectLinuxWebKitFailure(
+    browserName,
+    "Linux WebKit: the offline preparation does not finish here (see DEVELOPMENT.md)",
+  );
   const host = await server();
   const profile = await mkdtemp(join(tmpdir(), "audio-offline-profile-"));
   let session;

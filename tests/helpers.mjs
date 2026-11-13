@@ -1,5 +1,5 @@
 // Shared steps for the practice screen.
-import { expect } from "@playwright/test";
+import { test, expect } from "@playwright/test";
 
 // Opens the folded "詳しい設定" so its fields can be used.
 export async function openAdvanced(page) {
@@ -15,3 +15,13 @@ export async function setRepeat(page, on) {
     await toggle.click();
   await expect(toggle).toHaveAttribute("aria-pressed", String(on));
 }
+
+// Linux WebKit (the CI's WebKit) cannot run some offline steps: once the network is cut
+// it reports "WebKit encountered an internal error" on navigation, or cannot re-read a
+// Blob (NotReadableError). Offline use was checked on a real iPhone. These tests still
+// run everywhere; on Linux WebKit they are expected to fail, so the WebKit job turns red
+// only for a new failure, or if one of these starts to pass. See DEVELOPMENT.md.
+export function expectLinuxWebKitFailure(browserName, reason) {
+  test.fail(browserName === "webkit" && process.platform === "linux", reason);
+}
+
