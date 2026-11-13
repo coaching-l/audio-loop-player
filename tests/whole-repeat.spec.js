@@ -64,7 +64,11 @@ test("whole MP3 playback stops at the chosen count and replay resets the count",
   expect((await starts(page)).length).toBe(2);
   await expect(page.locator("#repeat-progress")).toHaveText("完了 2 / 2 回");
   await page.locator("#replay-whole").click();
+  // The label still reads 再生完了 for a moment after the click, so waiting for it
+  // could end before the replay starts: wait for the two replayed starts instead.
+  await expect.poll(async () => (await starts(page)).length, { timeout: 12000 }).toBe(4);
   await expect(page.locator("#play-status")).toHaveText("再生完了", { timeout: 12000 });
+  await expect(page.locator("#repeat-progress")).toHaveText("完了 2 / 2 回");
   expect((await starts(page)).length).toBe(4);
 });
 
