@@ -129,13 +129,20 @@ export class LoopPlayer {
       this.wait(this.remaining, this.resumeAt);
       return;
     }
-    // At (or within a hair of) the end there is nothing left to play: start over. WebKit
-    // can stop a paused element a few microseconds short of its duration, and playing
-    // from there it neither moves nor sends "ended".
+    // At (or within a hair of) the end of the audio there is nothing left to play: start
+    // over. WebKit can stop a paused element a few microseconds short of its duration,
+    // and playing from there it neither moves nor sends "ended". The allowance is for the
+    // end of the audio only: an A–B interval can be shorter than it, and each repeat
+    // starts at A, where it must not reset the count.
+    const nearAudioEnd =
+      this.mode !== "ab" &&
+      this.audio.currentTime > this.start &&
+      this.audio.currentTime >= this.end - END_SLACK;
     if (
       this.phase === "done" ||
       this.audio.ended ||
-      this.audio.currentTime >= this.end - END_SLACK
+      this.audio.currentTime >= this.end ||
+      nearAudioEnd
     ) {
       this.completed = 0;
       this.audio.currentTime = this.start;

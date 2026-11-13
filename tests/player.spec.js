@@ -551,3 +551,26 @@ test("pressing play a hair before the end starts over and finishes", async ({
   expect(starts.length).toBe(1);
   expect(starts[0]).toBeLessThan(0.1);
 });
+// The end allowance for starting over is for the end of the audio only. An A–B interval
+// shorter than it (0.04 s here) must still stop at the chosen count: every restart at A
+// once counted as "at the end" and reset the count, so it never stopped (found by Codex).
+for (const gap of ["0", "0.2"])
+  test(`a very short A–B interval stops at the chosen count (silence ${gap} s)`, async ({
+    page,
+  }) => {
+    await load(page);
+    await configure(page, { a: "0.2", b: "0.24", count: "2", gap });
+    await page.locator("#audio").evaluate((audio) => {
+      window.starts = [];
+      audio.addEventListener("play", () => window.starts.push(audio.currentTime));
+    });
+    await page.locator("#play").click();
+    await expect(page.locator("#play-status")).toHaveText("再生完了", { timeout: 5000 });
+    await expect(page.locator("#repeat-progress")).toHaveText("完了 2 / 2 回");
+    // It stays stopped, and both plays started at A.
+    await page.waitForTimeout(600);
+    const starts = await page.evaluate(() => window.starts);
+    expect(starts.length).toBe(2);
+    expect(starts.every((t) => Math.abs(t - 0.2) < 0.02)).toBe(true);
+    await expect(page.locator("#play-status")).toHaveText("再生完了");
+  });
