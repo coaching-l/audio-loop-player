@@ -73,8 +73,15 @@ async function server() {
       });
     },
     // Back online at the same address (and so the same origin and caches).
+    // Rejects if the port was taken meanwhile, rather than hanging until the timeout.
     reopen: () =>
-      new Promise((resolve) => host.listen(port, "127.0.0.1", resolve)),
+      new Promise((resolve, reject) => {
+        host.once("error", reject);
+        host.listen(port, "127.0.0.1", () => {
+          host.off("error", reject);
+          resolve();
+        });
+      }),
   };
 }
 // Offline in these tests means the server is stopped, not Playwright's offline switch

@@ -152,7 +152,9 @@ npm run test:all         # すべて
 
 WebKitのジョブは失敗してもPRを止めない設定です。
 
-オフラインのテスト（`offline.spec.js`）は、Playwrightの通信遮断（`context.setOffline`）を使わず、**テスト用サーバーを止めて**オフラインにします（`goOffline`。止めたあと、キャッシュ外のファイルが取得できないことを確かめます。オンラインに戻すときは同じアドレスで `reopen`）。Linux版WebKitは通信遮断のあとの読み込みで内部エラー（`WebKit encountered an internal error`）になるためです。この方法なら、Linux版WebKitでもオフライン機能を確かめられます。新しくオフラインのテストを書くときも、この方法を使ってください。
+オフラインのテスト（`offline.spec.js`）は、Playwrightの通信遮断（`context.setOffline`）を使わず、**テスト用サーバーを止めて**オフラインにします（`goOffline`。止めたあと、キャッシュ外のファイルが取得できないことを確かめます。オンラインに戻すときは同じアドレスで `reopen`）。Linux版WebKitは通信遮断のあとの読み込みで内部エラー（`WebKit encountered an internal error`）になるためです。この方法なら、Linux版WebKitでも、キャッシュからの起動・再読み込みを確かめられます。新しく**キャッシュからの起動・再読み込み**のテストを書くときは、この方法を使ってください。
+
+ただし、この方法では端末の通信状態は変わりません（`navigator.onLine` は true のままで、`offline`／`online` の合図も出ません）。**通信状態への反応**（オフライン中は更新を始めない、合図を受けて状態を確かめ直す、など）を確かめるテストは、読み込み済みのページで `context.setOffline` を使ってください（この方法でも、ページを読み込み直さなければLinux版WebKitの内部エラーは起きません）。
 
 それでも次の3件は、Linux版WebKitでは失敗します。iPhone実機ではオフラインで使えることを確認済みです。
 
