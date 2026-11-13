@@ -12,6 +12,12 @@ test("importing the development server only provides serveFile", ({}, testInfo) 
       input:
         'const m = await import("./scripts/serve.mjs"); console.log(typeof m.serveFile);',
       encoding: "utf8",
+      // Both set (as test runners may do) makes Node print a warning to standard error.
+      env: Object.fromEntries(
+        Object.entries(process.env).filter(
+          ([name]) => name !== "NO_COLOR" && name !== "FORCE_COLOR",
+        ),
+      ),
       timeout: 10000,
     },
   );
