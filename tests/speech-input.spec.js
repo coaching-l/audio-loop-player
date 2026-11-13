@@ -1,5 +1,8 @@
 import { test, expect } from '@playwright/test';
 import { speechMono, normalizeQuietSpeech } from '../speech-input.js';
+// The fixtures below are served by page.route. Once the app's service worker controls the
+// page, WebKit sent the second fixture request past the route to the real server (404).
+test.use({ serviceWorkers: 'block' });
 const buffer = (...channels) => ({ length: channels[0].length,
   numberOfChannels: channels.length, getChannelData: c => channels[c] });
 
