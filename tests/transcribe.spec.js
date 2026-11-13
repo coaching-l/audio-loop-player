@@ -1,8 +1,10 @@
 import { test, expect } from "@playwright/test";
 import { readFile } from "node:fs/promises";
+import { createServer } from "node:http";
+import { serveFile } from "../scripts/serve.mjs";
 import { createHash } from "node:crypto";
 import { makePhrasesWav } from "./fixtures/make-audio.mjs";
-import { setRepeat, expectLinuxWebKitFailure } from "./helpers.mjs";
+import { setRepeat } from "./helpers.mjs";
 import {
   splitSentences,
   alignSentences,
@@ -594,43 +596,60 @@ test("the model is saved once after checking each file, and can be deleted", asy
 // work of the U.S. government in the public domain; the sample whisper.cpp ships with.
 test("Whisper itself transcribes real speech, also offline once saved", async ({
   page,
-  context,
   isMobile,
-  browserName,
 }) => {
   test.skip(
     isMobile,
     "Same engine as the desktop run; once per engine is enough.",
   );
-  expectLinuxWebKitFailure(
-    browserName,
-    "Linux WebKit: offline, the saved audio Blob cannot be read again (NotReadableError; see DEVELOPMENT.md)",
-  );
   test.setTimeout(300000);
+  // A server of its own, stopped to go offline. Playwright's offline switch made Linux
+  // WebKit fail to read the chosen audio file again (NotReadableError); with the server
+  // gone, the model can only come from what the app saved.
+  const host = createServer(serveFile);
+  await new Promise((resolve) => host.listen(0, "127.0.0.1", resolve));
   const problems = [];
   page.on("console", (m) => m.type() === "error" && problems.push(m.text()));
   page.on("pageerror", (e) => problems.push(e.message));
-  await page.goto("/");
-  await load(page, "tests/fixtures/jfk.wav");
-  await startTranscribing(page);
-  await expect(sentences(page).first()).toBeVisible({ timeout: 240000 });
-  const heard = (await sentences(page).allTextContents()).join(" ");
-  expect(heard.toLowerCase().replace(/[^a-z ]/g, "")).toContain(
-    "ask not what your country can do for you",
-  );
-  // The saved model works without a connection.
-  await page.getByRole("button", { name: "スクリプトを消す" }).click();
-  await context.setOffline(true);
-  await startTranscribing(page);
   try {
-    await expect(page.locator("#notice")).toContainText("書き起こしました", {
-      timeout: 240000,
+    await page.goto(`http://127.0.0.1:${host.address().port}/`);
+    await load(page, "tests/fixtures/jfk.wav");
+    await startTranscribing(page);
+    await expect(sentences(page).first()).toBeVisible({ timeout: 240000 });
+    const heard = (await sentences(page).allTextContents()).join(" ");
+    expect(heard.toLowerCase().replace(/[^a-z ]/g, "")).toContain(
+      "ask not what your country can do for you",
+    );
+    // The saved model works without a connection.
+    await page.getByRole("button", { name: "スクリプトを消す" }).click();
+    await new Promise((resolve) => {
+      host.close(resolve);
+      host.closeAllConnections();
     });
-  } catch (error) {
-    // Name what went wrong inside the page, not only the message it showed.
-    error.message += "\nConsole errors:\n" + problems.join("\n");
-    throw error;
+    expect(
+      await page.evaluate(() =>
+        fetch("./not-cached-probe.txt", { cache: "no-store" }).then(
+          (response) => "answered " + response.status,
+          () => "unreachable",
+        ),
+      ),
+    ).toBe("unreachable");
+    await startTranscribing(page);
+    try {
+      await expect(page.locator("#notice")).toContainText("書き起こしました", {
+        timeout: 240000,
+      });
+    } catch (error) {
+      // Name what went wrong inside the page, not only the message it showed.
+      error.message += "\nConsole errors:\n" + problems.join("\n");
+      throw error;
+    }
+    await expect(sentences(page).first()).toBeVisible();
+  } finally {
+    if (host.listening)
+      await new Promise((resolve) => {
+        host.close(resolve);
+        host.closeAllConnections();
+      });
   }
-  await expect(sentences(page).first()).toBeVisible();
-  await context.setOffline(false);
 });

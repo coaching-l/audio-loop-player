@@ -152,16 +152,15 @@ npm run test:all         # すべて
 
 WebKitのジョブは失敗してもPRを止めない設定です。
 
-オフラインのテスト（`offline.spec.js`）は、Playwrightの通信遮断（`context.setOffline`）を使わず、**テスト用サーバーを止めて**オフラインにします（`goOffline`。止めたあと、キャッシュ外のファイルが取得できないことを確かめます。オンラインに戻すときは同じアドレスで `reopen`）。Linux版WebKitは通信遮断のあとの読み込みで内部エラー（`WebKit encountered an internal error`）になるためです。この方法なら、Linux版WebKitでも、キャッシュからの起動・再読み込みを確かめられます。新しく**キャッシュからの起動・再読み込み**のテストを書くときは、この方法を使ってください。
+オフラインのテスト（`offline.spec.js`）は、Playwrightの通信遮断（`context.setOffline`）を使わず、**テスト用サーバーを止めて**オフラインにします（`goOffline`。止めたあと、キャッシュ外のファイルが取得できないことを確かめます。オンラインに戻すときは同じアドレスで `reopen`）。Linux版WebKitは通信遮断のあとの読み込みで内部エラー（`WebKit encountered an internal error`）になるためです。この方法なら、Linux版WebKitでも、キャッシュからの起動・再読み込みを確かめられます。新しく**キャッシュからの起動・再読み込み**のテストを書くときは、この方法を使ってください。本物のWhisperのテスト（`transcribe.spec.js`）も、同じ理由で自分用のサーバー（`scripts/serve.mjs` の `serveFile`）を立て、それを止めてオフラインにします（通信遮断では、Linux版WebKitが選んだ音声ファイルを読み直せず `NotReadableError` になったため）。
 
 ただし、この方法では端末の通信状態は変わりません（`navigator.onLine` は true のままで、`offline`／`online` の合図も出ません）。**通信状態への反応**（オフライン中は更新を始めない、合図を受けて状態を確かめ直す、など）を確かめるテストは、読み込み済みのページで `context.setOffline` を使ってください。既存の翻訳テストは、Service Workerを無効にした（`serviceWorkers: "block"`）読み込み済みのページで `context.setOffline` を使い、Linux版WebKitのCIを通っています。Service Workerを有効にした状態での通信の合図や更新の操作がLinux版WebKitで通るかは、まだ確かめていないので、書くときに別に確かめてください。
 
-それでも次の3件は、Linux版WebKitでは失敗します。iPhone実機ではオフラインで使えることを確認済みです。
+それでも次の2件は、Linux版WebKitでは失敗します。iPhone実機ではオフラインで使えることを確認済みです。
 
 - `offline.spec.js` の「ブラウザを再起動してもオフラインで開ける」（デスクトップとiPhone設定で2件）。オフラインにする前、保存済みのプロファイルで開く最初の（オンラインの）オフライン準備が終わりません。通信の切り方とは関係がありません。
-- `transcribe.spec.js` の本物のWhisperのテストの後半（デスクトップのみ）。通信ありの文字起こしは成功し、通信を切ったあとの2回目で、すでに読み込んだ音声ファイル（Blob）の読み直しが `NotReadableError` になります。
 
-この3件は、テストの中で「Linux版WebKitでは失敗するもの」（`tests/helpers.mjs` の `expectLinuxWebKitFailure`、Playwrightの `test.fail`）として印を付けています。テストは消さずに毎回動かし、Linux版WebKitでは失敗すれば成功として数えます。そのため、WebKitのジョブは普段は成功（緑）になり、**新しい失敗が出たときか、この3件のどれかが通るようになったときだけ**失敗（赤）になります。WebKitのジョブが赤になったら、必ず調べてください。この3件のどれかが通るようになったら、そのテストの印を外してください。ChromiumやMac・iPhoneのWebKitでは、印は効きません。
+この2件は、テストの中で「Linux版WebKitでは失敗するもの」（`tests/helpers.mjs` の `expectLinuxWebKitFailure`、Playwrightの `test.fail`）として印を付けています。テストは消さずに毎回動かし、Linux版WebKitでは失敗すれば成功として数えます。そのため、WebKitのジョブは普段は成功（緑）になり、**新しい失敗が出たときか、この2件のどちらかが通るようになったときだけ**失敗（赤）になります。WebKitのジョブが赤になったら、必ず調べてください。この2件のどちらかが通るようになったら、そのテストの印を外してください。ChromiumやMac・iPhoneのWebKitでは、印は効きません。
 
 ### クラウド環境でWebKitを入れるとき
 

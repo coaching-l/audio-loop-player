@@ -1,6 +1,8 @@
 import { createServer } from "node:http";
 import { readFile, stat } from "node:fs/promises";
+import { realpathSync } from "node:fs";
 import { resolve, extname, sep } from "node:path";
+import { fileURLToPath } from "node:url";
 const root = resolve(import.meta.dirname, "..");
 const types = {
   ".html": "text/html; charset=utf-8",
@@ -15,7 +17,8 @@ const types = {
   ".mp3": "audio/mpeg",
   ".m4a": "audio/mp4",
 };
-createServer(async (req, res) => {
+// Also used by tests that need a server of their own, to stop it and so go offline.
+export async function serveFile(req, res) {
   try {
     const pathname = decodeURIComponent(
       new URL(req.url, "http://localhost").pathname,
@@ -42,6 +45,21 @@ createServer(async (req, res) => {
   } catch {
     res.writeHead(404).end("Not found");
   }
-}).listen(Number(process.env.PORT || 4173), "0.0.0.0", () =>
-  console.log("Audio Loop Player server on port " + (process.env.PORT || 4173)),
-);
+}
+// Listen only when run directly (npm start), also through a symbolic link to this file.
+// An entry that is not a file (e.g. "-" when the code comes from standard input) is
+// not this file being run.
+function runDirectly() {
+  try {
+    return (
+      realpathSync(process.argv[1]) ===
+      realpathSync(fileURLToPath(import.meta.url))
+    );
+  } catch {
+    return false;
+  }
+}
+if (process.argv[1] && runDirectly())
+  createServer(serveFile).listen(Number(process.env.PORT || 4173), "0.0.0.0", () =>
+    console.log("Audio Loop Player server on port " + (process.env.PORT || 4173)),
+  );
