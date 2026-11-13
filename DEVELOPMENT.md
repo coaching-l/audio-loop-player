@@ -150,11 +150,11 @@ npm run test:all         # すべて
 
 `.github/workflows/test.yml` が、PRと `main` への変更ごとにChromium（デスクトップ・Android想定）とWebKit（デスクトップ・iPhone想定）を実行します。
 
-WebKitのジョブは失敗してもPRを止めない設定です。Linux版WebKitでは、通信を切ったあとの読み込みでブラウザが内部エラー（`WebKit encountered an internal error`）になるため、次の11件が失敗します。iPhone実機ではオフラインで使えることを確認済みです。
+WebKitのジョブは失敗してもPRを止めない設定です。Linux版WebKitでは、通信を切ったあとの読み込みでブラウザが内部エラー（`WebKit encountered an internal error`）になるため、次の9件が失敗します。iPhone実機ではオフラインで使えることを確認済みです。
 
-この11件は、テストの中で「Linux版WebKitでは失敗するもの」（`tests/helpers.mjs` の `expectLinuxWebKitFailure`、Playwrightの `test.fail`）として印を付けています。テストは消さずに毎回動かし、Linux版WebKitでは失敗すれば成功として数えます。そのため、WebKitのジョブは普段は成功（緑）になり、**新しい失敗が出たときか、この11件のどれかが通るようになったときだけ**失敗（赤）になります。WebKitのジョブが赤になったら、必ず調べてください。この11件のどれかが通るようになったら、そのテストの印を外してください。ChromiumやMac・iPhoneのWebKitでは、印は効きません。
+この9件は、テストの中で「Linux版WebKitでは失敗するもの」（`tests/helpers.mjs` の `expectLinuxWebKitFailure`、Playwrightの `test.fail`）として印を付けています。テストは消さずに毎回動かし、Linux版WebKitでは失敗すれば成功として数えます。そのため、WebKitのジョブは普段は成功（緑）になり、**新しい失敗が出たときか、この9件のどれかが通るようになったときだけ**失敗（赤）になります。WebKitのジョブが赤になったら、必ず調べてください。この9件のどれかが通るようになったら、そのテストの印を外してください。ChromiumやMac・iPhoneのWebKitでは、印は効きません。
 
-- `offline.spec.js` の5種類（デスクトップとiPhone設定で×2）
+- `offline.spec.js` の4種類（デスクトップとiPhone設定で×2）。5種類目の「シェルのキャッシュが無いことを検知して準備し直す」は、Playwrightの通信遮断（`context.setOffline`）の代わりに**テスト用サーバーを止める**方法に変えた試行中のテストで、印を付けていません（サーバーを止めたあと、キャッシュ外のファイルが取得できないことを確かめてから再読み込みします）。この方法がLinux版WebKitで通るなら、残りのテストにも広げます。
 - `transcribe.spec.js` の本物のWhisperのテストの後半（デスクトップのみ）。通信ありの文字起こしは成功し、通信を切ったあとの2回目で、すでに読み込んだ音声ファイル（Blob）の読み直しが `NotReadableError` になります。
 
 ### クラウド環境でWebKitを入れるとき

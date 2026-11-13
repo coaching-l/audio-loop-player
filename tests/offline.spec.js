@@ -246,12 +246,13 @@ test("failed update keeps the old offline app; successful update preserves audio
   }
 });
 
+// Offline here means the server is stopped, not Playwright's offline switch: Linux WebKit
+// reports an internal error on navigation under that switch. With the server gone, the
+// page can only come from the service worker's cache. (A trial for the other offline
+// tests, which still use the switch and are marked as known Linux WebKit failures.)
 test("missing shell cache is detected and can be prepared again", async ({
   page,
-  context,
-  browserName,
 }) => {
-  expectLinuxWebKitFailure(browserName, "Linux WebKit: internal error when loading offline (see DEVELOPMENT.md)");
   const host = await server();
   try {
     await page.goto(host.url + "/audio-loop-player/");
@@ -268,15 +269,25 @@ test("missing shell cache is detected and can be prepared again", async ({
     await page.locator("#usage-guide > summary").click();
     await page.locator("#offline-retry").click();
     await prepared(page);
-    await context.setOffline(true);
+    await host.close();
+    // The server really is unreachable: a file outside the cache cannot be fetched.
+    expect(
+      await page.evaluate(() =>
+        fetch("./not-cached-probe.txt", { cache: "no-store" }).then(
+          (response) => "answered " + response.status,
+          () => "unreachable",
+        ),
+      ),
+    ).toBe("unreachable");
     await page.reload();
     await expect(page.locator("#offline-status")).toHaveAttribute(
       "data-ready",
       "true",
       { timeout: 15000 },
     );
+    // The reloaded page is the app itself, served from the cache.
+    await expect(page.locator("#entry-audio")).toBeVisible();
   } finally {
-    await context.setOffline(false);
     await host.close();
   }
 });
