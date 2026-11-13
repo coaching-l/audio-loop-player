@@ -504,3 +504,73 @@ test("switching while playing stops and releases the previous media element", as
       .evaluate((a) => a.paused && a.currentTime === 0),
   ).toBe(true);
 });
+
+// WebKit was seen to play from a hair before the end without moving or sending "ended",
+// leaving the player at 再生中. These reproduce both halves in any browser.
+test("playback ends and whole repeat loops even when the browser sends no ended event", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    // Seen first on the way to the element, so it can keep "ended" from the player.
+    window.addEventListener(
+      "ended",
+      (event) => window.dropEnded && event.stopImmediatePropagation(),
+      true,
+    );
+  });
+  await page.reload();
+  await load(page, { name: "short.wav", mimeType: "audio/wav", buffer: makeWav(0.65) });
+  await page.evaluate(() => (window.dropEnded = true));
+  await page.locator("#play").click();
+  await expect(page.locator("#play-status")).toHaveText("再生完了", { timeout: 4000 });
+  await page.locator("#audio").evaluate((audio) => {
+    window.starts = [];
+    audio.addEventListener("play", () => window.starts.push(audio.currentTime));
+  });
+  await page.locator("#toggle-whole").click();
+  await expect
+    .poll(() => page.evaluate(() => window.starts.length), { timeout: 5000 })
+    .toBeGreaterThanOrEqual(3);
+  expect(await page.evaluate(() => window.starts.every((t) => t < 0.15))).toBe(true);
+});
+test("pressing play a hair before the end starts over and finishes", async ({
+  page,
+}) => {
+  await load(page, { name: "short.wav", mimeType: "audio/wav", buffer: makeWav(0.65) });
+  await page.locator("#seek").evaluate((el) => {
+    el.value = String(document.getElementById("audio").duration - 0.01);
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await page.locator("#audio").evaluate((audio) => {
+    window.starts = [];
+    audio.addEventListener("play", () => window.starts.push(audio.currentTime));
+  });
+  await page.locator("#play").click();
+  await expect(page.locator("#play-status")).toHaveText("再生完了", { timeout: 4000 });
+  const starts = await page.evaluate(() => window.starts);
+  expect(starts.length).toBe(1);
+  expect(starts[0]).toBeLessThan(0.1);
+});
+// The end allowance for starting over is for the end of the audio only. An A–B interval
+// shorter than it (0.04 s here) must still stop at the chosen count: every restart at A
+// once counted as "at the end" and reset the count, so it never stopped (found by Codex).
+for (const gap of ["0", "0.2"])
+  test(`a very short A–B interval stops at the chosen count (silence ${gap} s)`, async ({
+    page,
+  }) => {
+    await load(page);
+    await configure(page, { a: "0.2", b: "0.24", count: "2", gap });
+    await page.locator("#audio").evaluate((audio) => {
+      window.starts = [];
+      audio.addEventListener("play", () => window.starts.push(audio.currentTime));
+    });
+    await page.locator("#play").click();
+    await expect(page.locator("#play-status")).toHaveText("再生完了", { timeout: 5000 });
+    await expect(page.locator("#repeat-progress")).toHaveText("完了 2 / 2 回");
+    // It stays stopped, and both plays started at A.
+    await page.waitForTimeout(600);
+    const starts = await page.evaluate(() => window.starts);
+    expect(starts.length).toBe(2);
+    expect(starts.every((t) => Math.abs(t - 0.2) < 0.02)).toBe(true);
+    await expect(page.locator("#play-status")).toHaveText("再生完了");
+  });
