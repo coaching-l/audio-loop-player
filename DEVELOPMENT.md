@@ -150,12 +150,16 @@ npm run test:all         # すべて
 
 `.github/workflows/test.yml` が、PRと `main` への変更ごとにChromium（デスクトップ・Android想定）とWebKit（デスクトップ・iPhone想定）を実行します。
 
-WebKitのジョブは失敗してもPRを止めない設定です。Linux版WebKitでは、通信を切ったあとの読み込みでブラウザが内部エラー（`WebKit encountered an internal error`）になるため、次の9件が失敗します。iPhone実機ではオフラインで使えることを確認済みです。
+WebKitのジョブは失敗してもPRを止めない設定です。
 
-この9件は、テストの中で「Linux版WebKitでは失敗するもの」（`tests/helpers.mjs` の `expectLinuxWebKitFailure`、Playwrightの `test.fail`）として印を付けています。テストは消さずに毎回動かし、Linux版WebKitでは失敗すれば成功として数えます。そのため、WebKitのジョブは普段は成功（緑）になり、**新しい失敗が出たときか、この9件のどれかが通るようになったときだけ**失敗（赤）になります。WebKitのジョブが赤になったら、必ず調べてください。この9件のどれかが通るようになったら、そのテストの印を外してください。ChromiumやMac・iPhoneのWebKitでは、印は効きません。
+オフラインのテスト（`offline.spec.js`）は、Playwrightの通信遮断（`context.setOffline`）を使わず、**テスト用サーバーを止めて**オフラインにします（`goOffline`。止めたあと、キャッシュ外のファイルが取得できないことを確かめます。オンラインに戻すときは同じアドレスで `reopen`）。Linux版WebKitは通信遮断のあとの読み込みで内部エラー（`WebKit encountered an internal error`）になるためです。この方法なら、Linux版WebKitでもオフライン機能を確かめられます。新しくオフラインのテストを書くときも、この方法を使ってください。
 
-- `offline.spec.js` の4種類（デスクトップとiPhone設定で×2）。5種類目の「シェルのキャッシュが無いことを検知して準備し直す」は、Playwrightの通信遮断（`context.setOffline`）の代わりに**テスト用サーバーを止める**方法に変えた試行中のテストで、印を付けていません（サーバーを止めたあと、キャッシュ外のファイルが取得できないことを確かめてから再読み込みします）。この方法がLinux版WebKitで通るなら、残りのテストにも広げます。
+それでも次の3件は、Linux版WebKitでは失敗します。iPhone実機ではオフラインで使えることを確認済みです。
+
+- `offline.spec.js` の「ブラウザを再起動してもオフラインで開ける」（デスクトップとiPhone設定で2件）。オフラインにする前、保存済みのプロファイルで開く最初の（オンラインの）オフライン準備が終わりません。通信の切り方とは関係がありません。
 - `transcribe.spec.js` の本物のWhisperのテストの後半（デスクトップのみ）。通信ありの文字起こしは成功し、通信を切ったあとの2回目で、すでに読み込んだ音声ファイル（Blob）の読み直しが `NotReadableError` になります。
+
+この3件は、テストの中で「Linux版WebKitでは失敗するもの」（`tests/helpers.mjs` の `expectLinuxWebKitFailure`、Playwrightの `test.fail`）として印を付けています。テストは消さずに毎回動かし、Linux版WebKitでは失敗すれば成功として数えます。そのため、WebKitのジョブは普段は成功（緑）になり、**新しい失敗が出たときか、この3件のどれかが通るようになったときだけ**失敗（赤）になります。WebKitのジョブが赤になったら、必ず調べてください。この3件のどれかが通るようになったら、そのテストの印を外してください。ChromiumやMac・iPhoneのWebKitでは、印は効きません。
 
 ### クラウド環境でWebKitを入れるとき
 
