@@ -61,9 +61,10 @@ async function server() {
     }
   });
   await new Promise((resolve) => host.listen(0, "127.0.0.1", resolve));
+  const port = host.address().port;
   return {
     state,
-    url: `http://127.0.0.1:${host.address().port}`,
+    url: `http://127.0.0.1:${port}`,
     close: () => {
       if (!host.listening) return Promise.resolve();
       return new Promise((resolve) => {
@@ -71,7 +72,32 @@ async function server() {
         host.closeAllConnections();
       });
     },
+    // Back online at the same address (and so the same origin and caches).
+    // Rejects if the port was taken meanwhile, rather than hanging until the timeout.
+    reopen: () =>
+      new Promise((resolve, reject) => {
+        host.once("error", reject);
+        host.listen(port, "127.0.0.1", () => {
+          host.off("error", reject);
+          resolve();
+        });
+      }),
   };
+}
+// Offline in these tests means the server is stopped, not Playwright's offline switch
+// (context.setOffline): under that switch Linux WebKit reports an internal error on
+// navigation. With the server gone, pages and files can only come from the service
+// worker's cache. This checks that the server really cannot be reached.
+async function goOffline(page, host) {
+  await host.close();
+  expect(
+    await page.evaluate(() =>
+      fetch("./not-cached-probe.txt", { cache: "no-store" }).then(
+        (response) => "answered " + response.status,
+        () => "unreachable",
+      ),
+    ),
+  ).toBe("unreachable");
 }
 async function prepared(page) {
   await expect(page.locator("#offline-status")).toHaveAttribute(
@@ -89,9 +115,7 @@ for (const prefix of ["/", "/audio-loop-player/"])
   test(`offline new-tab launch, reload and practice at ${prefix}`, async ({
     page,
     context,
-    browserName,
   }) => {
-    expectLinuxWebKitFailure(browserName, "Linux WebKit: internal error when loading offline (see DEVELOPMENT.md)");
     const host = await server();
     try {
       await page.goto(host.url + prefix);
@@ -102,8 +126,8 @@ for (const prefix of ["/", "/audio-loop-player/"])
       await page.locator("#point-b").press("Tab");
       await page.locator("#repeat-count").selectOption("2");
       await setRepeat(page, true);
+      await goOffline(page, host);
       await page.close();
-      await context.setOffline(true);
       const offline = await context.newPage();
       await offline.goto(host.url + prefix + "?practice=1");
       await expect(offline.locator("#offline-status")).toHaveAttribute(
@@ -144,11 +168,10 @@ for (const prefix of ["/", "/audio-loop-player/"])
         .getByRole("button", { name: "tone.wavを開く", exact: true })
         .click();
       await expect(offline.locator("#point-b")).toHaveValue("0:00.400");
-      await context.setOffline(false);
+      await host.reopen();
       await offline.reload();
       await prepared(offline);
     } finally {
-      await context.setOffline(false);
       await host.close();
     }
   });
@@ -172,10 +195,7 @@ test("failed preparation does not claim readiness and retry recovers", async ({
 });
 test("failed update keeps the old offline app; successful update preserves audio and sibling caches", async ({
   page,
-  context,
-  browserName,
 }) => {
-  expectLinuxWebKitFailure(browserName, "Linux WebKit: internal error when loading offline (see DEVELOPMENT.md)");
   const host = await server();
   try {
     await page.goto(host.url + "/audio-loop-player/");
@@ -198,7 +218,7 @@ test("failed update keeps the old offline app; successful update preserves audio
           });
         });
     });
-    await context.setOffline(true);
+    await goOffline(page, host);
     await page.reload();
     await expect(page.locator("#offline-status")).toHaveAttribute(
       "data-ready",
@@ -206,7 +226,7 @@ test("failed update keeps the old offline app; successful update preserves audio
       { timeout: 15000 },
     );
     await expect(page.locator(".audio-item")).toHaveCount(1);
-    await context.setOffline(false);
+    await host.reopen();
     host.state.fail = false;
     await page.evaluate(async () => {
       await (await navigator.serviceWorker.getRegistration()).update();
@@ -231,7 +251,7 @@ test("failed update keeps the old offline app; successful update preserves audio
       }),
     ).toBe(true);
     await expect(page.locator(".audio-item")).toHaveCount(1);
-    await context.setOffline(true);
+    await goOffline(page, host);
     await page.reload();
     await page
       .getByRole("button", { name: "tone.wavを開く", exact: true })
@@ -241,15 +261,10 @@ test("failed update keeps the old offline app; successful update preserves audio
       .poll(() => page.locator("#audio").evaluate((a) => a.currentTime))
       .toBeGreaterThan(0.1);
   } finally {
-    await context.setOffline(false);
     await host.close();
   }
 });
 
-// Offline here means the server is stopped, not Playwright's offline switch: Linux WebKit
-// reports an internal error on navigation under that switch. With the server gone, the
-// page can only come from the service worker's cache. (A trial for the other offline
-// tests, which still use the switch and are marked as known Linux WebKit failures.)
 test("missing shell cache is detected and can be prepared again", async ({
   page,
 }) => {
@@ -269,16 +284,7 @@ test("missing shell cache is detected and can be prepared again", async ({
     await page.locator("#usage-guide > summary").click();
     await page.locator("#offline-retry").click();
     await prepared(page);
-    await host.close();
-    // The server really is unreachable: a file outside the cache cannot be fetched.
-    expect(
-      await page.evaluate(() =>
-        fetch("./not-cached-probe.txt", { cache: "no-store" }).then(
-          (response) => "answered " + response.status,
-          () => "unreachable",
-        ),
-      ),
-    ).toBe("unreachable");
+    await goOffline(page, host);
     await page.reload();
     await expect(page.locator("#offline-status")).toHaveAttribute(
       "data-ready",
@@ -295,6 +301,9 @@ test("cold browser restart can open the saved app and audio offline", async ({
   browser,
   browserName,
 }, testInfo) => {
+  // Unlike the tests above, this one fails on Linux WebKit before going offline: in a
+  // persistent context the first, online preparation never finishes. Stopping the
+  // server instead of the offline switch would not help, so it keeps its marker.
   expectLinuxWebKitFailure(
     browserName,
     "Linux WebKit: the offline preparation does not finish here (see DEVELOPMENT.md)",
