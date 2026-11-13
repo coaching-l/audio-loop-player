@@ -3,6 +3,8 @@
 export const GAP_RATIOS = [0, 1, 1.5, 2];
 // "off" plays through once; "ab" repeats A–B; "whole" repeats the whole audio.
 export const MODES = ["off", "ab", "whole"];
+// Seconds before the end that count as the end when starting playback.
+const END_SLACK = 0.05;
 // While playing through ("off"), the player can stop after each sentence for as long as
 // `pauseFor(seconds the sentence took)` says, then go on from where it stopped.
 export class LoopPlayer {
@@ -127,10 +129,13 @@ export class LoopPlayer {
       this.wait(this.remaining, this.resumeAt);
       return;
     }
+    // At (or within a hair of) the end there is nothing left to play: start over. WebKit
+    // can stop a paused element a few microseconds short of its duration, and playing
+    // from there it neither moves nor sends "ended".
     if (
       this.phase === "done" ||
       this.audio.ended ||
-      this.audio.currentTime >= this.end
+      this.audio.currentTime >= this.end - END_SLACK
     ) {
       this.completed = 0;
       this.audio.currentTime = this.start;
@@ -164,6 +169,12 @@ export class LoopPlayer {
   }
   checkBoundary() {
     if (this.phase !== "playing" || this.audio.seeking) return;
+    // The element has ended but its "ended" event did not come (seen in WebKit):
+    // handle it the same way rather than stay "playing" for ever.
+    if (this.mode !== "ab" && this.audio.ended) {
+      this.onEnded();
+      return;
+    }
     if (this.mode === "ab") {
       if (this.audio.currentTime >= this.end) this.boundary();
       return;
