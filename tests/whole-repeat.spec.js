@@ -15,11 +15,38 @@ async function trace(page) {
   });
 }
 const starts = (page) => page.evaluate(() => window.starts);
+// A timeline of the audio element's events, for the report when a wait fails.
+async function watch(page) {
+  await page.locator("#audio").evaluate((audio) => {
+    const t0 = performance.now();
+    window.events = [];
+    for (const type of ["play", "playing", "pause", "ended", "seeking", "seeked", "waiting", "stalled", "emptied", "error"])
+      audio.addEventListener(type, () => window.events.push(
+        `${Math.round(performance.now() - t0)}ms ${type} t=${audio.currentTime.toFixed(3)} status=${document.getElementById("play-status").textContent}`));
+  });
+}
+// Waits for 再生完了; if it does not come, says what the audio element was doing
+// (WebKit in CI stayed at 再生中, which Chromium does not reproduce).
+async function expectFinished(page) {
+  try {
+    await expect(page.locator("#play-status")).toHaveText("再生完了");
+  } catch (error) {
+    const state = () => page.locator("#audio").evaluate((a) =>
+      `t=${a.currentTime.toFixed(3)} duration=${a.duration} paused=${a.paused} ended=${a.ended} ` +
+      `readyState=${a.readyState} networkState=${a.networkState} error=${a.error?.code ?? "none"}`);
+    const first = await state();
+    await page.waitForTimeout(500);
+    const later = await state();
+    const events = (await page.evaluate(() => window.events || [])).slice(-40).join("\n");
+    throw new Error(`${error.message}\n--- audio ---\n${first}\n500 ms later: ${later}\n--- events ---\n${events}`);
+  }
+}
 test.beforeEach(async ({ page }) => { await page.goto("/"); });
 
 test("one-tap whole repeat loops real audio from zero; pause and OFF stop repetition", async ({ page }) => {
   await load(page);
   await trace(page);
+  await watch(page);
   await page.locator("#toggle-whole").click();
   await expect(page.locator("#advanced")).not.toHaveAttribute("open", "");
   expect(await page.locator("#audio").evaluate(a => a.paused)).toBe(true);
@@ -32,7 +59,7 @@ test("one-tap whole repeat loops real audio from zero; pause and OFF stop repeti
   expect((await starts(page)).every(t => t < 0.15)).toBe(true);
   await page.locator("#toggle-whole").click();
   await page.locator("#play").click();
-  await expect(page.locator("#play-status")).toHaveText("再生完了");
+  await expectFinished(page);
   const endedCount = (await starts(page)).length;
   await page.waitForTimeout(800);
   expect((await starts(page)).length).toBe(endedCount);

@@ -1,5 +1,8 @@
 import { test, expect } from '@playwright/test';
 import { speechMono, normalizeQuietSpeech } from '../speech-input.js';
+// The fixtures below are served by page.route. Once the app's service worker controls the
+// page, WebKit sent the second fixture request past the route to the real server (404).
+test.use({ serviceWorkers: 'block' });
 const buffer = (...channels) => ({ length: channels[0].length,
   numberOfChannels: channels.length, getChannelData: c => channels[c] });
 
@@ -51,23 +54,33 @@ test('real English and Mandarin speech remain recognizable through opposite-phas
     ['en', './quality-jfk.wav', 'ask not what your country can do for you'],
     ['zh', './quality-zh.wav', '语音识别模型'],
   ]) {
+    // Each step is named in the error: WebKit in CI reported only "Decoding failed".
     const text = await page.evaluate(async ({ language, path }) => {
-      const { transcribe } = await import('./transcriber.js');
-      const response = await fetch(path);
-      const audio = await new OfflineAudioContext(1, 1, 16000).decodeAudioData(await response.arrayBuffer());
-      const samples = audio.getChannelData(0);
-      const bytes = new ArrayBuffer(44 + samples.length * 4);
-      const view = new DataView(bytes);
-      const str = (at, text) => [...text].forEach((c, i) => view.setUint8(at + i, c.charCodeAt(0)));
-      str(0, 'RIFF'); view.setUint32(4, bytes.byteLength - 8, true); str(8, 'WAVE');
-      str(12, 'fmt '); view.setUint32(16, 16, true); view.setUint16(20, 1, true);
-      view.setUint16(22, 2, true); view.setUint32(24, 16000, true); view.setUint32(28, 64000, true);
-      view.setUint16(32, 4, true); view.setUint16(34, 16, true); str(36, 'data'); view.setUint32(40, bytes.byteLength - 44, true);
-      for (let i = 0; i < samples.length; i++) {
-        const pcm = Math.round(Math.max(-1, Math.min(1, samples[i])) * 32767);
-        view.setInt16(44 + i * 4, pcm, true); view.setInt16(46 + i * 4, -pcm, true);
+      let step = 'import';
+      try {
+        const { transcribe } = await import('./transcriber.js');
+        step = 'fetch the source WAV';
+        const response = await fetch(path);
+        const source = await response.arrayBuffer();
+        step = `decode the source WAV (${response.status}, ${source.byteLength} bytes)`;
+        const audio = await new OfflineAudioContext(1, 1, 16000).decodeAudioData(source);
+        const samples = audio.getChannelData(0);
+        const bytes = new ArrayBuffer(44 + samples.length * 4);
+        const view = new DataView(bytes);
+        const str = (at, text) => [...text].forEach((c, i) => view.setUint8(at + i, c.charCodeAt(0)));
+        str(0, 'RIFF'); view.setUint32(4, bytes.byteLength - 8, true); str(8, 'WAVE');
+        str(12, 'fmt '); view.setUint32(16, 16, true); view.setUint16(20, 1, true);
+        view.setUint16(22, 2, true); view.setUint32(24, 16000, true); view.setUint32(28, 64000, true);
+        view.setUint16(32, 4, true); view.setUint16(34, 16, true); str(36, 'data'); view.setUint32(40, bytes.byteLength - 44, true);
+        for (let i = 0; i < samples.length; i++) {
+          const pcm = Math.round(Math.max(-1, Math.min(1, samples[i])) * 32767);
+          view.setInt16(44 + i * 4, pcm, true); view.setInt16(46 + i * 4, -pcm, true);
+        }
+        step = `transcribe the made stereo WAV (${audio.sampleRate} Hz, ${samples.length} samples)`;
+        return (await transcribe(new File([bytes], 'stereo.wav', { type: 'audio/wav' }), { language })).map(s => s.text).join('');
+      } catch (error) {
+        throw new Error(`${language}: ${step}: ${error.name}: ${error.message}`);
       }
-      return (await transcribe(new File([bytes], 'stereo.wav', { type: 'audio/wav' }), { language })).map(s => s.text).join('');
     }, { language, path });
     expect(text.toLowerCase()).toContain(expected);
   }
