@@ -1,6 +1,7 @@
 import { createServer } from "node:http";
 import { readFile, stat } from "node:fs/promises";
 import { resolve, extname, sep } from "node:path";
+import { fileURLToPath } from "node:url";
 const root = resolve(import.meta.dirname, "..");
 const types = {
   ".html": "text/html; charset=utf-8",
@@ -15,7 +16,8 @@ const types = {
   ".mp3": "audio/mpeg",
   ".m4a": "audio/mp4",
 };
-createServer(async (req, res) => {
+// Also used by tests that need a server of their own, to stop it and so go offline.
+export async function serveFile(req, res) {
   try {
     const pathname = decodeURIComponent(
       new URL(req.url, "http://localhost").pathname,
@@ -42,6 +44,8 @@ createServer(async (req, res) => {
   } catch {
     res.writeHead(404).end("Not found");
   }
-}).listen(Number(process.env.PORT || 4173), "0.0.0.0", () =>
-  console.log("Audio Loop Player server on port " + (process.env.PORT || 4173)),
-);
+}
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url))
+  createServer(serveFile).listen(Number(process.env.PORT || 4173), "0.0.0.0", () =>
+    console.log("Audio Loop Player server on port " + (process.env.PORT || 4173)),
+  );
