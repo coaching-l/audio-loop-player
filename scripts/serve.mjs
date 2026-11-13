@@ -47,10 +47,19 @@ export async function serveFile(req, res) {
   }
 }
 // Listen only when run directly (npm start), also through a symbolic link to this file.
-const runDirectly =
-  process.argv[1] &&
-  realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url));
-if (runDirectly)
+// An entry that is not a file (e.g. "-" when the code comes from standard input) is
+// not this file being run.
+function runDirectly() {
+  try {
+    return (
+      realpathSync(process.argv[1]) ===
+      realpathSync(fileURLToPath(import.meta.url))
+    );
+  } catch {
+    return false;
+  }
+}
+if (process.argv[1] && runDirectly())
   createServer(serveFile).listen(Number(process.env.PORT || 4173), "0.0.0.0", () =>
     console.log("Audio Loop Player server on port " + (process.env.PORT || 4173)),
   );
