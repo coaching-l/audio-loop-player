@@ -121,6 +121,50 @@ test("pasted text follows playback and a sentence becomes the A–B interval", a
   await expect(sentences(page)).toHaveCount(3);
 });
 
+test("the repeated sentence, tapped again, or the bottom bar's button ends the A–B repeat", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 700 });
+  await page.goto("/");
+  await load(page);
+  await expect(page.locator("#waveform")).toBeVisible();
+  await paste(page, english);
+  const repeat = page.locator("#toggle-ab");
+  const offButton = page.getByRole("button", { name: "区間リピートを解除" });
+  // Tapping the selected sentence again ends the repeat and the selection.
+  await sentences(page).nth(1).click();
+  await expect(repeat).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator("#notice")).toContainText("もう一度押すと解除します");
+  await sentences(page).nth(1).click();
+  await expect(repeat).toHaveAttribute("aria-pressed", "false");
+  await expect(sentences(page).nth(1)).not.toHaveClass(/is-selected/);
+  await expect(page.locator("#notice")).toContainText("区間リピートを解除しました");
+  // Tapping another sentence moves the repeat there instead of ending it.
+  await sentences(page).nth(0).click();
+  await sentences(page).nth(2).click();
+  await expect(repeat).toHaveAttribute("aria-pressed", "true");
+  await expect(sentences(page).nth(2)).toHaveClass(/is-selected/);
+  // With the main controls scrolled away, the bottom bar shows the repeat and ends it,
+  // while playback goes on.
+  await page.locator("footer").scrollIntoViewIfNeeded();
+  await expect(page.locator("#mini-player")).toBeVisible();
+  await expect(offButton).toBeVisible();
+  await expect(offButton).toContainText("区間リピート中");
+  await page.getByRole("button", { name: "下のバー：再生", exact: true }).click();
+  await offButton.click();
+  await expect(offButton).toBeHidden();
+  await expect(repeat).toHaveAttribute("aria-pressed", "false");
+  await expect(sentences(page).nth(2)).not.toHaveClass(/is-selected/);
+  await expect(page.locator("#mini-play")).toHaveAttribute("data-state", "playing");
+  // Turning the repeat off elsewhere also clears the sentence's selection.
+  await sentences(page).nth(0).click();
+  await expect(offButton).toBeVisible();
+  await page.locator("#toggle-ab").scrollIntoViewIfNeeded();
+  await setRepeat(page, false);
+  await expect(sentences(page).nth(0)).not.toHaveClass(/is-selected/);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
 test("a sentence's timing can be corrected from the A–B interval", async ({
   page,
 }) => {

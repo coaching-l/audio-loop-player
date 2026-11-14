@@ -1158,6 +1158,13 @@ label {
 .has-mini-player main {
   padding-bottom: calc(max(16px, env(safe-area-inset-bottom)) + 84px);
 }
+/* 区間リピート中は、下のバーが「解除」の分だけ高くなる */
+.has-mini-player.is-repeating-ab main {
+  padding-bottom: calc(max(16px, env(safe-area-inset-bottom)) + 124px);
+}
+.has-mini-player.is-repeating-ab .undo-bar {
+  bottom: calc(max(16px, env(safe-area-inset-bottom)) + 116px);
+}
 .mini-info {
   flex: 1;
   min-width: 0;
@@ -1178,6 +1185,24 @@ label {
 }
 .mini-time span + span {
   margin-left: 6px;
+}
+/* 区間リピート中だけ出る、解除のボタン */
+.mini-ab-off {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  margin-top: 4px;
+  padding: 0 12px;
+  border: 1px solid var(--gold);
+  border-radius: 999px;
+  background: var(--gold-soft);
+  color: var(--gold-label);
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+.mini-ab-off[hidden] {
+  display: none;
 }
 .mini-skip,
 .mini-play {
