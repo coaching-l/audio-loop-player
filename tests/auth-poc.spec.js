@@ -324,6 +324,8 @@ test.describe("sign-in window and API call in a browser", () => {
   let accessUser = USER; // who Access says is signed in (null: nobody)
   let blocked = [];
   let outside, outsideOrigin, outsideHits = 0; // a local server the browser must not reach
+  let apiSettings = {}; // per test: settings the stand-in Worker runs with
+  let apiMethods = []; // methods of the /api/ requests that reached the Worker
 
   test.beforeAll(async () => {
     const clientCode = await readFile("workers/auth-poc/client.js");
@@ -352,11 +354,12 @@ document.getElementById("in").onclick = () => { window.result = window.auth.sign
         if (!accessUser) return res.writeHead(200, { "Content-Type": "text/html" }).end("<p>Access login (stand-in)</p>");
         headers.set("cf-access-jwt-assertion", await sign(claims({ email: accessUser }), accessKey));
       }
+      if (req.url.startsWith("/api/")) apiMethods.push(req.method);
       const chunks = [];
       for await (const chunk of req) chunks.push(chunk);
       const response = await worker.fetch(new Request(apiOrigin + req.url, {
         method: req.method, headers, body: ["GET", "HEAD"].includes(req.method) ? undefined : Buffer.concat(chunks),
-      }), env({ APP_ORIGIN: appOrigin }));
+      }), env({ APP_ORIGIN: appOrigin, ...apiSettings }));
       res.writeHead(response.status, Object.fromEntries(response.headers)).end(Buffer.from(await response.arrayBuffer()));
     });
     await new Promise((resolve) => app.listen(0, "127.0.0.1", resolve));
@@ -379,6 +382,8 @@ document.getElementById("in").onclick = () => { window.result = window.auth.sign
   test.beforeEach(async ({ context }) => {
     blocked = [];
     outsideHits = 0;
+    apiSettings = {};
+    apiMethods = [];
     const allowed = (url) => [appOrigin, apiOrigin].includes(new URL(url).origin);
     await context.route("**/*", async (route) => {
       const url = route.request().url();
@@ -386,6 +391,13 @@ document.getElementById("in").onclick = () => { window.result = window.auth.sign
         blocked.push(url);
         return route.abort();
       }
+      // The app's pages and the API calls go to the network as they are, so the browser
+      // itself applies CORS and its other checks (answering them here would skip the
+      // preflight, and a page answered here counts as coming from outside this machine).
+      // Neither the app server nor the Worker's /api/ ever answers with a redirect.
+      const { origin, pathname } = new URL(url);
+      if (origin === appOrigin || (origin === apiOrigin && pathname.startsWith("/api/")))
+        return route.continue();
       const response = await route.fetch({ maxRedirects: 0 });
       const location = response.headers().location;
       if (location) {
@@ -398,6 +410,37 @@ document.getElementById("in").onclick = () => { window.result = window.auth.sign
   test.afterEach(() => {
     expect(blocked).toEqual([]);
     expect(outsideHits).toBe(0);
+  });
+
+  test("the browser's own CORS checks let the app read API answers, and only from the app's origin", async ({ page, context }) => {
+    // With any routing in place, Playwright answers the preflight itself, so the browser's
+    // CORS check is not really exercised. This test therefore runs without the blocking;
+    // the page only talks to the two local servers (the outside server is still counted).
+    await context.unrouteAll({ behavior: "ignoreErrors" });
+    const call = (path) => page.evaluate(([api, path]) => fetch(`${api}${path}`, {
+      method: "POST",
+      credentials: "omit",
+      headers: { Authorization: "Bearer not.a.token", "Content-Type": "application/json" },
+      body: JSON.stringify({ text: "hi" }),
+    }).then((r) => r.status, (e) => e.name), [apiOrigin, path]);
+    await page.goto(appOrigin);
+    // Allowed origin: the browser sends the preflight, then the call, and may read the answer.
+    expect(await call("/api/run")).toBe(401);
+    expect(apiMethods).toEqual(["OPTIONS", "POST"]);
+    // The Worker set up for another site: the preflight is refused, so the browser stops
+    // and never sends the call itself. (Another path: the browser keeps the first
+    // preflight's answer for a while, per URL.)
+    apiSettings = { APP_ORIGIN: "https://another-site.example" };
+    apiMethods = [];
+    expect(await call("/api/other")).toBe("TypeError");
+    expect(apiMethods).toEqual(["OPTIONS"]);
+    // Where the browser kept the earlier preflight answer, the call is sent, but the Worker
+    // refuses it and the browser does not let the page read the answer. (A browser that
+    // asks again gets the preflight refused instead.) Either way, nothing upstream.
+    apiMethods = [];
+    expect(await call("/api/run")).toBe("TypeError");
+    expect([["POST"], ["OPTIONS"]]).toContainEqual(apiMethods);
+    expect(calls.upstream).toHaveLength(0);
   });
 
   test("the blocking also stops a redirect from an allowed server to another one", async ({ page }) => {
