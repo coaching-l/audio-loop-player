@@ -391,8 +391,9 @@ document.getElementById("in").onclick = () => { window.result = window.auth.sign
       if (!local(request.url())) seen.push(request.url());
     });
     context.on("response", (response) => {
-      if (response.status() >= 300 && response.status() < 400 && !response.url().endsWith("/redirect-out"))
-        redirects.push(response.url());
+      // No exception, not even for the redirect check below: that redirect is stopped
+      // before the browser receives it, so it never shows up here.
+      if (response.status() >= 300 && response.status() < 400) redirects.push(response.url());
     });
     blocked = [];
     outsideHits = 0;
