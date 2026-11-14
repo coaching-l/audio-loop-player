@@ -347,7 +347,9 @@ document.getElementById("in").onclick = () => { window.result = window.auth.sign
       headers.delete("cf-access-jwt-assertion");
       if (req.url.startsWith("/auth/")) {
         lastState = new URL(req.url, apiOrigin).searchParams.get("state");
-        if (!accessUser) return res.writeHead(302, { Location: "/mock-login" }).end();
+        // Not signed in: Access would redirect to its login page; the stand-in shows it
+        // directly, so the browser follows no redirect here.
+        if (!accessUser) return res.writeHead(200, { "Content-Type": "text/html" }).end("<p>Access login (stand-in)</p>");
         headers.set("cf-access-jwt-assertion", await sign(claims({ email: accessUser }), accessKey));
       }
       const chunks = [];
@@ -371,8 +373,9 @@ document.getElementById("in").onclick = () => { window.result = window.auth.sign
     await new Promise((resolve) => outside.close(resolve));
   });
   // The browser may only reach the two local servers. Every request passes through here,
-  // and redirects are not followed behind its back: an allowed server's redirect is handed
-  // to the browser, whose next request comes through here again and is checked.
+  // and no redirect is followed behind its back: the test servers do not redirect (except
+  // the one check below), so any redirect is stopped and recorded. (Handing a redirect back
+  // to the browser is not possible in WebKit: "Cannot fulfill with redirect status".)
   test.beforeEach(async ({ context }) => {
     blocked = [];
     outsideHits = 0;
@@ -385,7 +388,7 @@ document.getElementById("in").onclick = () => { window.result = window.auth.sign
       }
       const response = await route.fetch({ maxRedirects: 0 });
       const location = response.headers().location;
-      if (location && !allowed(new URL(location, url))) {
+      if (location) {
         blocked.push(new URL(location, url).href);
         return route.abort();
       }
@@ -411,6 +414,7 @@ document.getElementById("in").onclick = () => { window.result = window.auth.sign
     await page.goto(appOrigin);
     const [popup] = await Promise.all([page.waitForEvent("popup", { timeout: 10000 }), page.locator("#in").click()]);
     await expect(popup.locator("body")).toContainText("stand-in");
+    expect(new URL(popup.url()).pathname).toBe("/auth/handoff");
     const answer = { type: "audio-loop-auth", state: lastState, token: "a.b.c", exp: 9e9 };
     return { popup, answer };
   }
