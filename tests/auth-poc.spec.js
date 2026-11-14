@@ -323,6 +323,8 @@ test.describe("sign-in window and API call in a browser", () => {
   let app, api, appOrigin, apiOrigin, lastState;
   let accessUser = USER; // who Access says is signed in (null: nobody)
   let blocked = [];
+  let seen = []; // requests to anywhere else, noticed without changing any request
+  let redirects = []; // redirects answered by the app or the Worker (they never redirect)
   let outside, outsideOrigin, outsideHits = 0; // a local server the browser must not reach
   let apiSettings = {}; // per test: settings the stand-in Worker runs with
   let apiMethods = []; // methods of the /api/ requests that reached the Worker
@@ -380,6 +382,18 @@ document.getElementById("in").onclick = () => { window.result = window.auth.sign
   // the one check below), so any redirect is stopped and recorded. (Handing a redirect back
   // to the browser is not possible in WebKit: "Cannot fulfill with redirect status".)
   test.beforeEach(async ({ context }) => {
+    // Watching, apart from the blocking: it changes no request, so it also covers the
+    // CORS test (which turns the blocking off) and requests sent on as they are.
+    seen = [];
+    redirects = [];
+    const local = (url) => [appOrigin, apiOrigin].includes(new URL(url).origin);
+    context.on("request", (request) => {
+      if (!local(request.url())) seen.push(request.url());
+    });
+    context.on("response", (response) => {
+      if (response.status() >= 300 && response.status() < 400 && !response.url().endsWith("/redirect-out"))
+        redirects.push(response.url());
+    });
     blocked = [];
     outsideHits = 0;
     apiSettings = {};
@@ -409,6 +423,8 @@ document.getElementById("in").onclick = () => { window.result = window.auth.sign
   });
   test.afterEach(() => {
     expect(blocked).toEqual([]);
+    expect(seen).toEqual([]);
+    expect(redirects).toEqual([]);
     expect(outsideHits).toBe(0);
   });
 
