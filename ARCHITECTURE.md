@@ -134,6 +134,14 @@ DeepLの当該アカウントは、調査時点ではDeveloperの**1回限り100
 
 Service Workerは認証・APIの要求や応答をキャッシュしない。ログイン画面をアプリHTMLとして保存しない。保存済み教材のオフライン利用と、オンライン認証が必須のAPI利用を分ける。ログアウトで教材を勝手に消さず、オフラインの端末データをAccessだけで保護できるとも説明しない。
 
+### 第1段階の技術検証（2026-11-13）【検証用コードのみ・本番未配置】
+
+公式資料と現在のコードを確認し、[workers/auth-poc/](workers/auth-poc/README.md) に独立した検証用Workerと自動テストを追加した。アプリ本体・本番Worker・Cloudflare設定は変更していない。
+
+- アプリ（`tools.coaching-l.net`）とAPI（`*.workers.dev`）は別サイトのため、AccessのCookieだけに頼る方式はSafariで成り立たない見込み（Cloudflareの資料にも第三者Cookieの注意あり）。DNSを変えずに進める方式として、**ログインだけAccess（パス単位）で行い、Accessが署名したトークンをアプリへ `postMessage` で渡し、API側Workerが毎回署名・iss・aud・期限・許可一覧を検証する**方式を推奨する。独自トークンは作らない。
+- `ctx.access` はAccessが直接認証した要求でしか使えず、APIの要求では空になるため使わない（資料で確認）。
+- iPhone Safariで小窓がアプリへ戻れるか、パス単位のAccessをworkers.devに適用できるかは実環境で未確認。成り立たなければ、APIを `coaching-l.net` 配下に置く案（DNSの扱いの確認と承認が必要）を再検討する。
+
 ## 7. 利用量と予算の設計【導入予定】
 
 Cloudflare Durable ObjectsのSQLiteを使い、利用量の台帳を1か所で整合性を保って更新する案。単なるWorkerメモリや、反映が遅れるKVのカウンターを厳密な予算管理に使わない。

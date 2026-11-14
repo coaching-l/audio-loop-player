@@ -1,0 +1,20 @@
+// Verification only. Not deployed by this PR; deploying needs the administrator's
+// approval and a separate Worker (never the production translation Worker).
+{
+  "name": "coaching-l-auth-poc",
+  "main": "worker.js",
+  "compatibility_date": "2026-11-13",
+  // Off until every value below is set on purpose. Empty or invalid values keep it off.
+  "vars": {
+    "ENABLED": "false",
+    "TEAM_DOMAIN": "",
+    "ACCESS_AUD": "",
+    "APP_ORIGIN": "https://tools.coaching-l.net",
+    "ALLOWED_EMAILS": "",
+    "UPSTREAM_URL": ""
+  },
+  // Preview (version) URLs must also be off or behind Access: set in the dashboard and
+  // checked before use. The code verifies every token whichever address is used.
+  "workers_dev": true,
+  "observability": { "enabled": false }
+}
