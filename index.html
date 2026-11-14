@@ -42,8 +42,8 @@
       content="端末の音声で、繰り返し聴く・声に出す。アップロード不要の語学学習プレーヤー。"
     />
     <title>音声リピートプレーヤー | COACHING-L</title>
-    <link rel="stylesheet" href="./style.css?v=58" />
-    <script type="module" src="./app.js?v=58"></script>
+    <link rel="stylesheet" href="./style.css?v=61" />
+    <script type="module" src="./app.js?v=61"></script>
   </head>
   <body>
     <main>
@@ -563,9 +563,9 @@
               <div
                 id="transcript-sentences"
                 class="transcript-sentences"
-                aria-label="スクリプト。文を押すと、その文をA–B区間にします"
+                aria-label="スクリプト。文を押すと、その文をA–B区間にします。もう一度押すと解除します"
               ></div>
-              <p class="small">文を押すと、その文をA–B区間にします。長押しすると日本語訳を表示します。</p>
+              <p class="small">文を押すと、その文をA–B区間にします。もう一度押すと解除します。長押しすると日本語訳を表示します。</p>
               <p class="small translation-note">日本語翻訳機能はオンラインのときに利用できます。保存済みの訳はオフラインでも確認できます。送信先・送信内容は翻訳画面に表示します。</p>
               <div class="transcript-links">
                 <button id="transcript-translate" class="text-button" type="button">日本語訳</button>
@@ -954,6 +954,15 @@
             <span id="mini-time">0:00.0</span>
             <span id="mini-status"></span>
           </p>
+          <button
+            id="mini-ab-off"
+            class="mini-ab-off"
+            type="button"
+            aria-label="区間リピートを解除"
+            hidden
+          >
+            区間リピート中<span aria-hidden="true">✕</span>
+          </button>
         </div>
         <button
           id="mini-back"

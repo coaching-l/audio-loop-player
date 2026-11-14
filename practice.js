@@ -52,6 +52,9 @@ let ready = false;
 let loadTimeout;
 let markerDrag = null;
 let lastPositionSave = 0;
+// The script sentence whose A–B interval is being repeated (-1: none). Declared here because
+// the gauge, drawn from the start, reads it.
+let selectedSentence = -1;
 
 // What a new material starts with: interval repeat off, and once it is on, it repeats
 // until paused, with no silence in between (shadowing).
@@ -282,6 +285,14 @@ function syncMiniPlayer() {
   $("mini-player").hidden = !show;
   document.body.classList.toggle("has-mini-player", show);
 }
+// The bar's height changes (the A–B button, narrow screens): the page and the undo bar
+// make room for its real height.
+if ("ResizeObserver" in window)
+  new ResizeObserver(([entry]) => {
+    const height = entry.target.getBoundingClientRect().height;
+    if (height > 0)
+      document.documentElement.style.setProperty("--mini-player-height", `${Math.ceil(height)}px`);
+  }).observe($("mini-player"));
 // Show it only once the controls are above the viewport; below it, the player is still ahead.
 let transportFrame = 0;
 function checkTransport() {
@@ -802,6 +813,11 @@ $("zoom-out").addEventListener("click", () =>
 );
 $("zoom-fit").addEventListener("click", fitView);
 function syncGauge() {
+  // The bar at the bottom shows, and can end, a running A–B repeat. Once it ends, the
+  // sentence that set it is no longer "the repeated one".
+  const repeating = engine.mode === "ab";
+  $("mini-ab-off").hidden = !repeating;
+  if (!repeating && selectedSentence >= 0) unselectSentence();
   const duration = engine.audio.duration;
   for (const point of ["a", "b"]) {
     const marker = $("marker-" + point);
@@ -909,6 +925,10 @@ function toggleRepeat() {
   updateSettings({ mode: engine.mode === "ab" ? "off" : "ab" });
 }
 $("toggle-ab").addEventListener("click", toggleRepeat);
+function stopIntervalRepeat() {
+  if (updateSettings({ mode: "off" })) notice("区間リピートを解除しました。");
+}
+$("mini-ab-off").addEventListener("click", stopIntervalRepeat);
 $("gauge-set-a").addEventListener("click", () =>
   updateSettings({ a: engine.audio.currentTime, mode: "ab" }),
 );
@@ -1226,7 +1246,6 @@ let editingTranscript = false;
 const canTranscribe = transcriptionSupported();
 let transcribing = null; // the AbortController of the running transcription
 let currentSentence = -1;
-let selectedSentence = -1;
 const sentenceTranslation = setupTranslation({
   context: () => ready && transcript && !editingTranscript ? { key: materialKey, transcript } : null,
   save: saveTranscript,
@@ -1399,12 +1418,20 @@ function selectSentence(index) {
     item.classList.toggle("is-selected", i === index),
   );
   $("transcript-fit").disabled = false;
-  notice("選んだ文をA–B区間にしました。再生ボタンでくり返し練習できます。");
+  notice("選んだ文をA–B区間にしました。再生ボタンでくり返し練習できます。もう一度押すと解除します。");
+}
+function unselectSentence() {
+  selectedSentence = -1;
+  for (const item of $("transcript-sentences").children) item.classList.remove("is-selected");
+  $("transcript-fit").disabled = true;
 }
 $("transcript-sentences").addEventListener("click", (event) => {
   const button = event.target.closest(".sentence");
   if (!button || !ready || !transcript) return;
-  selectSentence(Number(button.dataset.index));
+  const index = Number(button.dataset.index);
+  // The repeated sentence, tapped again: stop repeating it.
+  if (index === selectedSentence && engine.mode === "ab") stopIntervalRepeat();
+  else selectSentence(index);
 });
 $("transcript-fit").addEventListener("click", () => {
   const sentence = transcript?.sentences[selectedSentence];
