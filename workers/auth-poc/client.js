@@ -10,10 +10,13 @@ const randomState = () => {
 
 export function createAuthClient({ apiOrigin, timeout = 5 * 60 * 1000 }) {
   let session = null; // { token, exp }
+  let waiting = null; // the sign-in being waited for: { cancel }
   const signedIn = () => !!session && session.exp * 1000 > Date.now() + 30000;
 
-  // Must run from a tap or click, or the browser blocks the window.
+  // Must run from a tap or click, or the browser blocks the window. A new attempt, or
+  // signing out, cancels the one still waiting, so its late answer is ignored.
   function signIn() {
+    waiting?.cancel(new Error("replaced"));
     const state = randomState();
     const popup = window.open(
       `${apiOrigin}/auth/handoff?state=${state}`,
@@ -22,15 +25,19 @@ export function createAuthClient({ apiOrigin, timeout = 5 * 60 * 1000 }) {
     );
     if (!popup) return Promise.reject(new Error("popup_blocked"));
     return new Promise((resolve, reject) => {
+      const attempt = { cancel: (error) => finish(error) };
+      waiting = attempt;
       const timer = setTimeout(() => finish(new Error("timeout")), timeout);
       function finish(error) {
         clearTimeout(timer);
         window.removeEventListener("message", onMessage);
+        if (waiting === attempt) waiting = null;
         if (error) reject(error);
         else resolve();
       }
       function onMessage(event) {
         // Only the sign-in window we opened, from the API's exact origin, for this attempt.
+        if (waiting !== attempt) return;
         if (event.origin !== apiOrigin || event.source !== popup) return;
         const data = event.data;
         if (data?.type !== "audio-loop-auth" || data.state !== state) return;
@@ -43,6 +50,7 @@ export function createAuthClient({ apiOrigin, timeout = 5 * 60 * 1000 }) {
   }
 
   function signOut() {
+    waiting?.cancel(new Error("signed_out"));
     session = null;
   }
 

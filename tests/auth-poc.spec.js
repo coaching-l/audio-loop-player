@@ -37,9 +37,10 @@ const claims = (extra = {}) => ({
   iss: TEAM, type: "app", identity_nonce: "n", sub: "user-1", country: "JP", ...extra,
 });
 
-let accessKey, strangerKey;
-const calls = { upstream: [], keys: 0 };
+let accessKey, strangerKey, nextKey;
+const calls = { upstream: [], keys: 0, unexpected: [] };
 let keysAvailable = true;
+let publishedKeys = () => [accessKey.jwk];
 const realFetch = globalThis.fetch;
 
 // Stands in for the network the Worker reaches: Access's public keys and the paid API.
@@ -48,13 +49,16 @@ function fakeNetwork(input, init) {
   if (url === `${TEAM}/cdn-cgi/access/certs`) {
     calls.keys++;
     if (!keysAvailable) return Promise.resolve(new Response("down", { status: 500 }));
-    return Promise.resolve(Response.json({ keys: [accessKey.jwk] }));
+    // A short delay, so requests that arrive together really overlap.
+    return new Promise((resolve) => setTimeout(() => resolve(Response.json({ keys: publishedKeys() })), 20));
   }
   if (url === UPSTREAM) {
     calls.upstream.push({ headers: Object.fromEntries(new Headers(init.headers)), body: JSON.parse(init.body) });
     return Promise.resolve(Response.json({ ok: true }));
   }
-  return realFetch(input, init);
+  // Nothing else may leave this process.
+  calls.unexpected.push(url);
+  return Promise.reject(new Error(`unexpected network request: ${url}`));
 }
 
 const APP = "https://tools.coaching-l.net";
@@ -71,15 +75,25 @@ const apiCall = (token, extra = {}) => new Request("https://auth-poc.example.wor
 test.beforeAll(async () => {
   accessKey = await makeKey("access-key-1");
   strangerKey = await makeKey("access-key-1"); // same key id, different key: a forgery
+  nextKey = await makeKey("access-key-2"); // the key Access rotates to
   globalThis.fetch = fakeNetwork;
 });
 test.afterAll(() => { globalThis.fetch = realFetch; });
 test.beforeEach(() => {
   calls.upstream = [];
   calls.keys = 0;
+  calls.unexpected = [];
   keysAvailable = true;
+  publishedKeys = () => [accessKey.jwk];
   resetKeyCacheForTests();
 });
+test.afterEach(() => {
+  expect(calls.unexpected).toEqual([]);
+});
+// Moves the clock the Worker sees, to cross its waiting times without waiting.
+const realNow = Date.now;
+const later = (ms) => { const at = realNow() + ms; Date.now = () => at; };
+test.afterEach(() => { Date.now = realNow; });
 
 test.describe("Worker checks (Node only)", () => {
   test.beforeEach(({}, testInfo) => {
@@ -135,6 +149,64 @@ test.describe("Worker checks (Node only)", () => {
     const response = await worker.fetch(apiCall(await sign(claims(), accessKey)), env());
     expect(response.status).toBe(503);
     expect(calls.upstream).toHaveLength(0);
+  });
+
+  test("time claims must be finite numbers, even in a correctly signed token", async () => {
+    const raw = async (json) => {
+      const head = encode({ alg: "RS256", kid: accessKey.kid, typ: "JWT" });
+      const body = Buffer.from(json).toString("base64url");
+      const signature = await crypto.subtle.sign("RSASSA-PKCS1-v1_5", accessKey.privateKey, Buffer.from(`${head}.${body}`));
+      return `${head}.${body}.${Buffer.from(signature).toString("base64url")}`;
+    };
+    const base = claims();
+    for (const [name, token] of [
+      ["nbf as text", await sign(claims({ nbf: String(now() - 5) }), accessKey)],
+      ["iat as an object", await sign(claims({ iat: {} }), accessKey)],
+      ["exp as null", await sign(claims({ exp: null }), accessKey)],
+      ["no exp", await sign(claims({ exp: undefined }), accessKey)],
+      ["exp that becomes Infinity", await raw(JSON.stringify(base).replace(`"exp":${base.exp}`, '"exp":1e999'))],
+    ]) {
+      expect((await worker.fetch(apiCall(token), env())).status, name).toBe(401);
+    }
+    expect(calls.upstream).toHaveLength(0);
+  });
+
+  test("requests arriving together share one fetch of Access's keys", async () => {
+    const token = await sign(claims(), accessKey);
+    const answers = await Promise.all(Array.from({ length: 20 }, () => worker.fetch(apiCall(null, {
+      headers: { Authorization: `Bearer ${token.replace(/\.[^.]+$/, ".AAAA")}` },
+    }), env())));
+    expect(answers.every((response) => response.status === 401)).toBe(true);
+    expect(calls.keys).toBe(1);
+    expect(calls.upstream).toHaveLength(0);
+  });
+
+  test("a failed key fetch is not retried on every request", async () => {
+    keysAvailable = false;
+    const token = await sign(claims(), accessKey);
+    for (let i = 0; i < 10; i++) expect((await worker.fetch(apiCall(token), env())).status).toBe(503);
+    expect(calls.keys).toBe(1);
+    // After the waiting time, one new attempt; with the keys back, the user gets in.
+    keysAvailable = true;
+    later(61000);
+    expect((await worker.fetch(apiCall(await sign(claims(), accessKey)), env())).status).toBe(200);
+    expect(calls.keys).toBe(2);
+    expect(calls.upstream).toHaveLength(1);
+  });
+
+  test("unknown key ids do not trigger a fetch each time; a rotated key is picked up", async () => {
+    expect((await worker.fetch(apiCall(await sign(claims(), accessKey)), env())).status).toBe(200);
+    expect(calls.keys).toBe(1);
+    // Access rotates to a new key. Within the waiting time, tokens signed with it are not
+    // yet known (401) and cause no fetch; afterwards the keys are fetched once again.
+    publishedKeys = () => [nextKey.jwk, accessKey.jwk];
+    const rotated = await sign(claims(), nextKey);
+    for (let i = 0; i < 5; i++) expect((await worker.fetch(apiCall(rotated), env())).status).toBe(401);
+    expect(calls.keys).toBe(1);
+    later(61000);
+    expect((await worker.fetch(apiCall(rotated), env())).status).toBe(200);
+    expect(calls.keys).toBe(2);
+    expect(calls.upstream).toHaveLength(2);
   });
 
   test("missing or unsafe settings disable the API instead of opening it", async () => {
@@ -219,8 +291,9 @@ test.describe("Worker checks (Node only)", () => {
 
 // The browser part: the app page and the Worker on two origins, as on the real site.
 test.describe("sign-in window and API call in a browser", () => {
-  let app, api, appOrigin, apiOrigin;
+  let app, api, appOrigin, apiOrigin, lastState;
   let accessUser = USER; // who Access says is signed in (null: nobody)
+  let blocked = [];
 
   test.beforeAll(async () => {
     const clientCode = await readFile("workers/auth-poc/client.js");
@@ -235,11 +308,14 @@ document.getElementById("in").onclick = () => { window.result = window.auth.sign
     });
     api = createServer(async (req, res) => {
       // Plays Cloudflare's part: Access in front of /auth/* only, adding its signed token.
+      // Its login page is a local stand-in, so the browser never leaves this machine.
+      if (req.url.startsWith("/mock-login")) return res.writeHead(200, { "Content-Type": "text/html" }).end("<p>Access login (stand-in)</p>");
       const headers = new Headers();
       for (const [name, value] of Object.entries(req.headers)) if (typeof value === "string") headers.set(name, value);
       headers.delete("cf-access-jwt-assertion");
       if (req.url.startsWith("/auth/")) {
-        if (!accessUser) return res.writeHead(302, { Location: `${TEAM}/cdn-cgi/access/login` }).end();
+        lastState = new URL(req.url, apiOrigin).searchParams.get("state");
+        if (!accessUser) return res.writeHead(302, { Location: "/mock-login" }).end();
         headers.set("cf-access-jwt-assertion", await sign(claims({ email: accessUser }), accessKey));
       }
       const chunks = [];
@@ -258,6 +334,29 @@ document.getElementById("in").onclick = () => { window.result = window.auth.sign
     await new Promise((resolve) => app.close(resolve));
     await new Promise((resolve) => api.close(resolve));
   });
+  // The browser may only reach the two local servers.
+  test.beforeEach(async ({ context }) => {
+    blocked = [];
+    await context.route((url) => url.origin !== appOrigin && url.origin !== apiOrigin, (route) => {
+      blocked.push(route.request().url());
+      return route.abort();
+    });
+  });
+  test.afterEach(() => {
+    expect(blocked).toEqual([]);
+  });
+
+  // A sign-in left waiting on Access's login page, with what a real answer would carry.
+  async function waitingSignIn(page) {
+    accessUser = null;
+    await page.goto(appOrigin);
+    const [popup] = await Promise.all([page.waitForEvent("popup", { timeout: 10000 }), page.locator("#in").click()]);
+    await expect(popup.locator("body")).toContainText("stand-in");
+    const answer = { type: "audio-loop-auth", state: lastState, token: "a.b.c", exp: 9e9 };
+    return { popup, answer };
+  }
+  const post = (from, message, to = "opener") =>
+    from.evaluate(([message, to]) => window[to].postMessage(message, "*"), [message, to]);
 
   test("signing in through the window lets the app call the API; nothing is stored", async ({ page }, testInfo) => {
     accessUser = USER;
@@ -291,14 +390,47 @@ document.getElementById("in").onclick = () => { window.result = window.auth.sign
     expect(calls.upstream).toHaveLength(0);
   });
 
-  test("a message that does not come from the sign-in window is ignored", async ({ page }) => {
-    accessUser = null; // the window only reaches Access's login page
-    await page.goto(appOrigin);
-    await Promise.all([page.waitForEvent("popup"), page.locator("#in").click()]);
-    // Same shape, but sent by the page itself: wrong window (and the state is unknown).
-    await page.evaluate(() => window.postMessage({ type: "audio-loop-auth", state: "x".repeat(32), token: "a.b.c", exp: 9e9 }, "*"));
+  test("the answer is accepted from the sign-in window, at the API's origin, for this attempt", async ({ page }) => {
+    // The control case: the stand-in setup can succeed, so the cases below fail for their
+    // one wrong detail only.
+    const { popup, answer } = await waitingSignIn(page);
+    await post(popup, answer);
+    expect(await page.evaluate(() => window.result)).toBe("ok");
+    expect(await page.evaluate(() => window.auth.signedIn())).toBe(true);
+  });
+
+  test("an answer with one wrong detail is ignored: origin, window or attempt", async ({ page }) => {
+    // Right window and attempt, but from another origin (the window was sent elsewhere).
+    let { popup, answer } = await waitingSignIn(page);
+    await popup.goto(`${appOrigin}/elsewhere`);
+    await post(popup, answer);
+    expect(await page.evaluate(() => window.result)).toBe("timeout");
+    // (The sign-in window has a name, so a new attempt would reuse it: close it first.)
+    await popup.close();
+    // Right origin and attempt, but another window (a frame of the API's origin).
+    ({ popup, answer } = await waitingSignIn(page));
+    await page.evaluate((src) => new Promise((resolve) => {
+      const frame = Object.assign(document.createElement("iframe"), { src, onload: resolve });
+      document.body.append(frame);
+    }), `${apiOrigin}/mock-login`);
+    await post(page.frames().find((frame) => frame.url().includes("/mock-login")), answer, "parent");
+    expect(await page.evaluate(() => window.result)).toBe("timeout");
+    await popup.close();
+    // Right origin and window, but for another attempt.
+    ({ popup, answer } = await waitingSignIn(page));
+    await post(popup, { ...answer, state: "y".repeat(32) });
     expect(await page.evaluate(() => window.result)).toBe("timeout");
     expect(await page.evaluate(() => window.auth.signedIn())).toBe(false);
+    expect(calls.upstream).toHaveLength(0);
+  });
+
+  test("signing out while a sign-in waits makes its late answer count for nothing", async ({ page }) => {
+    const { popup, answer } = await waitingSignIn(page);
+    await page.evaluate(() => window.auth.signOut());
+    await post(popup, answer);
+    expect(await page.evaluate(() => window.result)).toBe("signed_out");
+    expect(await page.evaluate(() => window.auth.signedIn())).toBe(false);
+    expect(await page.evaluate(() => window.auth.call("/api/run", { text: "hi" }).catch((e) => e.message))).toBe("sign_in_required");
     expect(calls.upstream).toHaveLength(0);
   });
 });

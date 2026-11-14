@@ -21,17 +21,19 @@ const STATE = /^[A-Za-z0-9_-]{22,64}$/;
 const APP_ORIGIN = /^(https:\/\/[a-z0-9.-]+(:\d+)?|http:\/\/(127\.0\.0\.1|localhost)(:\d+)?)$/;
 const LEEWAY = 30; // seconds of clock difference accepted for exp / nbf / iat
 const KEYS_TTL = 10 * 60 * 1000;
-const KEYS_RETRY = 60 * 1000; // an unknown key id refetches the keys at most this often
+// Fetching the keys again (after a failure, or for an unknown key id) waits at least this
+// long, so requests cannot make the Worker fetch them over and over.
+const KEYS_RETRY = 60 * 1000;
+const KEYS_TIMEOUT = 5000;
 const MAX_TOKEN = 8192;
 const MAX_BODY = 4000;
 
-// Public keys, per isolate. Never a token or an identity.
-const keyCache = { url: "", keys: null, fetched: 0 };
+// Public keys, per isolate. Never a token or an identity. One fetch at a time: requests
+// that arrive meanwhile wait for it, and a failed fetch counts as an attempt too.
+const keyCache = { url: "", keys: null, fetched: 0, attempted: 0, pending: null };
 
 export function resetKeyCacheForTests() {
-  keyCache.url = "";
-  keyCache.keys = null;
-  keyCache.fetched = 0;
+  Object.assign(keyCache, { url: "", keys: null, fetched: 0, attempted: 0, pending: null });
 }
 
 function settings(env) {
@@ -51,20 +53,47 @@ const base64url = (text) =>
   Uint8Array.from(atob(text.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0));
 const json = (bytes) => JSON.parse(new TextDecoder().decode(bytes));
 
+function loadKeys(url) {
+  keyCache.attempted = Date.now();
+  const run = (async () => {
+    try {
+      const response = await fetch(url, {
+        redirect: "error",
+        signal: AbortSignal.timeout(KEYS_TIMEOUT),
+        cf: { cacheTtl: 300 },
+      });
+      const body = response.ok ? await response.json() : null;
+      if (!Array.isArray(body?.keys)) throw new Error("keys_unavailable");
+      keyCache.keys = body.keys.filter((k) => k?.kty === "RSA" && typeof k.kid === "string");
+      keyCache.fetched = Date.now();
+    } catch {
+      throw new Error("keys_unavailable");
+    }
+  })();
+  // Cleared after it settles (even if the fetch failed at once), so a later request can try
+  // again once KEYS_RETRY has passed.
+  keyCache.pending = run;
+  run.catch(() => {}).finally(() => {
+    if (keyCache.pending === run) keyCache.pending = null;
+  });
+  return run;
+}
+
 async function publicKey(config, kid) {
   const url = `${config.team}/cdn-cgi/access/certs`;
-  const now = Date.now();
-  const stale = keyCache.url !== url || !keyCache.keys || now - keyCache.fetched > KEYS_TTL;
-  let key = !stale && keyCache.keys.find((k) => k.kid === kid);
-  if (!key && (stale || now - keyCache.fetched > KEYS_RETRY)) {
-    const response = await fetch(url, { redirect: "error", cf: { cacheTtl: 300 } });
-    if (!response.ok) throw new Error("keys_unavailable");
-    const body = await response.json();
-    if (!Array.isArray(body?.keys)) throw new Error("keys_unavailable");
+  if (keyCache.url !== url) {
+    resetKeyCacheForTests();
     keyCache.url = url;
-    keyCache.keys = body.keys.filter((k) => k?.kty === "RSA" && typeof k.kid === "string");
-    keyCache.fetched = now;
-    key = keyCache.keys.find((k) => k.kid === kid);
+  }
+  const fresh = () => !!keyCache.keys && Date.now() - keyCache.fetched <= KEYS_TTL;
+  const find = () => (fresh() ? keyCache.keys.find((k) => k.kid === kid) : undefined);
+  let key = find();
+  if (!key) {
+    if (keyCache.pending) await keyCache.pending;
+    else if (Date.now() - keyCache.attempted >= KEYS_RETRY) await loadKeys(url);
+    // Tried too recently: with no usable keys, refuse (503) rather than fetch again.
+    else if (!fresh()) throw new Error("keys_unavailable");
+    key = find();
   }
   if (!key) return null;
   return crypto.subtle.importKey(
@@ -104,9 +133,13 @@ export async function verifyAccessToken(token, config, now = Date.now() / 1000) 
   if (claims?.iss !== config.team) return { error: "issuer" };
   const aud = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
   if (!aud.includes(config.aud)) return { error: "audience" };
-  if (typeof claims.exp !== "number" || claims.exp + LEEWAY < now) return { error: "expired" };
-  if (typeof claims.nbf === "number" && claims.nbf - LEEWAY > now) return { error: "not_yet" };
-  if (typeof claims.iat === "number" && claims.iat - LEEWAY > now) return { error: "not_yet" };
+  // Times are finite numbers: exp is required; nbf and iat, when present, must be too.
+  const time = (value) => typeof value === "number" && Number.isFinite(value);
+  if (!time(claims.exp) || ("nbf" in claims && !time(claims.nbf)) ||
+    ("iat" in claims && !time(claims.iat))) return { error: "claims" };
+  if (claims.exp + LEEWAY < now) return { error: "expired" };
+  if ("nbf" in claims && claims.nbf - LEEWAY > now) return { error: "not_yet" };
+  if ("iat" in claims && claims.iat - LEEWAY > now) return { error: "not_yet" };
   // A user's application token. Service tokens (common_name, no email) are not users.
   if (claims.type !== "app" || typeof claims.email !== "string" || !claims.email ||
     typeof claims.sub !== "string" || !claims.sub) return { error: "not_a_user" };
