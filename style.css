@@ -1130,8 +1130,12 @@ label {
   color: var(--accent-contrast);
   font-size: 0.9375rem;
 }
+/* 下のバーの実際の高さ（--mini-player-height、practice.js が測る）の分だけ上に出す。
+   区間リピート中や狭い画面で高さが変わっても重ならない */
 .has-mini-player .undo-bar {
-  bottom: calc(max(16px, env(safe-area-inset-bottom)) + 76px);
+  bottom: calc(
+    max(12px, env(safe-area-inset-bottom)) + var(--mini-player-height, 64px) + 8px
+  );
 }
 .undo-bar p {
   flex: 1;
@@ -1156,14 +1160,9 @@ label {
   border: 1px solid var(--line);
 }
 .has-mini-player main {
-  padding-bottom: calc(max(16px, env(safe-area-inset-bottom)) + 84px);
-}
-/* 区間リピート中は、下のバーが「解除」の分だけ高くなる */
-.has-mini-player.is-repeating-ab main {
-  padding-bottom: calc(max(16px, env(safe-area-inset-bottom)) + 124px);
-}
-.has-mini-player.is-repeating-ab .undo-bar {
-  bottom: calc(max(16px, env(safe-area-inset-bottom)) + 116px);
+  padding-bottom: calc(
+    max(12px, env(safe-area-inset-bottom)) + var(--mini-player-height, 64px) + 20px
+  );
 }
 .mini-info {
   flex: 1;
@@ -1200,6 +1199,7 @@ label {
   color: var(--gold-label);
   font-size: 0.8125rem;
   font-weight: 700;
+  white-space: nowrap;
 }
 .mini-ab-off[hidden] {
   display: none;

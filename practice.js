@@ -285,6 +285,14 @@ function syncMiniPlayer() {
   $("mini-player").hidden = !show;
   document.body.classList.toggle("has-mini-player", show);
 }
+// The bar's height changes (the A–B button, narrow screens): the page and the undo bar
+// make room for its real height.
+if ("ResizeObserver" in window)
+  new ResizeObserver(([entry]) => {
+    const height = entry.target.getBoundingClientRect().height;
+    if (height > 0)
+      document.documentElement.style.setProperty("--mini-player-height", `${Math.ceil(height)}px`);
+  }).observe($("mini-player"));
 // Show it only once the controls are above the viewport; below it, the player is still ahead.
 let transportFrame = 0;
 function checkTransport() {
@@ -809,7 +817,6 @@ function syncGauge() {
   // sentence that set it is no longer "the repeated one".
   const repeating = engine.mode === "ab";
   $("mini-ab-off").hidden = !repeating;
-  document.body.classList.toggle("is-repeating-ab", repeating);
   if (!repeating && selectedSentence >= 0) unselectSentence();
   const duration = engine.audio.duration;
   for (const point of ["a", "b"]) {

@@ -165,6 +165,44 @@ test("the repeated sentence, tapped again, or the bottom bar's button ends the A
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
+test("on a narrow screen the bottom bar, its A–B button and the undo bar do not overlap", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 320, height: 640 });
+  await page.goto("/");
+  await load(page);
+  await expect(page.locator("#waveform")).toBeVisible();
+  await paste(page, english);
+  await sentences(page).nth(1).click();
+  await page.getByRole("button", { name: "スクリプトを消す" }).click();
+  await expect(page.locator("#undo-bar")).toBeVisible();
+  await page.locator("footer").scrollIntoViewIfNeeded();
+  await expect(page.locator("#mini-player")).toBeVisible();
+  await expect(page.getByRole("button", { name: "区間リピートを解除" })).toBeVisible();
+  // With a status beside the time, as after playing and pausing.
+  await page.getByRole("button", { name: "下のバー：再生", exact: true }).click();
+  await page.getByRole("button", { name: "下のバー：一時停止", exact: true }).click();
+  await expect(page.locator("#mini-status")).not.toBeEmpty();
+  // Larger text (as with an accessibility setting) makes the bar taller still; its height
+  // differs with fonts, so nothing may rely on a fixed height.
+  await page.evaluate(() => { document.documentElement.style.fontSize = "20px"; });
+  // Measured after the layout settles (the bar's height is read when it changes).
+  await expect.poll(async () => {
+    const undo = await page.locator("#undo-bar").boundingBox();
+    const mini = await page.locator("#mini-player").boundingBox();
+    return undo.y + undo.height <= mini.y;
+  }).toBe(true);
+  const undoButton = await page.getByRole("button", { name: "元に戻す", exact: true }).boundingBox();
+  const mini = await page.locator("#mini-player").boundingBox();
+  expect(undoButton.y + undoButton.height).toBeLessThanOrEqual(mini.y);
+  // The end of the page can still be scrolled clear of the bar.
+  const padding = await page.locator("main").evaluate((el) => parseFloat(getComputedStyle(el).paddingBottom));
+  expect(padding).toBeGreaterThanOrEqual(mini.height);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.getByRole("button", { name: "元に戻す", exact: true }).click();
+  await expect(sentences(page)).toHaveCount(3);
+});
+
 test("a sentence's timing can be corrected from the A–B interval", async ({
   page,
 }) => {
