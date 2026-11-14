@@ -6,6 +6,7 @@ import worker, { verifyAccessToken, resetKeyCacheForTests } from "../workers/aut
 // Everything outside this process is a stand-in: the Access signing keys are made here,
 // and the "paid API" is a counter. No real Cloudflare, DeepL, OpenAI or Claude call.
 const TEAM = "https://audio-loop-test.cloudflareaccess.com";
+const TEAM_B = "https://audio-loop-other.cloudflareaccess.com";
 const AUD = "a".repeat(64);
 const OTHER_AUD = "b".repeat(64);
 const UPSTREAM = "https://paid-api.invalid/v1/run";
@@ -37,7 +38,8 @@ const claims = (extra = {}) => ({
   iss: TEAM, type: "app", identity_nonce: "n", sub: "user-1", country: "JP", ...extra,
 });
 
-let accessKey, strangerKey, nextKey;
+let accessKey, strangerKey, nextKey, teamBKey;
+let holdTeamKeys = null; // when set, the first team's key fetch waits for this promise
 const calls = { upstream: [], keys: 0, unexpected: [] };
 let keysAvailable = true;
 let publishedKeys = () => [accessKey.jwk];
@@ -50,7 +52,13 @@ function fakeNetwork(input, init) {
     calls.keys++;
     if (!keysAvailable) return Promise.resolve(new Response("down", { status: 500 }));
     // A short delay, so requests that arrive together really overlap.
-    return new Promise((resolve) => setTimeout(() => resolve(Response.json({ keys: publishedKeys() })), 20));
+    const answer = () => Response.json({ keys: publishedKeys() });
+    if (holdTeamKeys) return holdTeamKeys.then(answer);
+    return new Promise((resolve) => setTimeout(() => resolve(answer()), 20));
+  }
+  if (url === `${TEAM_B}/cdn-cgi/access/certs`) {
+    calls.keys++;
+    return Promise.resolve(Response.json({ keys: [teamBKey.jwk] }));
   }
   if (url === UPSTREAM) {
     calls.upstream.push({ headers: Object.fromEntries(new Headers(init.headers)), body: JSON.parse(init.body) });
@@ -76,6 +84,7 @@ test.beforeAll(async () => {
   accessKey = await makeKey("access-key-1");
   strangerKey = await makeKey("access-key-1"); // same key id, different key: a forgery
   nextKey = await makeKey("access-key-2"); // the key Access rotates to
+  teamBKey = await makeKey("team-b-key"); // another team's key
   globalThis.fetch = fakeNetwork;
 });
 test.afterAll(() => { globalThis.fetch = realFetch; });
@@ -85,6 +94,7 @@ test.beforeEach(() => {
   calls.unexpected = [];
   keysAvailable = true;
   publishedKeys = () => [accessKey.jwk];
+  holdTeamKeys = null;
   resetKeyCacheForTests();
 });
 test.afterEach(() => {
@@ -209,6 +219,25 @@ test.describe("Worker checks (Node only)", () => {
     expect(calls.upstream).toHaveLength(2);
   });
 
+  test("a slow key fetch for the old team cannot fill the new team's keys", async () => {
+    // The settings change while the first team's key fetch is still running (Cloudflare
+    // may keep the same isolate when only settings change).
+    let release;
+    holdTeamKeys = new Promise((resolve) => { release = resolve; });
+    const teamB = env({ TEAM_DOMAIN: TEAM_B });
+    const oldTeam = worker.fetch(apiCall(await sign(claims(), accessKey)), env());
+    await new Promise((resolve) => setTimeout(resolve, 10)); // the old fetch has started
+    const forTeamB = (key, extra = {}) => sign(claims({ iss: TEAM_B, ...extra }), key);
+    expect((await worker.fetch(apiCall(await forTeamB(teamBKey)), teamB)).status).toBe(200);
+    release();
+    expect((await oldTeam).status).toBe(200);
+    // Team B still accepts its own token, and still refuses one signed with the old
+    // team's key that claims to come from team B.
+    expect((await worker.fetch(apiCall(await forTeamB(teamBKey)), teamB)).status).toBe(200);
+    expect((await worker.fetch(apiCall(await forTeamB(accessKey)), teamB)).status).toBe(401);
+    expect(calls.upstream).toHaveLength(3);
+  });
+
   test("missing or unsafe settings disable the API instead of opening it", async () => {
     const token = await sign(claims(), accessKey);
     for (const extra of [
@@ -294,6 +323,7 @@ test.describe("sign-in window and API call in a browser", () => {
   let app, api, appOrigin, apiOrigin, lastState;
   let accessUser = USER; // who Access says is signed in (null: nobody)
   let blocked = [];
+  let outside, outsideOrigin, outsideHits = 0; // a local server the browser must not reach
 
   test.beforeAll(async () => {
     const clientCode = await readFile("workers/auth-poc/client.js");
@@ -310,6 +340,8 @@ document.getElementById("in").onclick = () => { window.result = window.auth.sign
       // Plays Cloudflare's part: Access in front of /auth/* only, adding its signed token.
       // Its login page is a local stand-in, so the browser never leaves this machine.
       if (req.url.startsWith("/mock-login")) return res.writeHead(200, { "Content-Type": "text/html" }).end("<p>Access login (stand-in)</p>");
+      // Only for the check that the blocking also stops redirects.
+      if (req.url === "/redirect-out") return res.writeHead(302, { Location: `${outsideOrigin}/` }).end();
       const headers = new Headers();
       for (const [name, value] of Object.entries(req.headers)) if (typeof value === "string") headers.set(name, value);
       headers.delete("cf-access-jwt-assertion");
@@ -327,23 +359,50 @@ document.getElementById("in").onclick = () => { window.result = window.auth.sign
     });
     await new Promise((resolve) => app.listen(0, "127.0.0.1", resolve));
     await new Promise((resolve) => api.listen(0, "127.0.0.1", resolve));
+    outside = createServer((req, res) => { outsideHits++; res.end("reached"); });
+    await new Promise((resolve) => outside.listen(0, "127.0.0.1", resolve));
+    outsideOrigin = `http://127.0.0.1:${outside.address().port}`;
     appOrigin = `http://127.0.0.1:${app.address().port}`;
     apiOrigin = `http://127.0.0.1:${api.address().port}`;
   });
   test.afterAll(async () => {
     await new Promise((resolve) => app.close(resolve));
     await new Promise((resolve) => api.close(resolve));
+    await new Promise((resolve) => outside.close(resolve));
   });
-  // The browser may only reach the two local servers.
+  // The browser may only reach the two local servers. Every request passes through here,
+  // and redirects are not followed behind its back: an allowed server's redirect is handed
+  // to the browser, whose next request comes through here again and is checked.
   test.beforeEach(async ({ context }) => {
     blocked = [];
-    await context.route((url) => url.origin !== appOrigin && url.origin !== apiOrigin, (route) => {
-      blocked.push(route.request().url());
-      return route.abort();
+    outsideHits = 0;
+    const allowed = (url) => [appOrigin, apiOrigin].includes(new URL(url).origin);
+    await context.route("**/*", async (route) => {
+      const url = route.request().url();
+      if (!allowed(url)) {
+        blocked.push(url);
+        return route.abort();
+      }
+      const response = await route.fetch({ maxRedirects: 0 });
+      const location = response.headers().location;
+      if (location && !allowed(new URL(location, url))) {
+        blocked.push(new URL(location, url).href);
+        return route.abort();
+      }
+      return route.fulfill({ response });
     });
   });
   test.afterEach(() => {
     expect(blocked).toEqual([]);
+    expect(outsideHits).toBe(0);
+  });
+
+  test("the blocking also stops a redirect from an allowed server to another one", async ({ page }) => {
+    // The control: without the blocking, this redirect reaches the outside server.
+    await page.goto(`${apiOrigin}/redirect-out`).catch(() => {});
+    expect(outsideHits).toBe(0);
+    expect(blocked).toEqual([`${outsideOrigin}/`]);
+    blocked = [];
   });
 
   // A sign-in left waiting on Access's login page, with what a real answer would carry.

@@ -28,12 +28,25 @@ const KEYS_TIMEOUT = 5000;
 const MAX_TOKEN = 8192;
 const MAX_BODY = 4000;
 
-// Public keys, per isolate. Never a token or an identity. One fetch at a time: requests
-// that arrive meanwhile wait for it, and a failed fetch counts as an attempt too.
-const keyCache = { url: "", keys: null, fetched: 0, attempted: 0, pending: null };
+// Public keys, per isolate, kept separately for each key address (team). Never a token or
+// an identity. One fetch at a time per address: requests that arrive meanwhile wait for
+// it, and a failed fetch counts as an attempt too. A fetch writes only into the entry it
+// started for, so a slow answer for one team can never fill another team's entry.
+const keyCaches = new Map();
+const MAX_TEAMS = 4;
 
 export function resetKeyCacheForTests() {
-  Object.assign(keyCache, { url: "", keys: null, fetched: 0, attempted: 0, pending: null });
+  keyCaches.clear();
+}
+
+function keyEntry(url) {
+  let entry = keyCaches.get(url);
+  if (!entry) {
+    if (keyCaches.size >= MAX_TEAMS) keyCaches.delete(keyCaches.keys().next().value);
+    entry = { keys: null, fetched: 0, attempted: 0, pending: null };
+    keyCaches.set(url, entry);
+  }
+  return entry;
 }
 
 function settings(env) {
@@ -53,8 +66,8 @@ const base64url = (text) =>
   Uint8Array.from(atob(text.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0));
 const json = (bytes) => JSON.parse(new TextDecoder().decode(bytes));
 
-function loadKeys(url) {
-  keyCache.attempted = Date.now();
+function loadKeys(entry, url) {
+  entry.attempted = Date.now();
   const run = (async () => {
     try {
       const response = await fetch(url, {
@@ -64,33 +77,30 @@ function loadKeys(url) {
       });
       const body = response.ok ? await response.json() : null;
       if (!Array.isArray(body?.keys)) throw new Error("keys_unavailable");
-      keyCache.keys = body.keys.filter((k) => k?.kty === "RSA" && typeof k.kid === "string");
-      keyCache.fetched = Date.now();
+      entry.keys = body.keys.filter((k) => k?.kty === "RSA" && typeof k.kid === "string");
+      entry.fetched = Date.now();
     } catch {
       throw new Error("keys_unavailable");
     }
   })();
   // Cleared after it settles (even if the fetch failed at once), so a later request can try
   // again once KEYS_RETRY has passed.
-  keyCache.pending = run;
+  entry.pending = run;
   run.catch(() => {}).finally(() => {
-    if (keyCache.pending === run) keyCache.pending = null;
+    if (entry.pending === run) entry.pending = null;
   });
   return run;
 }
 
 async function publicKey(config, kid) {
   const url = `${config.team}/cdn-cgi/access/certs`;
-  if (keyCache.url !== url) {
-    resetKeyCacheForTests();
-    keyCache.url = url;
-  }
-  const fresh = () => !!keyCache.keys && Date.now() - keyCache.fetched <= KEYS_TTL;
-  const find = () => (fresh() ? keyCache.keys.find((k) => k.kid === kid) : undefined);
+  const entry = keyEntry(url);
+  const fresh = () => !!entry.keys && Date.now() - entry.fetched <= KEYS_TTL;
+  const find = () => (fresh() ? entry.keys.find((k) => k.kid === kid) : undefined);
   let key = find();
   if (!key) {
-    if (keyCache.pending) await keyCache.pending;
-    else if (Date.now() - keyCache.attempted >= KEYS_RETRY) await loadKeys(url);
+    if (entry.pending) await entry.pending;
+    else if (Date.now() - entry.attempted >= KEYS_RETRY) await loadKeys(entry, url);
     // Tried too recently: with no usable keys, refuse (503) rather than fetch again.
     else if (!fresh()) throw new Error("keys_unavailable");
     key = find();
