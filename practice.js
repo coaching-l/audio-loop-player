@@ -739,17 +739,27 @@ function stepPhrase(direction) {
   if (!ready) return;
   const here = engine.mode === "ab" ? engine.a : engine.position;
   const list = steps();
-  // When the interval is a sentence's own, go to the one next to it: their starts,
-  // with the lead-in, can be closer than the allowance below (found by Codex).
+  // At the start of a sentence's interval (the interval is its own, or only B was
+  // moved, or playback stands there), go to the one next to it: starts with the lead-in
+  // can be closer together than the allowance below (found by Codex). Anywhere else,
+  // the sentences' own starts decide, as before the lead-in.
   const own = intervalIndex(list);
-  const index =
+  const startsHere = (i) => i >= 0 && Math.abs(intervalStart(list, i) - here) < 0.001;
+  const chosen = list === transcript?.sentences ? selectedSentence : -1;
+  const at =
     own >= 0
-      ? own + direction < list.length
-        ? own + direction
+      ? own
+      : startsHere(chosen) && list[chosen]
+        ? chosen
+        : list.findLastIndex((_, i) => startsHere(i));
+  const index =
+    at >= 0
+      ? at + direction >= 0 && at + direction < list.length
+        ? at + direction
         : -1
       : direction > 0
-        ? list.findIndex((_, i) => intervalStart(list, i) > here + 0.05)
-        : list.findLastIndex((_, i) => intervalStart(list, i) < here - 0.05);
+        ? list.findIndex((item) => item.start > here + 0.05)
+        : list.findLastIndex((item) => item.start < here - 0.05);
   if (index < 0) {
     notice(direction > 0 ? "これが最後の文です。" : "これが最初の文です。");
     return;

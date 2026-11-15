@@ -332,6 +332,15 @@ test("a sentence's interval starts up to 0.15 s early, never into the sentence b
   await expect(page.locator("#point-a")).toHaveValue("0:01.600");
   await page.locator("#prev-phrase").click();
   await expect(page.locator("#point-a")).toHaveValue("0:00.950");
+  // Without an interval, a little before a sentence (inside where its A would be),
+  // "next" goes to that sentence, not past it.
+  await sentences(page).nth(0).click();
+  await setRepeat(page, false);
+  await page.locator("#audio").evaluate((a) => (a.currentTime = 1));
+  await expect(page.locator("#current-time")).toHaveText("0:01.0");
+  await page.locator("#next-phrase").click();
+  await expect(page.locator("#transcript-sentences .is-selected")).toHaveText("Second.");
+  await expect(page.locator("#point-a")).toHaveValue("0:00.950");
   // Stopped at the early A, the sentence shown as being heard is the chosen one, not
   // the one before (found by Codex). The screen catches up after the seek.
   await page.waitForTimeout(400);
@@ -378,6 +387,20 @@ test("stepping goes to the very next sentence, even when their A points are clos
   await page.locator("#prev-phrase").click();
   await expect(selected).toHaveText("First.");
   await expect(page.locator("#point-a")).toHaveValue("0:00.000");
+  // The same when B was moved by hand, so the interval is no longer the sentence's own.
+  await openAdvanced(page);
+  await page.locator("#point-b").fill("0.06");
+  await page.locator("#point-b").press("Tab");
+  await expect(page.locator("#point-b")).toHaveValue("0:00.060");
+  await page.locator("#next-phrase").click();
+  await expect(selected).toHaveText("Second.");
+  // And with interval repeat off, from the start of the audio.
+  await setRepeat(page, false);
+  await page.locator("#audio").evaluate((a) => (a.currentTime = 0));
+  await expect(page.locator("#current-time")).toHaveText("0:00.0");
+  await page.locator("#next-phrase").click();
+  await expect(selected).toHaveText("Second.");
+  await expect(page.locator("#point-a")).toHaveValue("0:00.050");
 });
 
 // The way in from text will hand over audio together with its script and times.
