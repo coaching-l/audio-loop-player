@@ -208,6 +208,43 @@ test("a silence keeps the audio playing muted, showing B, and pausing in it stop
 });
 // Timers can be held back while the screen is locked; the playing element's own time
 // updates then end the silence instead.
+// A repeat with no silence starts again from inside the check for B; the check that
+// found B once kept its own timer too, so two ran at once (found by Codex).
+test("repeating with no silence keeps one position check running, and none after pausing", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const set = window.setTimeout;
+    const clear = window.clearTimeout;
+    const live = new Set();
+    window.checks = { live, most: 0 };
+    window.setTimeout = (fn, ms, ...rest) => {
+      if (ms !== 15) return set(fn, ms, ...rest);
+      const id = set(() => {
+        live.delete(id);
+        fn(...rest);
+      }, ms);
+      live.add(id);
+      window.checks.most = Math.max(window.checks.most, live.size);
+      return id;
+    };
+    window.clearTimeout = (id) => {
+      live.delete(id);
+      clear(id);
+    };
+  });
+  await page.reload();
+  await load(page);
+  await configure(page, { a: "0.1", b: "0.3", count: "10", gap: "0" });
+  await page.locator("#play").click();
+  // Past a few repeats of the 0.2-second interval.
+  await page.waitForTimeout(900);
+  await expect(page.locator("#play-status")).toHaveText("再生中");
+  await page.locator("#play").click();
+  await page.waitForTimeout(100);
+  const checks = await page.evaluate(() => ({ most: window.checks.most, live: window.checks.live.size }));
+  expect(checks).toEqual({ most: 1, live: 0 });
+});
 test("a silence ends on time even when its timer never fires", async ({ page }) => {
   await page.addInitScript(() => {
     const later = window.setTimeout;

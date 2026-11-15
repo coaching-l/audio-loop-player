@@ -201,9 +201,12 @@ export class LoopPlayer {
   }
   tick() {
     if (this.phase !== "playing") return;
+    const epoch = this.epoch;
     this.checkBoundary();
     this.emit();
-    if (this.phase === "playing")
+    // A repeat with no silence starts playing again inside checkBoundary, and that play
+    // starts its own ticks; this one stops, so only one runs (found by Codex).
+    if (this.phase === "playing" && epoch === this.epoch)
       this.timer = setTimeout(() => this.tick(), 15);
   }
   checkBoundary() {
