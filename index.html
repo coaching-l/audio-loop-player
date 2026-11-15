@@ -42,8 +42,8 @@
       content="端末の音声で、繰り返し聴く・声に出す。アップロード不要の語学学習プレーヤー。"
     />
     <title>音声リピートプレーヤー | COACHING-L</title>
-    <link rel="stylesheet" href="./style.css?v=61" />
-    <script type="module" src="./app.js?v=61"></script>
+    <link rel="stylesheet" href="./style.css?v=62" />
+    <script type="module" src="./app.js?v=62"></script>
   </head>
   <body>
     <main>
@@ -954,15 +954,6 @@
             <span id="mini-time">0:00.0</span>
             <span id="mini-status"></span>
           </p>
-          <button
-            id="mini-ab-off"
-            class="mini-ab-off"
-            type="button"
-            aria-label="区間リピートを解除"
-            hidden
-          >
-            区間リピート中<span aria-hidden="true">✕</span>
-          </button>
         </div>
         <button
           id="mini-back"
@@ -1000,6 +991,16 @@
             <path d="M20 4v4.5h-4.5" />
           </svg>
         </button>
+        <div id="mini-ab-row" class="mini-ab-row" hidden>
+          <button
+            id="mini-ab-off"
+            class="mini-ab-off"
+            type="button"
+            aria-label="区間リピートを解除"
+          >
+            区間リピート中<span aria-hidden="true">✕</span>
+          </button>
+        </div>
       </div>
       <dialog id="translation-dialog" class="translation-dialog" aria-labelledby="translation-heading">
         <div class="section-heading">

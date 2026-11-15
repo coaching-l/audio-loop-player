@@ -1153,6 +1153,8 @@ label {
   text-underline-offset: 3px;
 }
 .mini-player {
+  flex-wrap: wrap;
+  row-gap: 4px;
   bottom: max(12px, env(safe-area-inset-bottom));
   min-height: 64px;
   padding: 8px 8px 8px 16px;
@@ -1185,13 +1187,18 @@ label {
 .mini-time span + span {
   margin-left: 6px;
 }
-/* 区間リピート中だけ出る、解除のボタン */
+/* 区間リピート中だけ出る、解除のボタン。狭い画面や大きな文字でもボタンに重ならないよう、自分の行に置く */
+.mini-ab-row {
+  flex-basis: 100%;
+}
+.mini-ab-row[hidden] {
+  display: none;
+}
 .mini-ab-off {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   min-height: 32px;
-  margin-top: 4px;
   padding: 0 12px;
   border: 1px solid var(--gold);
   border-radius: 999px;
@@ -1201,9 +1208,7 @@ label {
   font-weight: 700;
   white-space: nowrap;
 }
-.mini-ab-off[hidden] {
-  display: none;
-}
+
 .mini-skip,
 .mini-play {
   flex: none;

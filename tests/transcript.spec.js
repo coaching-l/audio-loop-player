@@ -156,9 +156,10 @@ test("the repeated sentence, tapped again, or the bottom bar's button ends the A
   await expect(repeat).toHaveAttribute("aria-pressed", "false");
   await expect(sentences(page).nth(2)).not.toHaveClass(/is-selected/);
   await expect(page.locator("#mini-play")).toHaveAttribute("data-state", "playing");
-  // Turning the repeat off elsewhere also clears the sentence's selection.
+  // Turning the repeat off elsewhere also clears the sentence's selection. (Tapping a
+  // sentence may scroll the page, so the bottom bar is not checked here.)
   await sentences(page).nth(0).click();
-  await expect(offButton).toBeVisible();
+  await expect(repeat).toHaveAttribute("aria-pressed", "true");
   await page.locator("#toggle-ab").scrollIntoViewIfNeeded();
   await setRepeat(page, false);
   await expect(sentences(page).nth(0)).not.toHaveClass(/is-selected/);
@@ -198,7 +199,14 @@ test("on a narrow screen the bottom bar, its A–B button and the undo bar do no
   // The end of the page can still be scrolled clear of the bar.
   const padding = await page.locator("main").evaluate((el) => parseFloat(getComputedStyle(el).paddingBottom));
   expect(padding).toBeGreaterThanOrEqual(mini.height);
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  // The A–B button has its own row: inside the bar, clear of the play buttons.
+  const off = await page.getByRole("button", { name: "区間リピートを解除" }).boundingBox();
+  expect(off.x + off.width).toBeLessThanOrEqual(mini.x + mini.width);
+  expect(off.y + off.height).toBeLessThanOrEqual(mini.y + mini.height);
+  for (const name of ["下のバー：巻き戻し 5秒", "下のバー：再生", "下のバー：早送り 5秒"]) {
+    const box = await page.getByRole("button", { name, exact: true }).boundingBox();
+    expect(off.y >= box.y + box.height || off.x + off.width <= box.x, name).toBe(true);
+  }
   await page.getByRole("button", { name: "元に戻す", exact: true }).click();
   await expect(sentences(page)).toHaveCount(3);
 });

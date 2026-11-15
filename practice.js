@@ -816,7 +816,7 @@ function syncGauge() {
   // The bar at the bottom shows, and can end, a running A–B repeat. Once it ends, the
   // sentence that set it is no longer "the repeated one".
   const repeating = engine.mode === "ab";
-  $("mini-ab-off").hidden = !repeating;
+  $("mini-ab-row").hidden = !repeating;
   if (!repeating && selectedSentence >= 0) unselectSentence();
   const duration = engine.audio.duration;
   for (const point of ["a", "b"]) {
