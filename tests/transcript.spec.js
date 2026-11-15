@@ -7,6 +7,7 @@ import {
   sentenceAt,
   decodeText,
 } from "../transcript.js";
+import { findPhrases } from "../waveform.js";
 
 // Tones at 0–0.5 s, 1.1–1.6 s and 2.2–2.7 s, like three spoken sentences.
 const phrasesAudio = () => ({
@@ -44,6 +45,26 @@ test("English and Chinese text splits into sentences", () => {
   expect(decodeText(new Uint8Array([0xc4, 0xe3, 0xba, 0xc3, 0xa1, 0xa3]))).toBe(
     "你好。",
   );
+});
+
+test("a phrase keeps its soft start, without reaching into the phrase before", () => {
+  // 10 ms levels: silence, then a breathy start at 5% of the peak for 0.12 s (below the
+  // 8% threshold), then full sound; a 0.3 s pause; then a second phrase.
+  const levels = [
+    ...Array(50).fill(0),
+    ...Array(12).fill(0.05),
+    ...Array(40).fill(1),
+    ...Array(30).fill(0),
+    ...Array(40).fill(1),
+    ...Array(20).fill(0),
+  ];
+  const [first, second] = findPhrases(levels);
+  // Loud sound starts at 0.62 s; the soft start at 0.50 s is kept.
+  expect(first.start).toBeLessThanOrEqual(0.5);
+  expect(first.start).toBeGreaterThanOrEqual(0.4);
+  // The second phrase's sound starts at 1.32 s; its start stays after the first one's end.
+  expect(second.start).toBeGreaterThanOrEqual(first.end);
+  expect(second.start).toBeLessThan(1.32);
 });
 
 test("sentence times move to the pauses nearest their length-based estimate", () => {
@@ -90,7 +111,7 @@ test("pasted text follows playback and a sentence becomes the A–B interval", a
   await sentences(page).nth(1).click();
   const a = seconds(await page.locator("#point-a").inputValue());
   const b = seconds(await page.locator("#point-b").inputValue());
-  expect(a).toBeGreaterThan(0.95);
+  expect(a).toBeGreaterThan(0.9);
   expect(a).toBeLessThan(1.15);
   expect(b).toBeGreaterThan(1.55);
   expect(b).toBeLessThan(1.8);

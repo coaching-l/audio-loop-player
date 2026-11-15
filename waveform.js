@@ -2,6 +2,7 @@
 // Audio is decoded at a low sample rate so a long file stays small in memory.
 const MAX_BYTES = 40 * 1024 * 1024;
 const STEP = 0.01; // seconds per level
+const LEAD_IN = 0.15; // seconds kept before a phrase's sound starts
 
 export async function analyzeAudio(file) {
   const Offline =
@@ -42,12 +43,18 @@ export function findPhrases(levels, step = STEP) {
   const phrases = [];
   let start = -1;
   let quiet = 0;
+  // A phrase starts a little before its sound passes the threshold: a soft start (the
+  // breathy "I" of "I appreciate…") is quieter than that for a moment and would be cut.
+  // It never reaches back into the phrase before.
+  const lead = Math.round(LEAD_IN / step);
   const close = (end) => {
-    if ((end - start) * step >= 0.2)
+    if ((end - start) * step >= 0.2) {
+      const before = phrases.at(-1)?.end ?? 0;
       phrases.push({
-        start: Math.max(0, (start - 5) * step),
+        start: Math.max(0, before, (start - lead) * step),
         end: Math.min(levels.length * step, (end + 10) * step),
       });
+    }
     start = -1;
   };
   for (let i = 0; i < levels.length; i++) {

@@ -15,7 +15,7 @@ import {
 import { MODEL_FILES, planWindows } from "../transcriber.js";
 
 // Tones at 0–0.5 s, 1.1–1.6 s and 2.2–2.7 s; the waveform finds phrases at
-// 0–0.6, 1.05–1.7 and 2.15–2.8.
+// 0–0.6, 0.95–1.7 and 2.05–2.8 (each starts 0.15 s before its sound).
 const phrasesAudio = () => ({
   name: "phrases.wav",
   mimeType: "audio/wav",
@@ -398,7 +398,7 @@ test("speech is transcribed into sentences timed to the waveform's pauses", asyn
   expect(calls[0].passes).toBe(1);
   expect(calls[0].seconds).toBeCloseTo(2.7, 1);
   await sentences(page).nth(1).click();
-  await expect(page.locator("#point-a")).toHaveValue("0:01.050");
+  await expect(page.locator("#point-a")).toHaveValue("0:00.950");
   await expect(page.locator("#point-b")).toHaveValue("0:01.700");
   // Fixing a word keeps the times.
   await page.getByRole("button", { name: "スクリプトを直す" }).click();
@@ -410,7 +410,7 @@ test("speech is transcribed into sentences timed to the waveform's pauses", asyn
   await setRepeat(page, false);
   await sentences(page).nth(1).click();
   await expect(sentences(page).nth(1)).toHaveText("Three for.");
-  await expect(page.locator("#point-a")).toHaveValue("0:01.050");
+  await expect(page.locator("#point-a")).toHaveValue("0:00.950");
   await expect(page.locator("#point-b")).toHaveValue("0:01.700");
   // Saved with the audio file.
   await page.reload();
