@@ -76,12 +76,16 @@ export function alignSentences(sentences, duration, phrases = []) {
   );
 }
 
+// Where a phrase's sound starts, for matching times to it. Its `start` keeps a short
+// lead-in before that, for playing it; phrases from older analyses have no `onset`.
+const onsetOf = (phrase) => phrase.onset ?? phrase.start;
+
 // The silences between phrases: `end` is where the earlier phrase ends, `start` where
-// the next one starts.
+// the next one starts (with its lead-in) and `onset` where its sound starts.
 function pausesBetween(phrases) {
   return phrases
     .slice(1)
-    .map((phrase, i) => ({ end: phrases[i].end, start: phrase.start }));
+    .map((phrase, i) => ({ end: phrases[i].end, start: phrase.start, onset: onsetOf(phrase) }));
 }
 
 // Shares the time from `start` to `end` among sentences by length.
@@ -156,7 +160,7 @@ export function retimeSentences(previous, sentences, duration, phrases = []) {
         added,
         start,
         Math.max(start, end),
-        gaps.filter((gap) => gap.end >= start && gap.start <= end),
+        gaps.filter((gap) => gap.end >= start && gap.onset <= end),
       ),
     );
   };
@@ -226,7 +230,7 @@ export function transcriptFromSegments(segments, duration, phrases = []) {
     const total = weights.reduce((sum, w) => sum + w, 0);
     let parts = phrases
       .map((p) => [
-        Math.max(segment.start, p.start),
+        Math.max(segment.start, onsetOf(p)),
         Math.min(segment.end, p.end),
       ])
       .filter(([from, to]) => to - from > 0.05);
@@ -346,12 +350,11 @@ export function transcriptFromWords(words, duration, phrases = [], snap = 0.3) {
   }));
   const first = timed[0];
   const last = timed[timed.length - 1];
-  first.start =
-    nearest(
-      phrases.map((p) => p.start),
-      first.start,
-      snap,
-    ) ?? first.start;
+  // Matched by where the sound starts; placed at the phrase's start, with its lead-in.
+  const firstPhrase = phrases[
+    phrases.findIndex((p) => onsetOf(p) === nearest(phrases.map(onsetOf), first.start, snap))
+  ];
+  first.start = firstPhrase ? firstPhrase.start : first.start;
   last.end =
     nearest(
       phrases.map((p) => p.end),
@@ -370,13 +373,13 @@ export function transcriptFromWords(words, duration, phrases = [], snap = 0.3) {
       const distance = Math.max(
         0,
         gap.end - Math.max(from, to),
-        Math.min(from, to) - gap.start,
+        Math.min(from, to) - gap.onset,
       );
       if (
         distance <= snap &&
         (distance < bestDistance ||
           (distance === bestDistance &&
-            gap.start - gap.end > best.start - best.end))
+            gap.onset - gap.end > best.onset - best.end))
       ) {
         best = gap;
         bestDistance = distance;
@@ -492,7 +495,7 @@ function matchBoundaries(targets, gaps, tolerance) {
   for (let i = 1; i <= n; i++)
     for (let j = 1; j <= m; j++) {
       const take =
-        cost[i - 1][j - 1] + Math.abs(gaps[j - 1].start - targets[i - 1]);
+        cost[i - 1][j - 1] + Math.abs(gaps[j - 1].onset - targets[i - 1]);
       const skipGap = cost[i][j - 1];
       const skipBoundary = cost[i - 1][j] + tolerance;
       const best = Math.min(take, skipGap, skipBoundary);
@@ -506,7 +509,7 @@ function matchBoundaries(targets, gaps, tolerance) {
     if (j === 0 || move[i][j] === 2) i--;
     else if (move[i][j] === 1) j--;
     else {
-      if (Math.abs(gaps[j - 1].start - targets[i - 1]) < tolerance)
+      if (Math.abs(gaps[j - 1].onset - targets[i - 1]) < tolerance)
         matched[i - 1] = gaps[j - 1];
       i--;
       j--;

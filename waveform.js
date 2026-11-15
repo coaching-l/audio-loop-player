@@ -50,9 +50,13 @@ export function findPhrases(levels, step = STEP) {
   const close = (end) => {
     if ((end - start) * step >= 0.2) {
       const before = phrases.at(-1)?.end ?? 0;
+      // `onset` is where the sound itself starts (as phrases began before the lead-in):
+      // matching sentence times to phrases uses it, so the lead-in moves no match.
+      const onset = Math.max(0, (start - 5) * step);
       phrases.push({
-        start: Math.max(0, before, (start - lead) * step),
+        start: Math.min(onset, Math.max(0, before, (start - lead) * step)),
         end: Math.min(levels.length * step, (end + 10) * step),
+        onset,
       });
     }
     start = -1;

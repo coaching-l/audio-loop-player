@@ -6,6 +6,7 @@ import {
   alignSentences,
   sentenceAt,
   decodeText,
+  transcriptFromSegments,
 } from "../transcript.js";
 import { findPhrases } from "../waveform.js";
 
@@ -65,6 +66,22 @@ test("a phrase keeps its soft start, without reaching into the phrase before", (
   // The second phrase's sound starts at 1.32 s; its start stays after the first one's end.
   expect(second.start).toBeGreaterThanOrEqual(first.end);
   expect(second.start).toBeLessThan(1.32);
+});
+
+test("a transcribed sentence still finds its phrase, and starts with the phrase's lead-in", () => {
+  // Sound from 1.00 s to 2.00 s; the recognizer puts the sentence at 1.50 s. Matching is by
+  // where the sound starts (0.95 s, within 0.6 s of 1.50 s), so the earlier lead-in start
+  // (0.85 s) must not push the phrase out of reach and leave the sentence at 1.50 s.
+  const levels = [...Array(100).fill(0), ...Array(100).fill(1), ...Array(50).fill(0)];
+  const phrases = findPhrases(levels);
+  const { sentences } = transcriptFromSegments(
+    [{ text: " Hello there.", start: 1.5, end: 1.9 }],
+    2.5,
+    phrases,
+  );
+  expect(sentences[0].start).toBeCloseTo(0.85, 2);
+  expect(phrases[0].start).toBeCloseTo(0.85, 5);
+  expect(phrases[0].onset).toBeCloseTo(0.95, 5);
 });
 
 test("sentence times move to the pauses nearest their length-based estimate", () => {
