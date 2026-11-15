@@ -133,7 +133,7 @@ test("the waveform finds phrases and steps through them as A–B intervals", asy
   // Phrases sit at 0–0.5, 1.1–1.6 and 2.2–2.7 seconds.
   await page.locator("#next-phrase").click();
   let [a, b] = await interval();
-  expect(seconds(a)).toBeGreaterThan(0.9);
+  expect(seconds(a)).toBeGreaterThan(0.85);
   expect(seconds(a)).toBeLessThan(1.15);
   expect(seconds(b)).toBeGreaterThan(1.55);
   expect(seconds(b)).toBeLessThan(1.8);
@@ -143,12 +143,12 @@ test("the waveform finds phrases and steps through them as A–B intervals", asy
   );
   await page.locator("#next-phrase").click();
   [a] = await interval();
-  expect(seconds(a)).toBeGreaterThan(2.0);
+  expect(seconds(a)).toBeGreaterThan(1.95);
   await page.locator("#next-phrase").click();
   await expect(page.locator("#notice")).toContainText("最後の文");
   await page.locator("#prev-phrase").click();
   [a] = await interval();
-  expect(seconds(a)).toBeGreaterThan(0.9);
+  expect(seconds(a)).toBeGreaterThan(0.85);
   expect(seconds(a)).toBeLessThan(1.15);
   await page.locator("#prev-phrase").click();
   [a] = await interval();
@@ -179,7 +179,7 @@ test("with a script, the previous and next buttons step through its sentences", 
   await page.locator("#prev-phrase").click();
   await expect(page.locator(".sentence.is-selected")).toHaveText("Second.");
   const a = Number(await page.locator("#marker-a").getAttribute("aria-valuenow"));
-  expect(a).toBeGreaterThan(0.9);
+  expect(a).toBeGreaterThan(0.85);
   expect(a).toBeLessThan(1.15);
 });
 

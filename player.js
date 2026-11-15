@@ -7,6 +7,11 @@ export const MODES = ["off", "ab", "whole"];
 const END_SLACK = 0.05;
 // While playing through ("off"), the player can stop after each sentence for as long as
 // `pauseFor(seconds the sentence took)` says, then go on from where it stopped.
+//
+// During such a silence the audio keeps playing, muted, instead of pausing: with the
+// screen locked, a phone may suspend a page whose audio has stopped (so the silence never
+// ends), and may refuse to start it again without a tap. `position` is the time to show
+// meanwhile (where the silence began), not where the muted audio happens to be.
 export class LoopPlayer {
   constructor(audio, onChange = () => {}, onError = () => {}) {
     this.audio = audio;
@@ -28,10 +33,18 @@ export class LoopPlayer {
     this.stopIndex = -1;
     this.pauseFor = () => 0;
     this.resumeAt = null;
-    this.onEnded = () =>
-      this.mode === "off" ? this.finish() : this.boundary();
+    this.heldAt = null; // the time shown during a silence
+    this.onEnded = () => {
+      // The muted audio ran to the end during a silence: keep it going.
+      if (this.phase === "waiting") return this.keepSounding(this.start);
+      return this.mode === "off" ? this.finish() : this.boundary();
+    };
     this.onTime = () => {
-      this.checkBoundary();
+      // Timers may be held back while the screen is locked; the audio's own time events
+      // still come, so a silence also ends from here.
+      if (this.phase === "waiting" && performance.now() >= this.deadline)
+        this.endSilence(this.epoch);
+      else this.checkBoundary();
       this.emit();
     };
     audio.addEventListener("ended", this.onEnded);
@@ -45,6 +58,21 @@ export class LoopPlayer {
   }
   get active() {
     return this.phase === "playing" || this.phase === "waiting";
+  }
+  get position() {
+    return this.heldAt ?? this.audio.currentTime;
+  }
+  // Plays on, muted, from `time` (a silence keeps the audio going).
+  keepSounding(time) {
+    this.audio.muted = true;
+    this.audio.currentTime = time;
+    if (this.audio.paused) this.audio.play().catch(() => {});
+  }
+  // Back to the shown time, audible, with no silence held.
+  settle() {
+    if (this.heldAt !== null) this.audio.currentTime = this.heldAt;
+    this.heldAt = null;
+    this.audio.muted = false;
   }
   emit() {
     this.onChange(this);
@@ -89,6 +117,7 @@ export class LoopPlayer {
       return;
     const wasActive = this.active;
     this.pause();
+    this.settle();
     Object.assign(this, { mode, a, b, limit, gap, gapRatio });
     this.completed = 0;
     this.remaining = 0;
@@ -200,52 +229,66 @@ export class LoopPlayer {
     );
     if (!(seconds > 0)) return;
     this.clearTimer();
-    this.audio.pause();
     this.wait(seconds * 1000, this.audio.currentTime);
   }
   boundary() {
     if (this.phase !== "playing") return;
     this.clearTimer();
-    this.audio.pause();
-    this.audio.currentTime = this.end;
     this.completed++;
     if (this.limit > 0 && this.completed >= this.limit) {
+      this.audio.pause();
+      this.audio.currentTime = this.end;
       this.finish();
       return;
     }
-    this.wait(this.gapMilliseconds);
+    this.wait(this.gapMilliseconds, null, this.end);
   }
   // Silence, then playback again from `resumeAt` (after a sentence) or the start (a repeat).
-  wait(milliseconds, resumeAt = null) {
+  // The audio plays on muted meanwhile; `shownAt` is the time to show.
+  wait(milliseconds, resumeAt = null, shownAt = resumeAt) {
     this.clearTimer();
     this.phase = "waiting";
     this.resumeAt = resumeAt;
     this.remaining = milliseconds;
     this.deadline = performance.now() + milliseconds;
+    this.heldAt = shownAt ?? this.heldAt ?? this.audio.currentTime;
+    this.keepSounding(resumeAt ?? this.start);
     const epoch = this.epoch;
     this.emit();
-    this.timer = setTimeout(() => {
-      if (epoch !== this.epoch || this.phase !== "waiting") return;
-      this.remaining = 0;
-      this.audio.currentTime = resumeAt ?? this.start;
-      this.resumeAt = null;
-      this.phase = "paused";
-      void this.play();
-    }, milliseconds);
+    this.timer = setTimeout(() => this.endSilence(epoch), milliseconds);
+  }
+  endSilence(epoch) {
+    if (epoch !== this.epoch || this.phase !== "waiting") return;
+    this.clearTimer();
+    this.remaining = 0;
+    this.audio.currentTime = this.resumeAt ?? this.start;
+    this.resumeAt = null;
+    this.heldAt = null;
+    this.audio.muted = false;
+    this.phase = "paused";
+    void this.play();
   }
   pause() {
     if (this.phase === "disposed") return;
-    if (this.phase === "waiting") {
+    const silent = this.phase === "waiting";
+    if (silent) {
       this.remaining = Math.max(0, this.deadline - performance.now());
       this.phase = "gap-paused";
     } else if (this.phase !== "gap-paused") this.phase = "paused";
     this.clearTimer();
     this.audio.pause();
+    // Paused during a silence: the muted audio stops where the silence began, audible
+    // again (playing on resumes the rest of the silence first).
+    if (silent) {
+      this.audio.currentTime = this.heldAt;
+      this.audio.muted = false;
+    }
     this.emit();
   }
   seek(time) {
     const resume = this.active;
     this.pause();
+    this.settle();
     this.remaining = 0;
     this.resumeAt = null;
     this.phase = "paused";
@@ -258,6 +301,7 @@ export class LoopPlayer {
   finish() {
     this.clearTimer();
     this.audio.pause();
+    this.settle();
     this.phase = "done";
     this.remaining = 0;
     this.emit();
@@ -265,6 +309,8 @@ export class LoopPlayer {
   dispose() {
     this.clearTimer();
     this.audio.pause();
+    this.heldAt = null;
+    this.audio.muted = false;
     this.phase = "disposed";
     this.audio.removeEventListener("ended", this.onEnded);
     this.audio.removeEventListener("timeupdate", this.onTime);

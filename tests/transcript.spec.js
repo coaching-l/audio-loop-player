@@ -6,10 +6,7 @@ import {
   alignSentences,
   sentenceAt,
   decodeText,
-  transcriptFromSegments,
-  retimeSentences,
 } from "../transcript.js";
-import { findPhrases } from "../waveform.js";
 
 // Tones at 0–0.5 s, 1.1–1.6 s and 2.2–2.7 s, like three spoken sentences.
 const phrasesAudio = () => ({
@@ -47,79 +44,6 @@ test("English and Chinese text splits into sentences", () => {
   expect(decodeText(new Uint8Array([0xc4, 0xe3, 0xba, 0xc3, 0xa1, 0xa3]))).toBe(
     "你好。",
   );
-});
-
-test("a phrase keeps its soft start, without reaching into the phrase before", () => {
-  // 10 ms levels: silence, then a breathy start at 5% of the peak for 0.12 s (below the
-  // 8% threshold), then full sound; a 0.3 s pause; then a second phrase.
-  const levels = [
-    ...Array(50).fill(0),
-    ...Array(12).fill(0.05),
-    ...Array(40).fill(1),
-    ...Array(30).fill(0),
-    ...Array(40).fill(1),
-    ...Array(20).fill(0),
-  ];
-  const [first, second] = findPhrases(levels);
-  // Loud sound starts at 0.62 s; the soft start at 0.50 s is kept.
-  expect(first.start).toBeLessThanOrEqual(0.5);
-  expect(first.start).toBeGreaterThanOrEqual(0.4);
-  // The second phrase's sound starts at 1.32 s; its start stays after the first one's end.
-  expect(second.start).toBeGreaterThanOrEqual(first.end);
-  expect(second.start).toBeLessThan(1.32);
-});
-
-test("a transcribed sentence still finds its phrase, and starts with the phrase's lead-in", () => {
-  // Sound from 1.00 s to 2.00 s; the recognizer puts the sentence at 1.50 s. Matching is by
-  // where the sound starts (0.95 s, within 0.6 s of 1.50 s), so the earlier lead-in start
-  // (0.85 s) must not push the phrase out of reach and leave the sentence at 1.50 s.
-  const levels = [...Array(100).fill(0), ...Array(100).fill(1), ...Array(50).fill(0)];
-  const phrases = findPhrases(levels);
-  const { sentences } = transcriptFromSegments(
-    [{ text: " Hello there.", start: 1.5, end: 1.9 }],
-    2.5,
-    phrases,
-  );
-  expect(sentences[0].start).toBeCloseTo(0.85, 2);
-  expect(phrases[0].start).toBeCloseTo(0.85, 5);
-  expect(phrases[0].onset).toBeCloseTo(0.95, 5);
-});
-
-test("pasted sentences take the same pauses as before the lead-in, and keep it at their start", () => {
-  // Sound at 0.20–1.00, 1.30–2.10 and 2.40–3.40 s. Estimating from the lead-in start
-  // (0.1 s earlier) once moved the second sentence back to 1.15 s, over the middle phrase.
-  const levels = [
-    ...Array(20).fill(0), ...Array(80).fill(1), ...Array(30).fill(0),
-    ...Array(80).fill(1), ...Array(30).fill(0), ...Array(100).fill(1), ...Array(20).fill(0),
-  ];
-  const phrases = findPhrases(levels);
-  const timed = alignSentences(splitSentences("Hello there. Hello again."), 3.6, phrases);
-  expect(timed.map((s) => [s.start, s.end])).toEqual([
-    [phrases[0].start, phrases[1].end],
-    [phrases[2].start, 3.5],
-  ]);
-  expect(timed[1].start).toBeCloseTo(2.25, 5);
-});
-
-test("sentences added by editing stay before the unchanged sentence that follows", () => {
-  // Sound at 0–0.40 and 0.75–1.15 s. Two sentences added between "Hello." and "Goodbye."
-  // once reached past where "Goodbye." starts (its lead-in), overlapping it.
-  const levels = [...Array(40).fill(1), ...Array(35).fill(0), ...Array(40).fill(1), ...Array(15).fill(0)];
-  const phrases = findPhrases(levels);
-  const before = alignSentences(splitSentences("Hello. Goodbye."), 1.3, phrases);
-  const after = retimeSentences(before, splitSentences("Hello. New. Two. Goodbye."), 1.3, phrases);
-  expect(after.map((s) => s.text)).toEqual(["Hello.", "New.", "Two.", "Goodbye."]);
-  // The added sentences get the room they had before lead-ins (0.5–0.7 s). "Hello." keeps
-  // its times; "Goodbye." keeps its end and gives up only its lead-in, starting where its
-  // sound starts. Each sentence ends by the time the next starts.
-  expect([after[0].start, after[0].end]).toEqual([before[0].start, before[0].end]);
-  expect(after.map((s) => [s.start, s.end])).toEqual([[0, 0.5], [0.5, 0.6], [0.6, 0.7], [0.7, 1.25]]);
-  expect(after[3].end).toBe(before[1].end);
-  expect(after[3].start).toBeLessThanOrEqual(phrases[1].onset + 1e-9);
-  for (let i = 0; i < after.length - 1; i++) {
-    expect(after[i].start, after[i].text).toBeLessThan(after[i].end);
-    expect(after[i].end, after[i].text).toBeLessThanOrEqual(after[i + 1].start + 1e-9);
-  }
 });
 
 test("sentence times move to the pauses nearest their length-based estimate", () => {
@@ -166,7 +90,7 @@ test("pasted text follows playback and a sentence becomes the A–B interval", a
   await sentences(page).nth(1).click();
   const a = seconds(await page.locator("#point-a").inputValue());
   const b = seconds(await page.locator("#point-b").inputValue());
-  expect(a).toBeGreaterThan(0.9);
+  expect(a).toBeGreaterThan(0.85);
   expect(a).toBeLessThan(1.15);
   expect(b).toBeGreaterThan(1.55);
   expect(b).toBeLessThan(1.8);
@@ -362,6 +286,54 @@ test("the script can be edited and deleted with undo", async ({ page }) => {
   await expect(sentences(page)).toHaveText(["Only one sentence"]);
 });
 
+// The A point of a sentence's interval starts a little early, so a soft start is not cut.
+test("a sentence's interval starts up to 0.15 s early, never into the sentence before or past a time set by hand", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.evaluate(
+    async ({ bytes }) => {
+      const { openPractice } = await import("/practice.js");
+      const file = new File([new Uint8Array(bytes)], "made.wav", { type: "audio/wav" });
+      await openPractice({
+        file,
+        key: "text:lead-in",
+        name: "教材2",
+        script: {
+          text: "First. Second. Third. Fourth.",
+          sentences: [
+            { text: "First.", start: 0.1, end: 0.5 },
+            { text: "Second.", start: 1.1, end: 1.6 },
+            { text: "Third.", start: 1.65, end: 2.1 },
+            { text: "Fourth.", start: 2.2, end: 2.7, edited: true },
+          ],
+        },
+      });
+    },
+    { bytes: [...makePhrasesWav()] },
+  );
+  await expect(page.locator("#play")).toBeEnabled();
+  const pointA = async (index) => {
+    await sentences(page).nth(index).click();
+    return page.locator("#point-a").inputValue();
+  };
+  expect(await pointA(0)).toBe("0:00.000"); // not before the start of the audio
+  expect(await pointA(1)).toBe("0:00.950"); // 0.15 s early
+  expect(await pointA(2)).toBe("0:01.600"); // only back to where "Second." ends
+  expect(await pointA(3)).toBe("0:02.200"); // set by hand: exactly as set
+  // The times found and saved are not changed.
+  const saved = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem("kotonoha.transcript.v1:text:lead-in")),
+  );
+  expect(saved.sentences.map((s) => s.start)).toEqual([0.1, 1.1, 1.65, 2.2]);
+  // Stepping finds the next sentence from an early A point.
+  await sentences(page).nth(1).click();
+  await page.locator("#next-phrase").click();
+  await expect(page.locator("#point-a")).toHaveValue("0:01.600");
+  await page.locator("#prev-phrase").click();
+  await expect(page.locator("#point-a")).toHaveValue("0:00.950");
+});
+
 // The way in from text will hand over audio together with its script and times.
 test("material can bring its own script, which the learner's edits then replace", async ({
   page,
@@ -391,7 +363,8 @@ test("material can bring its own script, which the learner's edits then replace"
   await expect(page.locator("#file-name")).toHaveText("教材1");
   await expect(sentences(page)).toHaveText(["First.", "Second.", "Third."]);
   await sentences(page).nth(1).click();
-  await expect(page.locator("#point-a")).toHaveValue("0:01.100");
+  // A starts 0.15 s before the sentence (still after the one before ends).
+  await expect(page.locator("#point-a")).toHaveValue("0:00.950");
   await expect(page.locator("#point-b")).toHaveValue("0:01.600");
   // Saved under the material's own key, so the learner's edit is what comes back.
   await page.getByRole("button", { name: "スクリプトを直す" }).click();

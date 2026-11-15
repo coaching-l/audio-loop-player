@@ -4,7 +4,7 @@ import { unzipSync } from "../vendor/fflate/fflate.js";
 import { planExport } from "../export.js";
 import { pauseAfter } from "../audio-tools.js";
 import { makePhrasesWav } from "./fixtures/make-audio.mjs";
-import { openAdvanced, setRepeat } from "./helpers.mjs";
+import { openAdvanced, setRepeat, traceSound, firstSilence } from "./helpers.mjs";
 
 async function load(page, file) {
   await page.locator("#file-input").setInputFiles(file);
@@ -115,26 +115,8 @@ test("the audio is written out as MP3: whole, A–B, and a few sentences per fil
   await expect(page.locator("#export-status")).toContainText("書き出しました");
 });
 
-// Times the media element's pause and the play that follows it.
-async function traceStop(page) {
-  await page.locator("#audio").evaluate((audio) => {
-    window.mediaTrace = [];
-    for (const type of ["play", "pause"])
-      audio.addEventListener(type, () =>
-        window.mediaTrace.push({
-          type,
-          at: performance.now(),
-          time: audio.currentTime,
-        }),
-      );
-  });
-}
-async function firstSilence(page) {
-  const trace = await page.evaluate(() => window.mediaTrace);
-  const stop = trace.find((x) => x.type === "pause");
-  const resume = trace.find((x) => x.type === "play" && x.at > stop.at);
-  return { stop, resume, ms: resume.at - stop.at };
-}
+// Times when the sound stops and comes back (see traceSound).
+const traceStop = traceSound;
 const mode = (page, name) => page.getByRole("button", { name, exact: true });
 
 test("repeating stops after each sentence, even without a script, and is kept", async ({
