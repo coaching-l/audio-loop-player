@@ -65,6 +65,9 @@ export class LoopPlayer {
   // Plays on, muted, from `time` (a silence keeps the audio going).
   keepSounding(time) {
     this.audio.muted = true;
+    // WebKit can report the end while not paused, and then stand still there; stopping
+    // first makes the play below start it again, as before silences were muted (CI).
+    if (this.audio.ended && !this.audio.paused) this.audio.pause();
     this.audio.currentTime = time;
     if (this.audio.paused) this.audio.play().catch(() => {});
   }
