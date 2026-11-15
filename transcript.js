@@ -71,7 +71,7 @@ export function alignSentences(sentences, duration, phrases = []) {
     ? { start: phrases[0].start, end: phrases[phrases.length - 1].end }
     : { start: 0, end: duration };
   return finish(
-    spread(sentences, speech.start, speech.end, pausesBetween(phrases)),
+    spreadBetween(sentences, speech.start, speech.end, pausesBetween(phrases), phrases),
     duration,
   );
 }
@@ -79,6 +79,23 @@ export function alignSentences(sentences, duration, phrases = []) {
 // Where a phrase's sound starts, for matching times to it. Its `start` keeps a short
 // lead-in before that, for playing it; phrases from older analyses have no `onset`.
 const onsetOf = (phrase) => phrase.onset ?? phrase.start;
+
+// A time that is a phrase's start (with its lead-in), as the phrase's onset; any other
+// time as it is. Estimates are made from onsets, so the lead-in moves no boundary.
+function matchTime(time, phrases) {
+  const phrase = phrases.find((p) => Math.abs(p.start - time) < 0.001);
+  return phrase ? onsetOf(phrase) : time;
+}
+
+// Shares out the time from `start` to `end` like `spread`, estimating from onsets, then
+// keeps the outer edges where they were (a lead-in at the start stays).
+function spreadBetween(sentences, start, end, gaps, phrases) {
+  const from = matchTime(start, phrases);
+  const timed = spread(sentences, from, Math.max(from, matchTime(end, phrases)), gaps);
+  timed[0].start = start;
+  timed[timed.length - 1].end = Math.max(start, end);
+  return timed;
+}
 
 // The silences between phrases: `end` is where the earlier phrase ends, `start` where
 // the next one starts (with its lead-in) and `onset` where its sound starts.
@@ -156,11 +173,12 @@ export function retimeSentences(previous, sentences, duration, phrases = []) {
     const end =
       i0 < i1 ? previous[i1 - 1].end : i1 < n ? previous[i1].start : duration;
     timed.push(
-      ...spread(
+      ...spreadBetween(
         added,
         start,
-        Math.max(start, end),
+        end,
         gaps.filter((gap) => gap.end >= start && gap.onset <= end),
+        phrases,
       ),
     );
   };

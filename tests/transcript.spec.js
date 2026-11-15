@@ -84,6 +84,22 @@ test("a transcribed sentence still finds its phrase, and starts with the phrase'
   expect(phrases[0].onset).toBeCloseTo(0.95, 5);
 });
 
+test("pasted sentences take the same pauses as before the lead-in, and keep it at their start", () => {
+  // Sound at 0.20–1.00, 1.30–2.10 and 2.40–3.40 s. Estimating from the lead-in start
+  // (0.1 s earlier) once moved the second sentence back to 1.15 s, over the middle phrase.
+  const levels = [
+    ...Array(20).fill(0), ...Array(80).fill(1), ...Array(30).fill(0),
+    ...Array(80).fill(1), ...Array(30).fill(0), ...Array(100).fill(1), ...Array(20).fill(0),
+  ];
+  const phrases = findPhrases(levels);
+  const timed = alignSentences(splitSentences("Hello there. Hello again."), 3.6, phrases);
+  expect(timed.map((s) => [s.start, s.end])).toEqual([
+    [phrases[0].start, phrases[1].end],
+    [phrases[2].start, 3.5],
+  ]);
+  expect(timed[1].start).toBeCloseTo(2.25, 5);
+});
+
 test("sentence times move to the pauses nearest their length-based estimate", () => {
   const phrases = [
     { start: 0, end: 0.6 },
