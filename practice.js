@@ -739,19 +739,18 @@ function stepPhrase(direction) {
   if (!ready) return;
   const here = engine.mode === "ab" ? engine.a : engine.position;
   const list = steps();
-  // At the start of a sentence's interval (the interval is its own, or only B was
-  // moved, or playback stands there), go to the one next to it: starts with the lead-in
-  // can be closer together than the allowance below (found by Codex). Anywhere else,
-  // the sentences' own starts decide, as before the lead-in.
-  const own = intervalIndex(list);
-  const startsHere = (i) => i >= 0 && Math.abs(intervalStart(list, i) - here) < 0.001;
+  // In an interval that starts at a sentence's early A (its own interval, or only B
+  // was moved), go to the sentence next to it: starts with the lead-in can be closer
+  // together than the allowance below (found by Codex). Otherwise (no interval, or A
+  // set elsewhere) the sentences' own starts decide, as before the lead-in.
+  const startsAtA = (i) =>
+    i >= 0 && i < list.length && Math.abs(intervalStart(list, i) - engine.a) < 0.001;
   const chosen = list === transcript?.sentences ? selectedSentence : -1;
-  const at =
-    own >= 0
-      ? own
-      : startsHere(chosen) && list[chosen]
-        ? chosen
-        : list.findLastIndex((_, i) => startsHere(i));
+  let at = -1;
+  if (engine.mode === "ab") {
+    at = intervalIndex(list);
+    if (at < 0) at = startsAtA(chosen) ? chosen : list.findLastIndex((_, i) => startsAtA(i));
+  }
   const index =
     at >= 0
       ? at + direction >= 0 && at + direction < list.length

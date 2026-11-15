@@ -340,6 +340,16 @@ test("a sentence's interval starts up to 0.15 s early, never into the sentence b
   await expect(page.locator("#current-time")).toHaveText("0:01.0");
   await page.locator("#next-phrase").click();
   await expect(page.locator("#transcript-sentences .is-selected")).toHaveText("Second.");
+  // Also exactly at, and around, where Second's early A would be (0.95 s): without an
+  // interval that is not "in Second" yet (found by Codex).
+  for (const [time, shown] of [[0.94, "0:00.9"], [0.95, "0:01.0"], [0.96, "0:01.0"]]) {
+    await sentences(page).nth(0).click();
+    await setRepeat(page, false);
+    await page.locator("#audio").evaluate((a, t) => (a.currentTime = t), time);
+    await expect(page.locator("#current-time")).toHaveText(shown);
+    await page.locator("#next-phrase").click();
+    await expect(page.locator("#transcript-sentences .is-selected")).toHaveText("Second.");
+  }
   await expect(page.locator("#point-a")).toHaveValue("0:00.950");
   // Stopped at the early A, the sentence shown as being heard is the chosen one, not
   // the one before (found by Codex). The screen catches up after the seek.
@@ -401,6 +411,20 @@ test("stepping goes to the very next sentence, even when their A points are clos
   await page.locator("#next-phrase").click();
   await expect(selected).toHaveText("Second.");
   await expect(page.locator("#point-a")).toHaveValue("0:00.050");
+  // A sentence chosen, then the script made shorter so it is gone: stepping still works
+  // (it once read the missing sentence and threw; found by Codex).
+  const errors = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await sentences(page).nth(2).click();
+  await expect(selected).toHaveText("Third.");
+  await page.getByRole("button", { name: "スクリプトを直す" }).click();
+  await page.locator("#transcript-input").fill("First. Changed.");
+  await page.getByRole("button", { name: "保存する", exact: true }).click();
+  await expect(sentences(page)).toHaveText(["First.", "Changed."]);
+  await page.locator("#prev-phrase").click();
+  await page.locator("#next-phrase").click();
+  await expect(selected).toHaveCount(1);
+  expect(errors).toEqual([]);
 });
 
 // The way in from text will hand over audio together with its script and times.
