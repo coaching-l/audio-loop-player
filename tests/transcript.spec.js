@@ -332,6 +332,52 @@ test("a sentence's interval starts up to 0.15 s early, never into the sentence b
   await expect(page.locator("#point-a")).toHaveValue("0:01.600");
   await page.locator("#prev-phrase").click();
   await expect(page.locator("#point-a")).toHaveValue("0:00.950");
+  // Stopped at the early A, the sentence shown as being heard is the chosen one, not
+  // the one before (found by Codex). The screen catches up after the seek.
+  await page.waitForTimeout(400);
+  await expect(sentences(page).nth(1)).toHaveAttribute("aria-current", "true");
+  await expect(sentences(page).nth(0)).not.toHaveAttribute("aria-current", "true");
+});
+// Short sentences close together: with the lead-in their A points are less than the
+// stepping allowance apart, and "next" once skipped one (found by Codex).
+test("stepping goes to the very next sentence, even when their A points are close", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.evaluate(
+    async ({ bytes }) => {
+      const { openPractice } = await import("/practice.js");
+      const file = new File([new Uint8Array(bytes)], "made.wav", { type: "audio/wav" });
+      await openPractice({
+        file,
+        key: "text:close",
+        name: "教材3",
+        script: {
+          text: "First. Second. Third.",
+          sentences: [
+            { text: "First.", start: 0, end: 0.05 },
+            { text: "Second.", start: 0.15, end: 0.4 },
+            { text: "Third.", start: 0.6, end: 1 },
+          ],
+        },
+      });
+    },
+    { bytes: [...makePhrasesWav()] },
+  );
+  await expect(page.locator("#play")).toBeEnabled();
+  const selected = page.locator("#transcript-sentences .is-selected");
+  await sentences(page).nth(0).click();
+  await expect(selected).toHaveText("First.");
+  await page.locator("#next-phrase").click();
+  await expect(selected).toHaveText("Second.");
+  await expect(page.locator("#point-a")).toHaveValue("0:00.050");
+  await page.locator("#next-phrase").click();
+  await expect(selected).toHaveText("Third.");
+  await page.locator("#prev-phrase").click();
+  await expect(selected).toHaveText("Second.");
+  await page.locator("#prev-phrase").click();
+  await expect(selected).toHaveText("First.");
+  await expect(page.locator("#point-a")).toHaveValue("0:00.000");
 });
 
 // The way in from text will hand over audio together with its script and times.

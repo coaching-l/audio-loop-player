@@ -739,10 +739,17 @@ function stepPhrase(direction) {
   if (!ready) return;
   const here = engine.mode === "ab" ? engine.a : engine.position;
   const list = steps();
+  // When the interval is a sentence's own, go to the one next to it: their starts,
+  // with the lead-in, can be closer than the allowance below (found by Codex).
+  const own = intervalIndex(list);
   const index =
-    direction > 0
-      ? list.findIndex((_, i) => intervalStart(list, i) > here + 0.05)
-      : list.findLastIndex((_, i) => intervalStart(list, i) < here - 0.05);
+    own >= 0
+      ? own + direction < list.length
+        ? own + direction
+        : -1
+      : direction > 0
+        ? list.findIndex((_, i) => intervalStart(list, i) > here + 0.05)
+        : list.findLastIndex((_, i) => intervalStart(list, i) < here - 0.05);
   if (index < 0) {
     notice(direction > 0 ? "これが最後の文です。" : "これが最初の文です。");
     return;
@@ -760,6 +767,16 @@ function intervalStart(list, index) {
   if (edited) return start;
   const before = index > 0 ? list[index - 1].end : 0;
   return Math.min(start, Math.max(0, before, start - LEAD_IN));
+}
+// The sentence (or phrase) whose interval is the A–B now, or -1.
+function intervalIndex(list) {
+  if (engine.mode !== "ab") return -1;
+  const end = (i) => Math.min(list[i].end, engine.audio.duration);
+  const same = (i) =>
+    Math.abs(intervalStart(list, i) - engine.a) < 0.001 && Math.abs(end(i) - engine.b) < 0.001;
+  if (list === transcript?.sentences && selectedSentence >= 0 && list[selectedSentence] && same(selectedSentence))
+    return selectedSentence;
+  return list.findIndex((_, i) => same(i));
 }
 // Makes a sentence (or phrase) the A–B interval and moves playback to its start.
 function playInterval(list, index) {
@@ -1397,7 +1414,10 @@ function renderTranscript() {
 }
 function highlightSentence(time, follow) {
   if (!transcript || editingTranscript) return;
-  const index = sentenceAt(transcript.sentences, time);
+  let index = sentenceAt(transcript.sentences, time);
+  // In a sentence's interval, its lead-in already belongs to it, not to the one before.
+  const own = intervalIndex(transcript.sentences);
+  if (own >= 0 && time >= engine.a - 0.01 && time < transcript.sentences[own].start) index = own;
   if (index === currentSentence) return;
   const list = $("transcript-sentences");
   const previous = list.children[currentSentence];
