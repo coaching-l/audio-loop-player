@@ -70,10 +70,11 @@ export function alignSentences(sentences, duration, phrases = []) {
   const speech = phrases.length
     ? { start: phrases[0].start, end: phrases[phrases.length - 1].end }
     : { start: 0, end: duration };
-  return finish(
+  const timed = finish(
     spreadBetween(sentences, speech.start, speech.end, pausesBetween(phrases), phrases),
     duration,
   );
+  return yieldLeadIns(timed, new Set(timed.keys()));
 }
 
 // Where a phrase's sound starts, for matching times to it. Its `start` keeps a short
@@ -87,13 +88,28 @@ function matchTime(time, phrases) {
   return phrase ? onsetOf(phrase) : time;
 }
 
-// Shares out the time from `start` to `end` like `spread`, estimating from onsets, then
-// keeps the outer edges where they were (a lead-in at the start stays).
+// Shares out the time from `start` to `end` like `spread`, estimating from onsets (a time
+// that is a phrase's start counts as that phrase's onset, as before lead-ins), so the
+// boundaries are those found without lead-ins; the lead-in stays at the first start. The
+// last sentence may then end inside the lead-in of the sentence after `end`: the caller
+// lets that lead-in give way (see `yieldLeadIns`).
 function spreadBetween(sentences, start, end, gaps, phrases) {
   const from = matchTime(start, phrases);
   const timed = spread(sentences, from, Math.max(from, matchTime(end, phrases)), gaps);
   timed[0].start = start;
-  timed[timed.length - 1].end = Math.max(start, end);
+  return timed;
+}
+
+// A lead-in is only room before a sentence's sound: where a newly placed sentence (its
+// index in `placed`) reaches into the next one, also after the shortest length that
+// `finish` gives it, the next starts there instead. Only ever later, within the next
+// sentence; other sentences are left exactly as they were.
+function yieldLeadIns(timed, placed) {
+  for (let i = 1; i < timed.length; i++) {
+    const before = timed[i - 1];
+    if (placed.has(i - 1) && timed[i].start < before.end && before.end + 0.05 <= timed[i].end)
+      timed[i] = { ...timed[i], start: before.end };
+  }
   return timed;
 }
 
@@ -159,6 +175,7 @@ export function retimeSentences(previous, sentences, duration, phrases = []) {
           : Math.max(common[i + 1][j], common[i][j + 1]);
   const gaps = pausesBetween(phrases);
   const timed = [];
+  const placed = new Set(); // indexes of the sentences given new times by spreadBetween
   const replace = (i0, i1, j0, j1) => {
     if (j0 === j1) return;
     const added = sentences.slice(j0, j1);
@@ -172,15 +189,14 @@ export function retimeSentences(previous, sentences, duration, phrases = []) {
       i0 < i1 ? previous[i0].start : i0 > 0 ? previous[i0 - 1].end : 0;
     const end =
       i0 < i1 ? previous[i1 - 1].end : i1 < n ? previous[i1].start : duration;
-    timed.push(
-      ...spreadBetween(
-        added,
-        start,
-        end,
-        gaps.filter((gap) => gap.end >= start && gap.onset <= end),
-        phrases,
-      ),
+    const spread = spreadBetween(
+      added,
+      start,
+      end,
+      gaps.filter((gap) => gap.end >= start && gap.onset <= end),
+      phrases,
     );
+    for (const sentence of spread) placed.add(timed.push(sentence) - 1);
   };
   let i = 0;
   let j = 0;
@@ -200,7 +216,7 @@ export function retimeSentences(previous, sentences, duration, phrases = []) {
     else j++;
   }
   replace(i0, n, j0, m);
-  return finish(timed, duration);
+  return yieldLeadIns(finish(timed, duration), placed);
 }
 
 // A pause this long ends a sentence even without punctuation, which speech recognition

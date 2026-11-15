@@ -7,6 +7,7 @@ import {
   sentenceAt,
   decodeText,
   transcriptFromSegments,
+  retimeSentences,
 } from "../transcript.js";
 import { findPhrases } from "../waveform.js";
 
@@ -98,6 +99,27 @@ test("pasted sentences take the same pauses as before the lead-in, and keep it a
     [phrases[2].start, 3.5],
   ]);
   expect(timed[1].start).toBeCloseTo(2.25, 5);
+});
+
+test("sentences added by editing stay before the unchanged sentence that follows", () => {
+  // Sound at 0–0.40 and 0.75–1.15 s. Two sentences added between "Hello." and "Goodbye."
+  // once reached past where "Goodbye." starts (its lead-in), overlapping it.
+  const levels = [...Array(40).fill(1), ...Array(35).fill(0), ...Array(40).fill(1), ...Array(15).fill(0)];
+  const phrases = findPhrases(levels);
+  const before = alignSentences(splitSentences("Hello. Goodbye."), 1.3, phrases);
+  const after = retimeSentences(before, splitSentences("Hello. New. Two. Goodbye."), 1.3, phrases);
+  expect(after.map((s) => s.text)).toEqual(["Hello.", "New.", "Two.", "Goodbye."]);
+  // The added sentences get the room they had before lead-ins (0.5–0.7 s). "Hello." keeps
+  // its times; "Goodbye." keeps its end and gives up only its lead-in, starting where its
+  // sound starts. Each sentence ends by the time the next starts.
+  expect([after[0].start, after[0].end]).toEqual([before[0].start, before[0].end]);
+  expect(after.map((s) => [s.start, s.end])).toEqual([[0, 0.5], [0.5, 0.6], [0.6, 0.7], [0.7, 1.25]]);
+  expect(after[3].end).toBe(before[1].end);
+  expect(after[3].start).toBeLessThanOrEqual(phrases[1].onset + 1e-9);
+  for (let i = 0; i < after.length - 1; i++) {
+    expect(after[i].start, after[i].text).toBeLessThan(after[i].end);
+    expect(after[i].end, after[i].text).toBeLessThanOrEqual(after[i + 1].start + 1e-9);
+  }
 });
 
 test("sentence times move to the pauses nearest their length-based estimate", () => {
