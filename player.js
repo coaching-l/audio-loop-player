@@ -250,6 +250,19 @@ export class LoopPlayer {
   // The audio plays on muted meanwhile; `shownAt` is the time to show.
   wait(milliseconds, resumeAt = null, shownAt = resumeAt) {
     this.clearTimer();
+    if (milliseconds <= 0) {
+      // No silence (whole repeat, or a silence of 0 s): straight on, as before silences
+      // were muted, but with no timer in between, which a locked iPhone may hold back.
+      this.remaining = 0;
+      this.resumeAt = null;
+      this.heldAt = null;
+      this.audio.muted = false;
+      this.audio.pause();
+      this.audio.currentTime = resumeAt ?? this.start;
+      this.phase = "paused";
+      void this.play();
+      return;
+    }
     this.phase = "waiting";
     this.resumeAt = resumeAt;
     this.remaining = milliseconds;
