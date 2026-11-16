@@ -134,8 +134,9 @@ test("text becomes audio whose sentences, with their times, are the script", asy
   ]);
   // Times come from the audio of each sentence, not from guessing, moved by the
   // MP3's delay (1105 samples at 24 kHz, 0.046 s), with 0.3 s between sentences.
+  // A starts 0.15 s early, so the first sound of the sentence is not cut.
   await sentences(page).nth(1).click();
-  await expect(page.locator("#point-a")).toHaveValue("0:00.826");
+  await expect(page.locator("#point-a")).toHaveValue("0:00.676");
   await expect(page.locator("#point-b")).toHaveValue("0:01.426");
   // Kept as MP3, a fraction of the WAV's size, and its sound starts where the script
   // says the first sentence does.
@@ -235,8 +236,9 @@ test("if the MP3 encoder never loads, the audio is kept as WAV instead of waitin
   await expect(sentences(page)).toHaveCount(2);
   // Without the MP3's delay, the times are the sentences' own.
   await sentences(page).nth(1).click();
-  // The first sentence, then 0.3 s of pause: the second starts at 0.74 s.
-  await expect(page.locator("#point-a")).toHaveValue("0:00.740");
+  // The first sentence, then 0.3 s of pause: the second starts at 0.74 s, and A
+  // 0.15 s before it.
+  await expect(page.locator("#point-a")).toHaveValue("0:00.590");
 });
 
 test("a sentence that fails is named, and making again goes on from it", async ({

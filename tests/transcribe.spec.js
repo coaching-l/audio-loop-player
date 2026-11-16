@@ -398,7 +398,7 @@ test("speech is transcribed into sentences timed to the waveform's pauses", asyn
   expect(calls[0].passes).toBe(1);
   expect(calls[0].seconds).toBeCloseTo(2.7, 1);
   await sentences(page).nth(1).click();
-  await expect(page.locator("#point-a")).toHaveValue("0:01.050");
+  await expect(page.locator("#point-a")).toHaveValue("0:00.900");
   await expect(page.locator("#point-b")).toHaveValue("0:01.700");
   // Fixing a word keeps the times.
   await page.getByRole("button", { name: "スクリプトを直す" }).click();
@@ -410,7 +410,7 @@ test("speech is transcribed into sentences timed to the waveform's pauses", asyn
   await setRepeat(page, false);
   await sentences(page).nth(1).click();
   await expect(sentences(page).nth(1)).toHaveText("Three for.");
-  await expect(page.locator("#point-a")).toHaveValue("0:01.050");
+  await expect(page.locator("#point-a")).toHaveValue("0:00.900");
   await expect(page.locator("#point-b")).toHaveValue("0:01.700");
   // Saved with the audio file.
   await page.reload();

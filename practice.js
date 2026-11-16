@@ -118,7 +118,7 @@ function persist() {
   library[materialKey] = {
     ...library[materialKey],
     settings: settings(),
-    position: engine.audio.currentTime,
+    position: engine.position,
   };
   try {
     localStorage.setItem(storageKey, JSON.stringify(library));
@@ -226,16 +226,16 @@ function render(player) {
   });
 }
 function drawPlayer(player) {
-  $("current-time").textContent = formatTime(player.audio.currentTime, 1);
+  $("current-time").textContent = formatTime(player.position, 1);
   $("mini-time").textContent = $("current-time").textContent;
-  $("seek").value = player.audio.currentTime;
+  $("seek").value = player.position;
   // While zoomed, the view follows playback that runs past its edges.
-  const time = player.audio.currentTime;
+  const time = player.position;
   if (zoomed() && player.active && (time < view.start || time > view.end)) {
     const span = view.end - view.start;
     setView(time + span * 0.4, span);
   }
-  highlightSentence(player.audio.currentTime, player.active);
+  highlightSentence(player.position, player.active);
   const active = player.active;
   syncReplay();
   $("play").dataset.state = active ? "playing" : "paused";
@@ -556,7 +556,7 @@ function togglePlay() {
 }
 function skip(seconds) {
   stopCompare();
-  if (ready) engine.seek(engine.audio.currentTime + seconds);
+  if (ready) engine.seek(engine.position + seconds);
 }
 $("play").addEventListener("click", togglePlay);
 $("mini-play").addEventListener("click", togglePlay);
@@ -737,25 +737,63 @@ function showSteps() {
 }
 function stepPhrase(direction) {
   if (!ready) return;
-  const here = engine.mode === "ab" ? engine.a : engine.audio.currentTime;
+  const here = engine.mode === "ab" ? engine.a : engine.position;
   const list = steps();
+  // In an interval that starts at a sentence's early A (its own interval, or only B
+  // was moved), go to the sentence next to it: starts with the lead-in can be closer
+  // together than the allowance below (found by Codex). Otherwise (no interval, or A
+  // set elsewhere) the sentences' own starts decide, as before the lead-in.
+  const startsAtA = (i) =>
+    i >= 0 && i < list.length && Math.abs(intervalStart(list, i) - engine.a) < 0.001;
+  const chosen = list === transcript?.sentences ? selectedSentence : -1;
+  let at = -1;
+  if (engine.mode === "ab") {
+    at = intervalIndex(list);
+    if (at < 0) at = startsAtA(chosen) ? chosen : list.findLastIndex((_, i) => startsAtA(i));
+  }
   const index =
-    direction > 0
-      ? list.findIndex((p) => p.start > here + 0.05)
-      : list.findLastIndex((p) => p.start < here - 0.05);
+    at >= 0
+      ? at + direction >= 0 && at + direction < list.length
+        ? at + direction
+        : -1
+      : direction > 0
+        ? list.findIndex((item) => item.start > here + 0.05)
+        : list.findLastIndex((item) => item.start < here - 0.05);
   if (index < 0) {
     notice(direction > 0 ? "これが最後の文です。" : "これが最初の文です。");
     return;
   }
   if (transcript) selectSentence(index);
-  else playInterval(list[index]);
+  else playInterval(list, index);
 }
-// Makes a sentence the A–B interval and moves playback to its start.
-function playInterval({ start, end }) {
-  const b = Math.min(end, engine.audio.duration);
-  if (!updateSettings({ a: start, b, mode: "ab" })) return false;
+// A sentence's interval starts a little before its time: a soft start (the breathy "I"
+// of "I appreciate…") is quieter than the waveform's threshold for a moment and would be
+// cut. Only the A point moves; the times found and saved stay as they are. It never
+// reaches back into the sentence before, and a time set by hand is kept exactly.
+const LEAD_IN = 0.15;
+function intervalStart(list, index) {
+  const { start, edited } = list[index];
+  if (edited) return start;
+  const before = index > 0 ? list[index - 1].end : 0;
+  return Math.min(start, Math.max(0, before, start - LEAD_IN));
+}
+// The sentence (or phrase) whose interval is the A–B now, or -1.
+function intervalIndex(list) {
+  if (engine.mode !== "ab") return -1;
+  const end = (i) => Math.min(list[i].end, engine.audio.duration);
+  const same = (i) =>
+    Math.abs(intervalStart(list, i) - engine.a) < 0.001 && Math.abs(end(i) - engine.b) < 0.001;
+  if (list === transcript?.sentences && selectedSentence >= 0 && list[selectedSentence] && same(selectedSentence))
+    return selectedSentence;
+  return list.findIndex((_, i) => same(i));
+}
+// Makes a sentence (or phrase) the A–B interval and moves playback to its start.
+function playInterval(list, index) {
+  const a = intervalStart(list, index);
+  const b = Math.min(list[index].end, engine.audio.duration);
+  if (!updateSettings({ a, b, mode: "ab" })) return false;
   if (zoomed()) fitView();
-  engine.seek(start);
+  engine.seek(a);
   return true;
 }
 $("prev-phrase").addEventListener("click", () => stepPhrase(-1));
@@ -786,7 +824,7 @@ function applyView() {
   $("seek").max = view.end;
   $("seek").step = zoomed() ? "0.001" : "0.01";
   if (!ready) return;
-  $("seek").value = engine.audio.currentTime;
+  $("seek").value = engine.position;
   $("zoom-out").disabled = !zoomed();
   $("zoom-in").disabled = view.end - view.start <= MIN_VIEW + 0.001;
   $("zoom-range").textContent = zoomed()
@@ -805,7 +843,7 @@ $("zoom-in").addEventListener("click", () => {
   const center =
     engine.mode === "ab" && middle >= view.start && middle <= view.end
       ? middle
-      : engine.audio.currentTime;
+      : engine.position;
   setView(center, span / 2);
 });
 $("zoom-out").addEventListener("click", () =>
@@ -930,10 +968,10 @@ function stopIntervalRepeat() {
 }
 $("mini-ab-off").addEventListener("click", stopIntervalRepeat);
 $("gauge-set-a").addEventListener("click", () =>
-  updateSettings({ a: engine.audio.currentTime, mode: "ab" }),
+  updateSettings({ a: engine.position, mode: "ab" }),
 );
 $("gauge-set-b").addEventListener("click", () =>
-  updateSettings({ b: engine.audio.currentTime, mode: "ab" }),
+  updateSettings({ b: engine.position, mode: "ab" }),
 );
 
 // Lock screen, headset and keyboard media keys act on the same player as the on-screen buttons.
@@ -973,7 +1011,7 @@ function updateMediaSession(player) {
     mediaSession.setPositionState({
       duration: player.audio.duration,
       playbackRate: player.audio.playbackRate,
-      position: Math.min(player.audio.currentTime, player.audio.duration),
+      position: Math.min(player.position, player.audio.duration),
     });
   } catch {
     /* Older browsers lack position state; the controls still work. */
@@ -1009,8 +1047,8 @@ const shortcuts = {
   j: () => skip(-5),
   arrowright: () => skip(5),
   l: () => skip(5),
-  a: () => updateSettings({ a: engine.audio.currentTime, mode: "ab" }),
-  b: () => updateSettings({ b: engine.audio.currentTime, mode: "ab" }),
+  a: () => updateSettings({ a: engine.position, mode: "ab" }),
+  b: () => updateSettings({ b: engine.position, mode: "ab" }),
   r: toggleRepeat,
   "[": () => stepRate(-0.05),
   "]": () => stepRate(0.05),
@@ -1377,7 +1415,7 @@ function renderTranscript() {
       if (index === selectedSentence) button.classList.add("is-selected");
       list.append(button);
     });
-    highlightSentence(engine.audio.currentTime, false);
+    highlightSentence(engine.position, false);
   }
   $("transcript-fit").disabled = !has || selectedSentence < 0;
   showSteps();
@@ -1385,7 +1423,10 @@ function renderTranscript() {
 }
 function highlightSentence(time, follow) {
   if (!transcript || editingTranscript) return;
-  const index = sentenceAt(transcript.sentences, time);
+  let index = sentenceAt(transcript.sentences, time);
+  // In a sentence's interval, its lead-in already belongs to it, not to the one before.
+  const own = intervalIndex(transcript.sentences);
+  if (own >= 0 && time >= engine.a - 0.01 && time < transcript.sentences[own].start) index = own;
   if (index === currentSentence) return;
   const list = $("transcript-sentences");
   const previous = list.children[currentSentence];
@@ -1411,7 +1452,7 @@ function highlightSentence(time, follow) {
     });
 }
 function selectSentence(index) {
-  if (!playInterval(transcript.sentences[index])) return;
+  if (!playInterval(transcript.sentences, index)) return;
   selectedSentence = index;
   const list = $("transcript-sentences");
   [...list.children].forEach((item, i) =>

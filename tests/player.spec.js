@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { makeWav } from "./fixtures/make-audio.mjs";
-import { openAdvanced, setRepeat } from "./helpers.mjs";
+import { openAdvanced, setRepeat, traceSound, soundTrace, firstSilence as silenceOf } from "./helpers.mjs";
 const fixture = "tests/fixtures/tone.wav";
 async function load(page, file = fixture) {
   await page.locator("#file-input").setInputFiles(file);
@@ -29,24 +29,10 @@ async function setRate(page, rate) {
     el.dispatchEvent(new Event("input", { bubbles: true }));
   }, String(rate));
 }
-// Times the real pause and restart of the media element around the first silence.
-// The screen shows at most one status per frame, too coarse for silence lengths.
-async function traceMedia(page) {
-  await page.locator("#audio").evaluate((audio) => {
-    window.mediaTrace = [];
-    for (const type of ["play", "pause"])
-      audio.addEventListener(type, () =>
-        window.mediaTrace.push({ type, at: performance.now() }),
-      );
-  });
-}
-async function firstSilence(page) {
-  const trace = await page.evaluate(() => window.mediaTrace);
-  const pause = trace.findIndex((x) => x.type === "pause");
-  expect(pause).toBeGreaterThan(-1);
-  const resume = trace.slice(pause + 1).find((x) => x.type === "play");
-  return resume.at - trace[pause].at;
-}
+// Times when the sound stops and comes back around the first silence. The screen shows
+// at most one status per frame, too coarse for silence lengths.
+const traceMedia = traceSound;
+const firstSilence = async (page) => (await silenceOf(page)).ms;
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
 });
@@ -106,11 +92,8 @@ for (const count of ["2", "3", "5", "10"])
   test(`A–B stops after exactly ${count} total plays`, async ({ page }) => {
     await load(page);
     await configure(page, { a: ".2", b: ".35", count });
-    // Count real playback starts; the screen shows at most one status per frame.
-    await page.locator("#audio").evaluate((audio) => {
-      window.plays = 0;
-      audio.addEventListener("play", () => window.plays++);
-    });
+    // Count the times it is heard from A; the screen shows at most one status per frame.
+    await traceSound(page);
     await page.locator("#play").click();
     await expect(page.locator("#play-status")).toHaveText("再生完了", {
       timeout: 10000,
@@ -123,7 +106,9 @@ for (const count of ["2", "3", "5", "10"])
         .locator("#audio")
         .evaluate((a) => a.paused && Math.abs(a.currentTime - 0.35) < 0.02),
     ).toBe(true);
-    expect(await page.evaluate(() => window.plays)).toBe(Number(count));
+    const heard = (await soundTrace(page)).filter((x) => x.type === "sound");
+    expect(heard.length).toBe(Number(count));
+    expect(heard.every((x) => Math.abs(x.time - 0.2) < 0.03)).toBe(true);
     await page.waitForTimeout(250);
     await expect(page.locator("#play-status")).toHaveText("再生完了");
   });
@@ -195,6 +180,88 @@ test("pause during silence retains the remaining silence and never auto-resumes"
   await expect(page.locator("#play-status")).toHaveText("再生完了", {
     timeout: 5000,
   });
+});
+// On an iPhone with the screen locked, a paused element could not start again after the
+// silence (no tap to allow it) and timers stop. So during a silence the element keeps
+// playing, muted, and the screen still shows where the interval stopped.
+test("a silence keeps the audio playing muted, showing B, and pausing in it stops for real", async ({
+  page,
+}) => {
+  await load(page);
+  await configure(page, { gap: "1" });
+  await page.locator("#play").click();
+  await expect(page.locator("#play-status")).toHaveText("無音中");
+  await page.waitForTimeout(300);
+  expect(
+    await page.locator("#audio").evaluate((a) => ({ paused: a.paused, muted: a.muted })),
+  ).toEqual({ paused: false, muted: true });
+  await expect(page.locator("#current-time")).toHaveText("0:00.5");
+  await page.locator("#play").click();
+  await expect(page.locator("#play-status")).toHaveText("無音中に一時停止");
+  expect(
+    await page.locator("#audio").evaluate((a) => ({
+      paused: a.paused,
+      muted: a.muted,
+      near: Math.abs(a.currentTime - 0.5) < 0.02,
+    })),
+  ).toEqual({ paused: true, muted: false, near: true });
+});
+// Timers can be held back while the screen is locked; the playing element's own time
+// updates then end the silence instead.
+// A repeat with no silence starts again from inside the check for B; the check that
+// found B once kept its own timer too, so two ran at once (found by Codex).
+test("repeating with no silence keeps one position check running, and none after pausing", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const set = window.setTimeout;
+    const clear = window.clearTimeout;
+    const live = new Set();
+    window.checks = { live, most: 0 };
+    window.setTimeout = (fn, ms, ...rest) => {
+      if (ms !== 15) return set(fn, ms, ...rest);
+      const id = set(() => {
+        live.delete(id);
+        fn(...rest);
+      }, ms);
+      live.add(id);
+      window.checks.most = Math.max(window.checks.most, live.size);
+      return id;
+    };
+    window.clearTimeout = (id) => {
+      live.delete(id);
+      clear(id);
+    };
+  });
+  await page.reload();
+  await load(page);
+  await configure(page, { a: "0.1", b: "0.3", count: "10", gap: "0" });
+  await page.locator("#play").click();
+  // Past a few repeats of the 0.2-second interval.
+  await page.waitForTimeout(900);
+  await expect(page.locator("#play-status")).toHaveText("再生中");
+  await page.locator("#play").click();
+  await page.waitForTimeout(100);
+  const checks = await page.evaluate(() => ({ most: window.checks.most, live: window.checks.live.size }));
+  expect(checks).toEqual({ most: 1, live: 0 });
+});
+test("a silence ends on time even when its timer never fires", async ({ page }) => {
+  await page.addInitScript(() => {
+    const later = window.setTimeout;
+    window.setTimeout = (fn, ms, ...rest) =>
+      window.holdTimers && ms >= 300 ? 0 : later(fn, ms, ...rest);
+  });
+  await page.reload();
+  await load(page);
+  await configure(page, { gap: ".6" });
+  await traceSound(page);
+  await page.evaluate(() => (window.holdTimers = true));
+  await page.locator("#play").click();
+  await expect(page.locator("#play-status")).toHaveText("再生完了", { timeout: 5000 });
+  const { ms, resume } = await silenceOf(page);
+  expect(ms).toBeGreaterThanOrEqual(580);
+  expect(ms).toBeLessThan(1100);
+  expect(Math.abs(resume.time - 0.2)).toBeLessThan(0.03);
 });
 test("switching files cancels old repeat timers and revokes old object URLs", async ({
   page,
@@ -560,16 +627,13 @@ for (const gap of ["0", "0.2"])
   }) => {
     await load(page);
     await configure(page, { a: "0.2", b: "0.24", count: "2", gap });
-    await page.locator("#audio").evaluate((audio) => {
-      window.starts = [];
-      audio.addEventListener("play", () => window.starts.push(audio.currentTime));
-    });
+    await traceSound(page);
     await page.locator("#play").click();
     await expect(page.locator("#play-status")).toHaveText("再生完了", { timeout: 5000 });
     await expect(page.locator("#repeat-progress")).toHaveText("完了 2 / 2 回");
-    // It stays stopped, and both plays started at A.
+    // It stays stopped, and both plays were heard from A.
     await page.waitForTimeout(600);
-    const starts = await page.evaluate(() => window.starts);
+    const starts = (await soundTrace(page)).filter((x) => x.type === "sound").map((x) => x.time);
     expect(starts.length).toBe(2);
     expect(starts.every((t) => Math.abs(t - 0.2) < 0.02)).toBe(true);
     await expect(page.locator("#play-status")).toHaveText("再生完了");

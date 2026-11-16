@@ -90,7 +90,7 @@ test("pasted text follows playback and a sentence becomes the A–B interval", a
   await sentences(page).nth(1).click();
   const a = seconds(await page.locator("#point-a").inputValue());
   const b = seconds(await page.locator("#point-b").inputValue());
-  expect(a).toBeGreaterThan(0.95);
+  expect(a).toBeGreaterThan(0.85);
   expect(a).toBeLessThan(1.15);
   expect(b).toBeGreaterThan(1.55);
   expect(b).toBeLessThan(1.8);
@@ -286,6 +286,147 @@ test("the script can be edited and deleted with undo", async ({ page }) => {
   await expect(sentences(page)).toHaveText(["Only one sentence"]);
 });
 
+// The A point of a sentence's interval starts a little early, so a soft start is not cut.
+test("a sentence's interval starts up to 0.15 s early, never into the sentence before or past a time set by hand", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.evaluate(
+    async ({ bytes }) => {
+      const { openPractice } = await import("/practice.js");
+      const file = new File([new Uint8Array(bytes)], "made.wav", { type: "audio/wav" });
+      await openPractice({
+        file,
+        key: "text:lead-in",
+        name: "教材2",
+        script: {
+          text: "First. Second. Third. Fourth.",
+          sentences: [
+            { text: "First.", start: 0.1, end: 0.5 },
+            { text: "Second.", start: 1.1, end: 1.6 },
+            { text: "Third.", start: 1.65, end: 2.1 },
+            { text: "Fourth.", start: 2.2, end: 2.7, edited: true },
+          ],
+        },
+      });
+    },
+    { bytes: [...makePhrasesWav()] },
+  );
+  await expect(page.locator("#play")).toBeEnabled();
+  const pointA = async (index) => {
+    await sentences(page).nth(index).click();
+    return page.locator("#point-a").inputValue();
+  };
+  expect(await pointA(0)).toBe("0:00.000"); // not before the start of the audio
+  expect(await pointA(1)).toBe("0:00.950"); // 0.15 s early
+  expect(await pointA(2)).toBe("0:01.600"); // only back to where "Second." ends
+  expect(await pointA(3)).toBe("0:02.200"); // set by hand: exactly as set
+  // The times found and saved are not changed.
+  const saved = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem("kotonoha.transcript.v1:text:lead-in")),
+  );
+  expect(saved.sentences.map((s) => s.start)).toEqual([0.1, 1.1, 1.65, 2.2]);
+  // Stepping finds the next sentence from an early A point.
+  await sentences(page).nth(1).click();
+  await page.locator("#next-phrase").click();
+  await expect(page.locator("#point-a")).toHaveValue("0:01.600");
+  await page.locator("#prev-phrase").click();
+  await expect(page.locator("#point-a")).toHaveValue("0:00.950");
+  // Without an interval, a little before a sentence (inside where its A would be),
+  // "next" goes to that sentence, not past it.
+  await sentences(page).nth(0).click();
+  await setRepeat(page, false);
+  await page.locator("#audio").evaluate((a) => (a.currentTime = 1));
+  await expect(page.locator("#current-time")).toHaveText("0:01.0");
+  await page.locator("#next-phrase").click();
+  await expect(page.locator("#transcript-sentences .is-selected")).toHaveText("Second.");
+  // Also exactly at, and around, where Second's early A would be (0.95 s): without an
+  // interval that is not "in Second" yet (found by Codex).
+  for (const [time, shown] of [[0.94, "0:00.9"], [0.95, "0:01.0"], [0.96, "0:01.0"]]) {
+    await sentences(page).nth(0).click();
+    await setRepeat(page, false);
+    await page.locator("#audio").evaluate((a, t) => (a.currentTime = t), time);
+    await expect(page.locator("#current-time")).toHaveText(shown);
+    await page.locator("#next-phrase").click();
+    await expect(page.locator("#transcript-sentences .is-selected")).toHaveText("Second.");
+  }
+  await expect(page.locator("#point-a")).toHaveValue("0:00.950");
+  // Stopped at the early A, the sentence shown as being heard is the chosen one, not
+  // the one before (found by Codex). The screen catches up after the seek.
+  await page.waitForTimeout(400);
+  await expect(sentences(page).nth(1)).toHaveAttribute("aria-current", "true");
+  await expect(sentences(page).nth(0)).not.toHaveAttribute("aria-current", "true");
+});
+// Short sentences close together: with the lead-in their A points are less than the
+// stepping allowance apart, and "next" once skipped one (found by Codex).
+test("stepping goes to the very next sentence, even when their A points are close", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.evaluate(
+    async ({ bytes }) => {
+      const { openPractice } = await import("/practice.js");
+      const file = new File([new Uint8Array(bytes)], "made.wav", { type: "audio/wav" });
+      await openPractice({
+        file,
+        key: "text:close",
+        name: "教材3",
+        script: {
+          text: "First. Second. Third.",
+          sentences: [
+            { text: "First.", start: 0, end: 0.05 },
+            { text: "Second.", start: 0.15, end: 0.4 },
+            { text: "Third.", start: 0.6, end: 1 },
+          ],
+        },
+      });
+    },
+    { bytes: [...makePhrasesWav()] },
+  );
+  await expect(page.locator("#play")).toBeEnabled();
+  const selected = page.locator("#transcript-sentences .is-selected");
+  await sentences(page).nth(0).click();
+  await expect(selected).toHaveText("First.");
+  await page.locator("#next-phrase").click();
+  await expect(selected).toHaveText("Second.");
+  await expect(page.locator("#point-a")).toHaveValue("0:00.050");
+  await page.locator("#next-phrase").click();
+  await expect(selected).toHaveText("Third.");
+  await page.locator("#prev-phrase").click();
+  await expect(selected).toHaveText("Second.");
+  await page.locator("#prev-phrase").click();
+  await expect(selected).toHaveText("First.");
+  await expect(page.locator("#point-a")).toHaveValue("0:00.000");
+  // The same when B was moved by hand, so the interval is no longer the sentence's own.
+  await openAdvanced(page);
+  await page.locator("#point-b").fill("0.06");
+  await page.locator("#point-b").press("Tab");
+  await expect(page.locator("#point-b")).toHaveValue("0:00.060");
+  await page.locator("#next-phrase").click();
+  await expect(selected).toHaveText("Second.");
+  // And with interval repeat off, from the start of the audio.
+  await setRepeat(page, false);
+  await page.locator("#audio").evaluate((a) => (a.currentTime = 0));
+  await expect(page.locator("#current-time")).toHaveText("0:00.0");
+  await page.locator("#next-phrase").click();
+  await expect(selected).toHaveText("Second.");
+  await expect(page.locator("#point-a")).toHaveValue("0:00.050");
+  // A sentence chosen, then the script made shorter so it is gone: stepping still works
+  // (it once read the missing sentence and threw; found by Codex).
+  const errors = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await sentences(page).nth(2).click();
+  await expect(selected).toHaveText("Third.");
+  await page.getByRole("button", { name: "スクリプトを直す" }).click();
+  await page.locator("#transcript-input").fill("First. Changed.");
+  await page.getByRole("button", { name: "保存する", exact: true }).click();
+  await expect(sentences(page)).toHaveText(["First.", "Changed."]);
+  await page.locator("#prev-phrase").click();
+  await page.locator("#next-phrase").click();
+  await expect(selected).toHaveCount(1);
+  expect(errors).toEqual([]);
+});
+
 // The way in from text will hand over audio together with its script and times.
 test("material can bring its own script, which the learner's edits then replace", async ({
   page,
@@ -315,7 +456,8 @@ test("material can bring its own script, which the learner's edits then replace"
   await expect(page.locator("#file-name")).toHaveText("教材1");
   await expect(sentences(page)).toHaveText(["First.", "Second.", "Third."]);
   await sentences(page).nth(1).click();
-  await expect(page.locator("#point-a")).toHaveValue("0:01.100");
+  // A starts 0.15 s before the sentence (still after the one before ends).
+  await expect(page.locator("#point-a")).toHaveValue("0:00.950");
   await expect(page.locator("#point-b")).toHaveValue("0:01.600");
   // Saved under the material's own key, so the learner's edit is what comes back.
   await page.getByRole("button", { name: "スクリプトを直す" }).click();

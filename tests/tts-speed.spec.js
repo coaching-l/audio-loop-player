@@ -211,5 +211,6 @@ test("streaming encoder errors fall back to WAV and retain sentence timings", as
   await expect(page.locator("#play")).toBeEnabled({ timeout: 25000 });
   await expect(page.locator("#file-name")).toHaveText("First line.wav");
   await page.locator("#transcript-sentences .sentence").nth(1).click();
-  await expect(page.locator("#point-a")).toHaveValue("0:00.740");
+  // The second sentence starts at 0.74 s; A is 0.15 s before it.
+  await expect(page.locator("#point-a")).toHaveValue("0:00.590");
 });

@@ -25,3 +25,41 @@ export function expectLinuxWebKitFailure(browserName, reason) {
   test.fail(browserName === "webkit" && process.platform === "linux", reason);
 }
 
+
+// Records when the audio can be heard: it starts ("sound") and stops ("silence"), with the
+// time in the audio. Silences keep the element playing, muted (so an iPhone with its
+// screen locked keeps going), so play and pause events alone no longer show them. The
+// element's own play, pause and muted are watched as they are called, not by their
+// events, which arrive later: a 0-second silence would otherwise be missed.
+export async function traceSound(page) {
+  await page.locator("#audio").evaluate((audio) => {
+    const proto = HTMLMediaElement.prototype;
+    const muted = Object.getOwnPropertyDescriptor(proto, "muted");
+    let audible = !audio.paused && !audio.muted;
+    window.sound = [];
+    const note = () => {
+      const now = !audio.paused && !audio.muted;
+      if (now === audible) return;
+      audible = now;
+      window.sound.push({ type: now ? "sound" : "silence", at: performance.now(), time: audio.currentTime });
+    };
+    Object.defineProperty(audio, "muted", {
+      configurable: true,
+      get() { return muted.get.call(this); },
+      set(value) { muted.set.call(this, value); note(); },
+    });
+    audio.play = function () { const started = proto.play.call(this); note(); return started; };
+    audio.pause = function () { proto.pause.call(this); note(); };
+    for (const type of ["play", "pause", "ended"]) audio.addEventListener(type, note);
+  });
+}
+export const soundTrace = (page) => page.evaluate(() => window.sound);
+// The first silence: where and when the sound stopped, and when it came back.
+export async function firstSilence(page) {
+  const trace = await soundTrace(page);
+  const stop = trace.find((x) => x.type === "silence");
+  expect(stop).toBeTruthy();
+  const resume = trace.find((x) => x.type === "sound" && x.at >= stop.at && x !== trace[0]);
+  expect(resume).toBeTruthy();
+  return { stop, resume, ms: resume.at - stop.at };
+}
